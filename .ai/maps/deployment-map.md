@@ -1,13 +1,8 @@
-# Deployment Map
+# Deployment map
 
-Fill this file after deployment targets and runtime configuration are known.
-
-## Suggested Content
-
-- Environments.
-- Build and release commands.
-- Hosting targets.
-- Required configuration.
-- Secret names.
-- Smoke checks.
-- Monitoring and rollback notes.
+Read `docs/deployment/deployment.md`. Open
+`application/SophiaScriptura/SophiaScriptura.xcodeproj`, scheme SophiaScriptura.
+This is a personal iPad installation with owner-managed Personal Team signing,
+Developer Mode, and profile trust. No hosting, CI/CD, or App Store release is configured.
+The owner performs Apple Account sign-in and device trust. Keep credentials out of docs.
+Test commands use command-scoped DEVELOPER_DIR when the Mac selects Command Line Tools.

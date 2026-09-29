@@ -48,3 +48,25 @@ graphify-out/
 .understand-anything/intermediate/
 .understand-anything/diff-overlay.json
 repomix-output.*
+
+# Xcode / Swift
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+DerivedData/
+.build/
+*.moved-aside
+Packages/
+.swiftpm/
+
+# Generated scripture content (never commit downloaded copyrighted text or keys).
+# Publisher input archives remain in ignored build/ dirs. Only the verified public-domain
+# WEBP database and manifest in app Resources/ are committable. No licensed importer exists.
+service/build/
+*.sqlite-shm
+*.sqlite-wal
+secrets/
+
+# Python importer caches
+__pycache__/
+*.py[cod]

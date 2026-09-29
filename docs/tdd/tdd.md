@@ -1,21 +1,682 @@
-# Technical Design Document
+# Technical Design Document — Sophia Scriptura
 
-This file is intended to be filled out for `[Project Name]`.
+This is the canonical source of technical intent for Sophia Scriptura. Source files
+remain the final implementation truth; when they diverge from this document, update this
+document. Status: revised planning draft, 2026-09-29. Technical choices marked proposed
+need the linked planning evidence before implementation. The app contains the six-tab scaffold and an isolated SP-006 native canvas experiment;
+SP-007 also adds a temporary Collections workspace with in-memory folders and sample
+memberships; it does not implement production storage or artifact routing. The broader
+design is not implemented. Requirements live in the
+[product specification](../product-specification/product-specification.md).
 
-Use it to describe the technical design, architecture decisions, constraints, data flow, runtime behavior, and implementation intent. It should help an engineer or agent understand what must be built and what must not be built.
+Development follows the [owner-directed AI workflow](../guidelines/ai-structure-guidelines.md).
+The owner chooses the next ticket; planning and feedback do not automatically authorize
+new feature implementation. Empty standalone contract/diagram templates were removed;
+this TDD retains proposed contracts until a selected ticket produces maintained detail.
+The reader-specific maintained contract is `docs/data/scripture-reader-contract.md`.
 
-## Suggested Sections
+## Full-design reconciliation checkpoint — 2026-09-16
 
-- Project goal.
-- Target users and primary workflows.
-- System responsibilities.
-- Architecture overview.
-- Module boundaries.
-- Data flow.
-- External integrations.
-- Security constraints.
-- Quality and testing expectations.
-- Deployment assumptions.
-- Out-of-scope behavior.
+Read the [complete feature map and open decisions](../product-specification/product-specification.md#full-design-reconciliation--review-baseline)
+and [whole-app UX](../design/ux-specification.md). SP-001 remains open for design review;
+SP-007 is the bounded Collections prototype, whose verification continues separately.
+Neither authorizes the remaining production features. The feature map
+preserves the full theological brief, topic/translation variety, all Save types, rich
+Notes/library features, Activity, Settings/Account and native Pencil palette expectation.
 
-Update this document when architectural intent changes.
+The platform/store/provider choices below remain candidates where labeled proposed.
+D-08 now confirms local Settings without a Sophia account, Files backup/restore and
+optional backup reminders. D-02 is confirmed: multiple layers with Read Hidden, Read Visible and Draw states;
+see §10 for the interaction contract. Native tool-picker integration needs
+a separate scoped follow-up; SP-006 does not fulfill REQ-021. Premium and accessibility
+acceptance apply throughout delivery, not only in the final milestone.
+
+## 1. Project Goal
+
+Build Sophia Scriptura, a personal, offline-first iPadOS Bible study app for a single
+user that unifies scripture reading, Apple Pencil annotation layers, note taking,
+verse-anchored collections, a guardrailed AI study companion (bring-your-own-key), audio
+playback, and a Bible reading habit tracker — grounded in historic orthodox Christian
+conviction.
+
+This is a personal app. It is not distributed on the App Store, has no multi-user
+accounts, no analytics backend, and no server component.
+
+## 2. Target User and Primary Workflows
+
+Single user: the owner, doing personal study and discipleship on their own iPad.
+
+Primary workflows:
+
+1. Read a chapter in a chosen translation; switch translations; play audio.
+2. Turn on the annotation layer and write over the text with Apple Pencil; optionally
+   expand a ruled writing area beside the column.
+3. Tap a verse or chapter number to open a popup showing everything anchored to that
+   reference (notes, conversations, saved verses, links).
+4. Select scripture text and act on it: Copy, Ask, Save, Share.
+5. Study a topic with the AI Companion using a guardrailed prompt preset.
+6. Draft freeform notes mixing text, ink, images, tables, quotes, and link cards.
+7. Organize artifacts into collections (folders).
+8. Track reading time and review streaks and analytics.
+
+## 3. System Responsibilities
+
+- Render scripture with per-verse tappable anchors and a custom selection menu.
+- Persist all user study data locally and reliably.
+- Keep ink annotations spatially aligned per version and chapter.
+- Anchor every study artifact to a canonical verse reference for cross-linking.
+- Mediate AI requests through a provider-agnostic BYOK adapter without leaking secrets.
+- Work offline for bundled content and provider-permitted, unexpired cached content.
+
+## 4. Decision Status
+
+| Area | Decision | Rationale |
+| --- | --- | --- |
+| Target device | Confirmed: owner's iPad A16 | Owner reports iPadOS 26.6.2 and non-Pro Apple Pencil; exact Pencil model is unknown. Xcode 26.6 was verified locally. |
+| Platform | Proposed: native SwiftUI with UIKit/PencilKit bridges | Deployment target follows device confirmation; iPadOS 17+ is the scaffold setting, not a newly approved requirement. |
+| Developer account | Proposed: free Personal Team signing | Periodic reinstall is a tradeoff to review; no paid membership assumed. |
+| Scripture rendering | Implemented in SP-009: continuous TextKit 1 chapter surface with horizontal chapter swipes | SP-009 must prove continuous scrolling, passage selection and accessibility; annotation geometry remains a later native gate. |
+| Scripture visual system | Implemented SP-009 refinement: OldPaper reader/shell and seven persisted color/type presets | Shared presentation tokens and bundled offline OFL fonts implement the [Scripture screen specification](../design/scripture-screen-specification.md). Reader unit/UI evidence is tracked in SP-009; full accessibility, annotation integration and owner visual acceptance remain open. |
+| Translations | Confirmed: prioritize free access; prefer NIV, NLT, NKJV, or ESV | WEB is the proposed bundled base; preferred-version availability is not promised. |
+| Offline | Proposed: complete permitted base text plus policy-controlled online content | Free access does not imply permanent offline storage rights. |
+| Notes | Confirmed: expandable canvas with freely positioned text, ink, and images; explicit grouping | Objects stay independent until deliberately grouped. Growth limits, detailed selection/resize behavior, and export remain open. |
+| Audio | Confirmed preference: human narration | Provider/edition rights remain open; TTS is not an approved substitute. |
+| AI | Proposed: provider-neutral boundary, one provider first, Keychain secrets | Selected-context online use and source retrieval accepted. Provider/model, source access and numeric cost controls remain open; shared foundation and all four preset wordings approved; runtime and behavior evaluation pending. |
+| Storage | Reader slice implemented: immutable bundled SQLite Scripture plus local-only SwiftData reader state; remaining study data stays proposed | The maintained reader contract defines identity, loading and restore behavior. Notes/ink/media and full backup remain SP-005 work. |
+| Annotation persistence | Proposed: version + chapter + layer + layout revision | Separate ink per translation and preservation of original annotated layout confirmed; exact page/layout schema remains proposed. Meaningful passage links use valid mappings. |
+
+Non-goals: multi-user, cloud sync, App Store release, monetization, Android/web.
+
+## SP-006 implementation checkpoint — 2026-09-15
+
+Closure: owner approved stopping the bounded experiment with documented limitations.
+SP-006 is done under revised acceptance; deferred accessibility/gesture checks are
+not passes and must be addressed in the corresponding production editor tickets.
+
+The Notes tab now opens a disposable native canvas experiment. A SwiftUI session owns
+selection and snapshot history; a UIKit scroll view zooms one shared document surface
+containing text, an image, and a transparent PencilKit view. Object positions remain in
+document points. Group movement clamps every member by the same delta.
+
+The experimental store is an actor writing one validated, atomic JSON envelope containing
+text, geometry, group IDs, drawing bytes, and a generated image. It is deliberately
+separate from the proposed production SwiftData/file schema. Revision ordering prevents
+late autosaves replacing newer saves; invalid restore input leaves the existing file intact.
+
+Limits: three sample objects, one whole drawing object with a 1,100 × 800 pt ink area,
+canvas extent capped at 6,000 pt, 50–200% zoom, 500 text characters, and 30 undo snapshots.
+There is no stroke-level grouping, rich text, image import, multi-window coordination,
+or full backup implementation. Memory and Pencil behavior require physical-device evidence.
+A DEBUG-only `CanvasMemoryProbe` can collect physical footprint metrics with the
+explicit `SP006_MEMORY_PROBE=1` flag and a valid `SP006_UI_TEST_FIXTURE` UUID. It
+opens the experiment directly, uses the existing isolated fixture path, and records
+numeric JSON under `Application Support/SP006/Diagnostics/`. Normal launches keep
+the six-tab flow; Release excludes the probe. Synthetic stroke/edit/zoom cycles
+measure a bounded workload, not real Pencil gestures or production note capacity.
+See [SP-006](../../tickets/SP-006-native-canvas-experiment.md) and the
+[iPad walkthrough](../testing/sp006-ipad-guide.md). Production architecture remains provisional.
+
+## 5. Architecture Overview
+
+Proposed boundaries below; external Bible adapters are alternatives pending selection,
+not a commitment to integrate every provider. YouVersion is also under evaluation.
+
+```mermaid
+flowchart TB
+    subgraph app [iPad App - SwiftUI]
+        scriptureTab[Scripture Tab]
+        collectionsTab[Collections Tab]
+        notesTab[Notes Tab]
+        companionTab[Companion Tab]
+        activityTab[Activity Tab]
+        settingsTab[Settings Tab]
+    end
+    subgraph core [Core Modules]
+        renderer["Scripture renderer (implementation pending)"]
+        inkLayer["AnnotationEngine (PencilKit overlay)"]
+        anchorHub["VerseAnchor Hub"]
+        aiClient["LLM Adapter (BYOK, multi-provider)"]
+        audio["Audio playback (permitted narration; provider pending)"]
+        store["SwiftData Store + File Store"]
+        contentStore["Bible Content Store (SQLite, offline)"]
+        keychain["Keychain (API keys)"]
+    end
+    subgraph external [External APIs]
+        apiBible[API.Bible]
+        esvApi[Crossway ESV API]
+        llmApi["LLM Provider (user key)"]
+    end
+    scriptureTab --> renderer --> anchorHub
+    scriptureTab --> inkLayer --> store
+    renderer --> contentStore
+    contentStore --> apiBible
+    contentStore --> esvApi
+    audio --> narration["Permitted narration source (pending)"]
+    companionTab --> aiClient --> llmApi
+    aiClient --> keychain
+    collectionsTab --> anchorHub
+    notesTab --> anchorHub
+    anchorHub --> store
+```
+
+The diagram shows runtime responsibilities and candidate data sources. It does not
+require domain modules to import concrete stores or SDKs; dependency direction is
+specified in §5.1.
+
+### 5.1 Recommended implementation structure — architecture review
+
+Status: recommendation for owner review, not approval to refactor or build features.
+Use a native Swift app, organized by feature, with MVVM-style presentation and small
+application/domain boundaries. Start with one app target; extract local Swift packages
+when real reuse or compile-time dependency enforcement warrants them. Do not create
+empty packages, protocols or use-case wrappers merely to populate a template.
+
+- **App composition:** constructs concrete dependencies and navigation. Explicit initializer
+  injection supplies repositories and provider interfaces; no global mutable service locator.
+- **Presentation:** SwiftUI views display state and forward actions to a feature-owned
+  screen model/session. UIKit/PencilKit bridges handle rendering and native gestures.
+  They do not own database access, provider requests or theological prompt policy.
+- **Application:** coordinates meaningful workflows such as Save verse as note or Ask
+  about passage. Simple display/local-selection logic stays in presentation; use cases
+  are introduced for multi-step rules, reuse or transaction coordination, not every tap.
+- **Domain:** value types and rules such as passage identity, annotation layout identity,
+  note geometry and grouping. Domain code does not import SwiftUI, SwiftData, PencilKit
+  or a provider SDK. Platform drawing data is translated at the editor/storage boundary.
+- **Infrastructure:** implements domain/application-owned interfaces for local persistence,
+  media files, Keychain, Scripture sources and AI providers. Views never construct it.
+  Framework persistence objects do not escape as shared mutable application state.
+
+Compile-time dependency intent (arrows mean imports/references, not runtime call order):
+Presentation → Application → Domain; Infrastructure → inner contracts; App → concrete
+implementations and composition. A workflow invokes a repository interface at runtime;
+the app injects the implementation. Features do not import another feature's views or
+screen models. Cross-feature study links use shared passage/artifact IDs and explicit
+workflows. Shared code is introduced only for genuinely shared concepts.
+
+Recommended stack: SwiftUI for screens/design system; UIKit and PencilKit for canvas,
+Pencil lifecycle and the native tool picker; Swift concurrency for async work; URLSession
+behind provider adapters; Keychain for keys; AVFoundation for permitted audio playback.
+SwiftData reader preferences and immutable bundled SQLite Scripture are selected by the
+[reader data contract](../data/scripture-reader-contract.md). Separate drawing/media files
+and the remaining study-data schema stay proposed until their SP-005 slices specify
+atomic-save/recovery/migration boundaries. A custom TextKit-backed reader is selected;
+YouVersion remains an optional future content integration, not a rendering dependency. Keep
+XCTest/XCUITest for the existing test targets. No third-party architecture framework is
+required initially; Swift Package Manager manages dependencies only when justified.
+
+State ownership: view-local transient state in the view, screen state in one screen
+model/session, durable study state in repositories. UI state is MainActor-isolated;
+repository concurrency and background work are explicitly designed. Async calls alone
+do not guarantee off-main execution. Cancellation, failed saves and stale responses have
+explicit behavior; no force-try persistence or silent data replacement.
+
+For Notes specifically, separate document geometry/grouping and edit history from
+viewport/selection state, UIKit rendering/gesture coordination, and media persistence.
+Do not grow SP-006's session or controller into an all-purpose editor. The three-object
+JSON fixture and whole-drawing snapshot history are experimental, not production contracts.
+
+Maintainability gates: each selected ticket identifies owning modules and a visible
+outcome; new I/O crosses an explicit boundary; reusable UI tokens/components live in a
+design system; error/cancellation behavior is described; meaningful rule/repository tests
+and a small number of UI journeys verify the change. Review actual dependencies and
+responsibilities, not folder names or arbitrary line-count limits. Persist architectural
+decisions here; add separate ADRs only for substantial tradeoffs that need their own record.
+
+Apple references: [SwiftUI/UIKit bridge](https://developer.apple.com/documentation/swiftui/uiviewrepresentable),
+[PencilKit canvas](https://developer.apple.com/documentation/pencilkit/pkcanvasview),
+[SwiftData actor support](https://developer.apple.com/documentation/swiftdata/modelactor).
+
+## 6. Module Boundaries
+
+| Module | Owns | Must not own |
+| --- | --- | --- |
+| `ScriptureRenderer` | Turning cached chapter data into an attributed layout with verse anchors; selection handling; verse-tap hit-testing. | Persistence, networking, AI. |
+| `AnnotationEngine` | PencilKit lifecycle, version/chapter/layer/layout binding, extended ruled area and scroll sync; persistence through an interface. | Verse semantics, note content. |
+| `VerseAnchorHub` | Resolving a `VerseRef` to all attached artifacts and creating anchored artifacts. | Rendering, drawing. |
+| `LLMAdapter` | Normalizing provider requests/responses and streaming; receives already-built conversation context. | UI state, verse rendering. |
+| `AudioEngine` | Playback and playback state for permitted narration; provider remains open. | Content licensing, implicit TTS substitution. |
+| `ContentStore` | Offline SQLite scripture store; version metadata; chapter fetch-or-cache. | User study data. |
+| `UserStore` | SwiftData models for notes, conversations, collections, saved verses, activity, presets. | Bible text. |
+| `KeychainStore` | Secure read/write of provider API keys. | Anything else. |
+| `NoteCanvas` | Positioned content, selection, transforms, editing focus, undo, and viewport. | Network calls or direct provider access. |
+
+Start with one app target and feature folders. Introduce local Swift packages only
+where a tested boundary benefits from independent compilation or reuse. Empty protocols
+in the scaffold are placeholders, not finalized contracts.
+
+## 7. Data Model
+
+### 7.1 Scripture reader identity and locations
+
+The accepted reader slice is maintained in the
+[Scripture reader data contract](../data/scripture-reader-contract.md). An edition,
+content revision and reference system jointly identify source text. A verse identity
+uses that reference system plus a USFM book code, chapter and verse; passage ranges use
+ordered interval overlap rather than quotation matching. Explicit source mappings
+represent bridges, omissions and other versification differences.
+
+Reader restoration persists an edition/revision-aware source location and an optional
+UTF-16 body offset. A display page number is never the sole reading-position key because
+pagination can change. If an exact revision or offset is unavailable, restoration falls
+back visibly to the nearest valid source passage and never silently switches editions.
+
+### 7.2 Offline Scripture and reader-state stores
+
+SP-009 uses a generated, immutable bundled SQLite resource for the permitted WEBP
+snapshot and a manifest containing source, license, checksum and revision metadata.
+Normalized edition/book/chapter indexes lead to a versioned `ChapterDocument` payload;
+views request it through `ScriptureContentRepository` and never open SQLite directly.
+The importer validates the archive checksum, the exact 66-book set, chapter/order rules,
+UTF-8 content, deterministic output and license/credit fields before bundling it.
+
+Reader progress and typography/theme preferences are local user data stored through a
+separate `ReaderStateRepository`, initially implemented with SwiftData. Replacing the
+bundled database must not replace reader state. Restricted future editions require their
+own verified retention, quotation, export, TTS, narration and AI-use policy; API access
+alone is not permission to retain a full text.
+
+### 7.3 User data (SwiftData)
+
+- Proposed `Note(id, title, createdAt, updatedAt, tags[], canvas)`.
+  - The expandable canvas has stable identity, coordinate space, and positioned elements.
+  - Element kinds: rich text (including lists), ink, image, table, quote, link card, shape.
+  - Persist element identity, bounds, stacking order, payload reference, and passage links.
+  - Confirmed interaction rule: objects remain independent until deliberately grouped;
+    moving text alone leaves independent handwriting in place. See
+    [Interaction proposal 02](../design/canvas-interactions.md). Group membership must
+    preserve individual payloads. Stroke-storage granularity remains an experiment
+    question; accepting explicit grouping does not finalize the PencilKit data model.
+    Separate document coordinates from viewport pan/zoom in the prototype.
+  - Canvas growth limits, resizing rules, accessible reading order, and file commit strategy are
+    open. These sketches are not SwiftData declarations or a migration contract.
+- `Conversation(id, title, presetId, createdAt, updatedAt, linkedVerseRefs[], messages[])`
+- `Message(id, role, content, createdAt, providerId, modelId)` — role: system | user | assistant.
+- `Collection(id, name, createdAt, items[])`
+- `CollectionItem(id, kind, targetId | verseRef | url)` — kind: note | conversation | verse | link.
+- `SavedVerse(id, verseRef, versionId, snapshotText, kind, createdAt, noteId?)`
+  - `kind`: gleaning | bookmark | noteQuote.
+- `LinkAttachment(id, url, title, verseRef?, createdAt)`
+- `ActivitySession(id, start, end, source, label)` — source: timer | manual.
+- `PromptPreset(id, name, systemInstruction, isBuiltIn, options{...})`
+
+### 7.4 File store
+
+- PencilKit drawings: `ink/{versionId}/{bookUSFM}.{chapter}.layer{n}.drawing`.
+- Note images: `notes/{noteId}/{imageId}.heic`.
+
+Paths above are scaffold-era sketches. Final storage needs layout revision identity,
+note/page ink identity, versioned manifests, and recoverable metadata/file commits.
+Complete and test export/import before trusting the app with irreplaceable study notes.
+
+### 7.5 Keychain
+
+- One entry per provider: `service = "sophia.llm.{providerId}"`, value = API key.
+
+## 8. External Integrations
+
+### 8.1 Free content strategy and provider evaluation
+
+- SP-002 research baseline: eBible `engwebp`, American-English WEB Protestant edition,
+  USFM input, matching the existing 66-book scope. Immutable archive/checksum acquisition
+  belongs to ingestion implementation, not this research. See the dated
+  [content integration specification](../integrations/scripture-content.md) for evidence,
+  capability matrix, remaining questions and reproducible import acceptance plan.
+- Acquire permitted text → parse/map source book/chapter/verse identities → render in
+  Sophia's own Scripture UI. A provider's ready-made reader is optional, not required.
+  Keep content adapters independent of rendering, verse actions and Pencil geometry.
+  Offline WEB needs no YouVersion SDK or runtime content API. Personal use is the scope;
+  it does not imply every API grants permanent storage of its complete catalog.
+- Preferred editions are conditional integrations, not blockers for the base reader.
+  YouVersion offers Swift components and API access, but Sophia's app-specific licenses
+  remain unverified. API.Bible's current Starter plan advertises three optional copyrighted
+  editions; the earlier public-domain-only assumption is superseded. Exact eligibility,
+  refresh, quotations, exports and AI rules are recorded in the specification.
+- On expiry or unavailable access, explain the state and offer the bundled edition at
+  the same mapped reference. Never silently substitute a translation.
+- The existing ingestion script is an unimplemented stub with superseded bulk-download
+  assumptions. It is not approved tooling for downloading entire copyrighted Bibles.
+
+### 8.2 Crossway ESV API (ESV text + audio)
+
+- Base: `https://api.esv.org/v3`.
+- Auth: `Authorization: Token {key}` header.
+- Reads: `/passage/text/` and `/passage/html/` for text; `/passage/audio/` for passage
+  MP3; `/passage/search/` optional. Long-term audio storage permission remains unresolved;
+  avoiding persistent audio initially is Sophia policy, not a verified API prohibition.
+- Rate limits: 5,000/day, 60/min for non-commercial personal use. Required copyright
+  attribution is shown on the reader and in Settings → About.
+- Also enforce the 1,000/hour request limit and storage limit of 500 verses or half
+  of any book, whichever is less. Standard access cannot provide a full offline ESV.
+  Decide how quotations, conversation passage copies, and exports count toward local
+  storage before implementing Save/Ask. Narration storage and timing metadata need
+  separate verification; do not promise word/verse synchronization without timing data.
+
+### 8.3 LLM provider (BYOK, provider-agnostic)
+
+- Proposed `LLMAdapter` has a provider-neutral boundary; this sketch is not a final API:
+  `send(messages, preset, model, temperature) -> AsyncStream<Token>`.
+- Choose one provider for the first implementation after budget/capability review.
+  Additional adapters are later work. Verify the selected provider's current API at
+  implementation time; map instruction roles and streaming errors explicitly.
+- The active provider, model, and temperature are chosen in Settings; the key is read
+  from Keychain at call time and never logged or persisted in plaintext.
+- Failure handling: surface provider errors to the user verbatim-but-sanitized (no key
+  echo), allow retry, and keep the partial assistant message.
+
+## 9. Scripture Rendering and Interaction
+
+SP-003 selects custom TextKit-backed rendering for planning, with TextKit 2 preferred.
+The [rendering decision](../design/scripture-rendering-decision.md) governs range mapping,
+page geometry, layer lifecycle and transitions, superseding the earlier candidates below.
+M2 now uses continuous chapter scrolling under the owner revision below; selection across
+long passages remains a native verification gate. Proposed text and page-local PencilKit
+surfaces share one viewport transform; independently synchronized scroll offsets are not
+selected. Customize selection actions through the UITextView edit-menu delegate.
+
+- A `UITextView` backed by TextKit 2, wrapped in `UIViewRepresentable`. Chapter tokens
+  become an `NSAttributedString` where each run carries a custom `verseRef` attribute and
+  verse-number runs carry a `tappableVerse` attribute.
+- Verse/chapter taps: a tap gesture hit-tests the glyph at the touch point, reads the
+  `verseRef` attribute, and opens the anchor popup (Section 11).
+- Selection menu: `UIEditMenuInteraction` provides Copy, Ask, Save, Share. The selected
+  `NSRange` maps back to a `VerseRef` (or range) via the run attributes.
+  - Copy: plain text + reference to the pasteboard.
+  - Ask: opens a Companion conversation seeded with the selection + reference, and links
+    that conversation to the verse (auto-anchor).
+  - Save: prompts for gleaning | bookmark | note-quote, then writes a `SavedVerse`.
+  - Share: system share sheet with formatted text + reference.
+
+## 10. Annotation Layer Design
+
+D-10 reader direction was revised by the owner on 2026-09-22: one continuously scrolling
+chapter, with left/right chapter navigation. Bounded pages are not required for M2. M3
+annotation geometry must be revisited before implementation; the earlier page-based
+proposal below remains a candidate, not an active reader requirement. If pages are adopted, identity
+must retain passage and layout identity, not rely only on a mutable page number.
+D-11 requires main tabs at the bottom; native/adaptive behavior and Pencil palette overlap
+need validation before implementation. See the UX specification.
+
+
+- Page-local transparent `PKCanvasView` surfaces use the same viewport transform as the
+  text layout. An active canvas does not own an independent scrolling coordinate system.
+- Only one layer is visible at a time; layers are toggled hidden/shown. Empty and
+  transparent by default.
+- Proposed persistence: drawing identity includes version, chapter, layer, and layout
+  revision (content revision, font metrics, column width, and margin geometry). Ink
+  does not automatically carry across translations. SP-003 selects preserved spatial
+  layouts, while passage anchors support navigation and queries. Rotation, larger text, window resize,
+  Companion presentation, and extended-margin changes must not silently misalign ink.
+- Extended Annotation: one toggle shows the ruled margin throughout the current reading
+  layout. Its space remains reserved when hidden; toggling must not reflow Scripture or
+  displace ink. Narrow-window handling and initial dimensions still need design.
+- Confirmed D-02 (2026-09-16): multiple independent layers; at most one visible.
+  Read Hidden shows no ink, while Read Visible shows the selected layer without accepting
+  drawing. Both reading states support passage taps, text selection/actions and listening.
+  Draw enables the native Pencil palette and finger navigation, pauses Scripture text
+  selection and verse/chapter taps, and allows existing audio to continue.
+- Separate selected-layer identity from interaction state. Hidden layers retain content;
+  new layers are empty/transparent. Test gesture ownership, input transitions and undo.
+  Layer lifecycle is specified by SP-003; persistence/recovery remains SP-005 and native
+  validation remains SP-008. Preserve the original layout when text reflows.
+
+## 11. Verse Anchor Hub
+
+- `VerseAnchorHub.attachments(for: VerseRef)` returns notes (via quote blocks),
+  conversations (via `linkedVerseRefs`), saved verses, and links anchored to that
+  reference, powering the verse-tap popup — the core organization/accessibility feature.
+- Anchors are stored on the artifacts themselves (verse ref strings), so the hub is a
+  query layer, not a separate source of truth. This keeps references shared across all
+  translations.
+
+The query contract must also return collection memberships and deduplicate results.
+Chapter queries and overlapping passage ranges cannot be implemented as string equality.
+Select indexed relationships versus embedded references when the data contract is written.
+
+## 12. AI Companion Guardrails
+
+- Every conversation is created from a `PromptPreset`. Built-in presets seed from
+  `shared/prompt-presets.seed.json`: Biblical Studies, Christian Living, Apologetics,
+  Tough Questions. Each carries the owner's orthodox study instruction (orthodoxy lens,
+  original-language analysis when crucial, hermeneutics/exegesis with Scripture
+  interpreting Scripture, historical-cultural context, tradition comparison where
+  relevant, named proponents, APA references, and optional concision).
+- Seed revision 2 in `shared/prompt-presets.seed.json` retains owner-approved revision-1
+  wording: shared
+  Christian foundation plus Biblical Studies and Christian Living. Apologetics and Tough
+  Questions wording in revision 2 is now also owner-approved. No instruction text changed at approval.
+- Future integration must resolve `{{sharedGuardrail}}` exactly once in the selected
+  `systemInstruction` and send the composed context in the provider-supported instruction
+  role on every request, including follow-ups. Never transmit the unresolved placeholder.
+  There is no runtime consumer or provider integration yet; approval is for wording only.
+- Presets are user-editable in Settings; edits never delete the built-in defaults
+  (defaults can be reset).
+- ASK-from-scripture injects the selected passage and reference into the first user
+  message and auto-links the conversation to the verse.
+- Proposed reliability requirements: snapshot preset version per conversation; distinguish
+  retrieved evidence from model recollection; never invent citations, claim a search
+  without retrieval, or present model output as divine revelation. APA formatting is
+  not proof of source validity. Preserve the owner's theological intent with a reviewed
+  foundation and explicit handling of differences between Christian traditions.
+- A prompt does not provide browsing or commentary access. Retrieval, source licensing,
+  and provider costs remain open. Explain the passage/note context sent off-device;
+  include only deliberately selected context. Review seed prompts before using them.
+
+### 12.1 Conversational memory — requirement confirmed; architecture proposed
+
+REQ-024 confirms contextual follow-ups and clarifications. This is conversation-scoped
+state, not a promise of perfect recall or automatic learning about the user across chats.
+It does not require a Sophia server or provider-hosted conversation storage.
+
+Proposed responsibilities:
+
+- Conversation store: persist ordered user/assistant messages, passage references, selected
+  edition/context, resolved preset snapshot/version and relevant source metadata locally.
+  New conversations have separate identity and history. Storage/retention must respect
+  Scripture/source permissions; local history does not authorize retaining restricted text.
+- Request context builder: compose the active instruction snapshot, selected passage,
+  relevant prior turns and current question before the provider call. Treat messages,
+  retrieved documents and generated summaries as content, not instruction authority.
+  Do not include unrelated conversations, private notes or the entire library implicitly.
+- Provider adapter: translate the composed request into the selected provider's supported
+  message roles and context limits. A new API call must not be assumed to remember earlier
+  requests automatically. Provider choice and exact composition contract remain open.
+- Long conversations: reserve room for the answer and current question; preserve recent
+  turns and important explicit corrections, using provenance-linked summaries or selected
+  older messages when history exceeds the context budget. Summaries are lossy and may be
+  wrong; keep original permitted history available and ask for clarification when an omitted
+  detail matters. Never imply the model received every saved message. Do not preserve a
+  deleted message through an old summary; invalidate/rebuild derived memory when needed.
+- UI/session state: closing the panel, maximizing to the tab or reopening the app retains
+  the same conversation. Show failed/partial replies explicitly; retry must not duplicate
+  turns. Pin the instruction version for an existing conversation rather than silently
+  changing its foundation when defaults are edited; explicit context changes need a policy.
+
+Candidate acceptance scenarios (not executed): ask about John 3:16 and follow with “What
+about verse 17?”; refer to a previous argument; correct an earlier assumption and ask again;
+reopen the conversation; start another conversation and confirm isolation; exceed the
+context budget; retry an interrupted response; delete content and verify it is not used
+from derived memory. Conversation-range ambiguity should prompt clarification rather than
+an invented reference. Cross-chat memory and automatic profiling are not selected scope.
+
+### 12.2 Approved remaining presets
+
+Apologetics has approved wording emphasizing defense of Christian faith and teaching
+sound argumentation, without fabricated credentials or a win-at-any-cost approach.
+Tough Questions has approved wording emphasizing fair examination of major competing
+positions, including relevant non-Christian perspectives, evidence weighting and uncertainty.
+It remains transparent about the shared Christian foundation rather than claiming freedom
+from all bias. Both inherit the approved shared guardrail; both are owner-approved. No request, retrieval integration or model evaluation ran for these prompt edits.
+
+## 13. Audio, Activity, Settings
+
+- Audio: human narration preferred where permitted; on-device `AVSpeechSynthesizer`
+  only for content whose permissions allow it. Share playback state with the reader;
+  synchronized verse highlighting depends on actual timing data. Test interruptions,
+  screen lock, chapter completion, and missing voices/audio on the owner's device.
+- Activity: a manually triggered timer with activity-type tags plus manual start/end
+  entry, pause/resume and corrections writes proposed `ActivitySession`s. Streaks and goals
+  are confirmed; qualifying rules remain open.
+  Analytics (streaks, weekly minutes, per-book time) are computed locally from sessions.
+- Activity design must define book/reference capture, pause/resume, overlapping manual
+  entries, local-day boundaries, and whether listening counts. The current entity sketch
+  lacks book/reference fields, so per-book analytics are not yet implementation-ready.
+- Settings (fills the idea's gaps): theme mode; font family/size/line spacing;
+  default translation; red-letter toggle; TTS voice and speed; AI provider + key + model
+  + temperature; prompt-preset editor; data export/import; storage usage; cache refresh;
+  About/attribution.
+
+## 14. Security Constraints
+
+- API keys live only in Keychain; never in source, logs, SwiftData, or exports.
+- Data export excludes secrets; it packages user study data and drawing files as a zip.
+- Validate external input (API responses, pasted URLs) before rendering or storing.
+- LLM/provider errors are shown without echoing the key.
+- No secrets are committed; `.gitignore` excludes any local key material and generated
+  content databases.
+
+## 15. Quality and Testing Expectations
+
+These are planned checks, not reports of passing tests.
+
+- Unit-test: verse-reference parsing/formatting and ranges; content-store fetch-or-cache;
+  LLM adapter request mapping and streaming normalization; anchor-hub queries.
+- UI-test: tab navigation, verse tap popup, selection menu actions, annotation toggle.
+- Manual test cases in `tests/` and `docs/testing/test-specification.md` cover offline
+  reading, ingestion limits, and audio.
+- See `AGENTS.md` → Verification Commands for the exact `xcodebuild` invocations.
+- Verify freeform geometry and attachments survive reload, undo, and export/import;
+  test damaged imports without replacing intact user data. Test content-policy expiry
+  with injected dates and no live credentials. Measure Pencil feel and canvas memory
+  on the actual iPad A16, including long notes and large images.
+- Accessibility includes VoiceOver element order on the freeform canvas, larger text,
+  keyboard access, contrast, reduced motion, and labeled selection/edit controls.
+
+## 16. Deployment Assumptions
+
+- Proposed: free Personal Team signing on the owner's Mac. Provisioning expires after
+  7 days; review reinstall and backup workflow before daily use. Paid membership has
+  not been requested. See [Apple account guidance](https://developer.apple.com/help/account/basics/about-your-developer-account).
+- No CI/CD, no server, no store submission. Data safety relies on periodic manual export.
+- Verified 2026-09-14: Xcode 26.6 is installed at `/Applications/Xcode.app`; the default
+  developer directory points to Command Line Tools. A command-scoped `DEVELOPER_DIR`
+  selected full Xcode for version inspection. No successful app build is recorded.
+
+## 17. Out-of-Scope Behavior
+
+- Multi-user accounts, cloud sync, sharing between devices.
+- Commercial distribution or monetization.
+- Editing or redistributing licensed Bible text beyond personal on-device use.
+- Non-iPad platforms.
+
+## 18. Risks, Evidence, and Next Decisions
+
+Outstanding: exact Pencil model, canvas growth limits, detailed selection/resize behavior, canon scope,
+content entitlements, layout persistence, signing choice, AI budget/provider, and exact
+backup format. Track these through the [development plan](../development-plan/development-plan.md).
+The owner is learning native Apple development; each ticket must explain the relevant
+framework concepts and include a reproducible demonstration.
+
+Primary evidence checked 2026-09-14 (recheck before integrating a provider):
+
+- [iPad A16 specifications](https://support.apple.com/en-gb/122240): supports Apple Pencil USB-C and first generation; actual owned accessory remains unknown.
+- [WEB publisher](https://ebible.org/details.php?id=eng-web): public-domain text and edition details.
+- [YouVersion Swift SDK](https://github.com/youversion/platform-sdk-swift): official native integration candidate.
+- [API.Bible editions](https://docs.api.bible/guides/bibles/) and [terms](https://api.bible/terms-and-conditions): access and content restrictions.
+- [ESV conditions](https://www.esv.org/api/): standard noncommercial use and cache limits.
+
+## Owner answer integration — 2026-09-16
+
+The product specification's Q1–Q12 register governs the newly confirmed product choices.
+Use warm-paper/book-like styling; nested topic collections and shared memberships; intact
+Scripture quotations with separate commentary; direct canvas text editing, plain/ruled/grid
+backgrounds and card/list note library. These choices are not implemented by the prototype.
+
+Companion may send deliberately selected context online and retrieve sources. The owner
+has no numeric spending ceiling selected; this is not permission to purchase access or
+create provider accounts. Provider-neutral boundaries, privacy handling and source
+verification still need technical contracts. The owner supplied both samples and approved their refined shared foundation and two
+presets. A specific confession/source whitelist remains unselected; runtime integration and
+behavioral evaluation are future work.
+
+Files export/import and optional reminders are approved product requirements, not an
+implemented backup mechanism. Preferred visible feature sequence is Scripture, annotations,
+Notes, Collections, Companion, audio, Activity. The revised M0–M9 roadmap maps feature delivery to M2–M8 in that order; M0/M1 handles
+planning/feasibility and M9 integrated acceptance. Phase boundaries and implementation
+tickets require owner review before coding resumes.
+
+## SP-009 implementation evidence
+
+The M2 reader is under implementation and acceptance. See [reader evidence](../testing/sp009-reader-evidence.md) for the exact source snapshot, checks, remaining design gaps and physical gates. The first renderer uses TextKit 1 with a chapter-wide UTF-16 map; this is not a failed TextKit 2 experiment or an accepted M3 annotation layout. Scripture content and reader metadata are implemented; the remaining study-data sketches remain proposed.
+
+### Owner reader revision — 2026-09-22
+
+After physical testing, the owner reported bottom-scroll bouncing and requested continuous
+chapters, horizontal chapter swipes and removal of the duplicated top book/chapter title.
+M2 now uses one continuous UITextView with no exclusion bands or page counters. Chrome
+height stays fixed during scrolling. Left swipe advances, right swipe
+goes back; active text selection suppresses chapter swipes. Existing Previous/Next controls
+remain accessible alternatives. Location remains in navigation controls and the footer.
+No reader-state migration or content change is needed. See SP-009 for verification.
+
+### Compact passage navigation — 2026-09-22
+
+The owner's next M2 revision replaces three independent selectors with two compact buttons:
+current book/chapter (for example Genesis 1) and Version (WEB). A navigation sheet drills
+through searchable Books → Chapters → Verses, with native Back, cancellation and a Read
+chapter shortcut. Previewing choices does not mutate or save the current passage. Verse
+choices come from the bundled chapter's mapped verse numbers, independent of scroll position.
+The topmost visible verse remains an internal restoration anchor, not a displayed progress
+counter. Selecting a verse briefly colors its complete mapped body and label for 1.5 seconds;
+notes/headings and neighboring verses are excluded. A subsequent jump clears the previous
+focus. This is transient rendering, never saved highlighting or native text selection.
+The redundant branding/collapse row and its Settings toggle are removed. The serialized
+controlsExpanded preference is retained for backward compatibility but no longer affects UI.
+
+### Licensed-edition account verification — 2026-09-22
+
+Owner selected NIV, NLT and NKJV. Authenticated API.Bible catalog checks confirmed NIV11,
+NLT and NKJV metadata access. Full-edition downloads remain unresolved: section 8's
+systematic-extraction restriction must be reconciled with section 11's conditional offline
+storage requirements. A 30-day refresh policy alone is not bulk-download authorization.
+See [content integration evidence](../integrations/scripture-content.md#authenticated-edition-verification--2026-09-22)
+and its unsent permission-request draft. No licensed Scripture text has been downloaded
+or installed, and no runtime provider integration is claimed.
+
+### SP-010 licensed offline translations — 2026-09-23
+
+The owner later supplied explicit API.Bible approval for full offline caching of NIV11,
+NLT and NKJV for this personal iPad app, with a 30-day validation/sync requirement and
+later approval for unlimited personal Copy/Share and text extraction. This is recorded as
+owner-supplied correspondence, without independent verification. SP-010 implements an
+authenticated direct client, validated typed chapter parser, staged download/resume,
+device-only Keychain credential/key storage, and AES-GCM-encrypted chapter payloads in
+protected app storage. Each lease locks licensed text on expiry, revocation or detected
+clock rollback; WEB remains readable. The user enters the credential on the physical iPad,
+then starts the download in Versions. No provider secret or licensed chapter text is in
+source control.
+
+### SP-010 development-period exception — 2026-09-29
+
+The owner supplied written API.Bible authorization for Sophia Scriptura to retain encrypted
+NIV11, NLT and NKJV copies beyond the standard 30-day refresh period during development,
+testing, debugging and application rebuilds. This exception is scoped to development and
+does not authorize permanent production caching or distribution. Debug builds use the
+exception; Release and Archive builds continue to enforce the 30-day lease. Revocation,
+clock-rollback detection, encryption, attribution and secure local storage remain required.
+
+### SP-010 manual sync correction — 2026-09-29
+
+Licensed-edition synchronization is owner-initiated only. App launch, foreground resume,
+status refresh and near-expiry checks must never call API.Bible sync endpoints. The owner
+uses the explicit per-edition Sync button or **Sync all three now** when choosing to renew.
+The provider abbreviation NIV11 remains part of account/catalog evidence; Sophia presents
+that edition as **NIV** without changing its stable API.Bible ID or redownloading content.
+
+### Cached access recovery — 2026-09-29
+
+Debug builds honor the owner-supplied development authorization for existing encrypted
+NIV11, NLT and NKJV copies even when an earlier denied sync set the legacy shared
+access-block flag. Failed API requests still fail; they do not invalidate these separately
+authorized development copies. The flag is retained and enforced by the standard policy
+in Release/Archive. Missing or invalid encrypted content and clock rollback still block
+access. Opening cached translations does not start a sync or download.

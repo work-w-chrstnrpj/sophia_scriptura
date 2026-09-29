@@ -1,36 +1,94 @@
 # Project Agent Rules
 
-Source of intent: `wiki/tdd/tdd.md`. Source files remain the final implementation truth.
+Source of intent: `docs/tdd/tdd.md`. Source files remain the final implementation truth.
 
 Agents working in this repository must keep implementation and documentation changes aligned with the project goal:
 
 ```text
-[State the project goal here.]
+Build Sophia Scriptura, a personal, offline-first iPadOS Bible study app for a single
+user that unifies scripture reading, Apple Pencil annotation layers, note taking,
+verse-anchored collections, a guardrailed AI study companion (BYOK), audio playback,
+and a Bible reading habit tracker — grounded in historic orthodox Christian conviction.
 ```
+
+## Owner-directed development
+
+Follow `docs/guidelines/ai-structure-guidelines.md` and `.ai/context-routing.md`.
+The owner chooses the next ticket. Before implementation, name the ticket, milestone,
+visible outcome, exclusions, affected modules, and checks. A ready ticket is not automatic
+permission to execute it. Continue necessary work inside the selected scope without
+repeated confirmation; return to the owner before starting another ticket or new feature.
+Planning, feedback, and architecture-review requests do not authorize app implementation.
+Use existing `.agents/` roles and skills as applicable; role selection does not itself
+require spawning agents. End each ticket with evidence, gaps, and status.
 
 ## Project Overview
 
-Describe `[Project Name]`, the target audience, the main user workflows, and the highest-level system responsibilities. Keep this section specific enough for agents to avoid inventing behavior.
+Sophia Scriptura is a native SwiftUI application for iPadOS 17+, built and run by its
+single owner on a personal iPad using a free Apple Developer account (weekly re-deploy
+from Xcode). It is explicitly not a production or App Store product.
 
-## Detected Tech Stack
+Target user: one person doing personal Bible study and discipleship.
 
-Fill this after the project chooses its tools.
+Intended user workflows (mostly not implemented):
 
-- Application/runtime: `[Runtime or framework]`
-- Service/API layer: `[Runtime, framework, or not applicable]`
-- Data store: `[Data Store or not applicable]`
-- Testing: `[Test tools]`
-- Deployment: `[Deployment target]`
+- Read scripture across multiple translations. Free access is prioritized; NIV, NLT,
+  NKJV and ESV are preferred. Provider access and offline permissions remain subject
+  to SP-002; WEB is a proposed bundled base. See TDD §8.
+- Toggle a transparent Apple Pencil annotation layer over the text, with an optional
+  extended ruled writing area beside the scripture column.
+- Tap chapter and verse numbers to see everything anchored to that verse: notes,
+  conversations, saved verses, and links.
+- Select scripture text to Copy, Ask (start a guardrailed AI conversation auto-linked
+  to the verse), Save (as a gleaning, bookmark, or note quote), or Share.
+- Chat with an AI Companion whose every conversation starts from an editable prompt
+  preset that carries orthodox theological guardrails.
+- Take OneNote-style notes mixing typed text, ink, images, tables, quotes, and link
+  cards; group by tag; sort by title or date; view as cards or a list.
+- Group notes, conversations, scriptures, and links into collections shown as folders.
+- Listen to permitted narration or on-device text-to-speech where content rights allow.
+- Track reading sessions with a timer or manual entry and view local analytics.
+
+Highest-level system responsibilities: render scripture with tappable verse anchors,
+persist user study data locally, keep ink annotations aligned per version and chapter,
+anchor all study artifacts to canonical verse references, and mediate AI requests
+through a provider-agnostic bring-your-own-key adapter without leaking secrets.
+
+## Implemented and proposed technology
+
+- Application/runtime: `SwiftUI on iPadOS 17+ (Swift 5.9+, Xcode 16+)`
+- Service/API layer: no runtime backend. SP-010 implements a direct on-device API.Bible
+  client and encrypted licensed-content sync for the owner-approved NIV11, NLT and NKJV IDs.
+- Current runtime store: SP-006 atomic JSON fixture with drawing/image bytes. SP-009 implements bundled read-only SQLite plus local-only SwiftData reader state.
+  SP-010 adds AES-GCM-encrypted Core Data payloads and device-only Keychain state for
+  licensed editions; drawing/media and remaining study data contracts remain proposed.
+- Testing: `XCTest (unit and UI); manual test cases under tests/ and docs/testing.`
+- Deployment: `Personal sideload from Xcode to the owner's iPad (free Apple Developer account, 7-day signing validity). No CI/CD, no server, no App Store distribution.`
 
 ## Repository Map
 
 Update this map whenever the project structure changes.
 
-- `application/`: user-facing application, client, command surface, or primary runtime.
-- `service/`: backend service, API, worker, job, integration, or process layer.
-- `shared/`: shared contracts, utilities, constants, types, schemas, or design assets.
-- `tests/`: cross-cutting manual and automated tests.
-- `wiki/`: project intent, contracts, architecture, operations, and quality documentation.
+- `application/`: the SwiftUI iPad app. `application/SophiaScriptura/` holds the Xcode
+  project: the six tabs (Scripture, Collections, Notes, Companion, Activity, Settings)
+  with the SP-006 Notes experiment and SP-007 in-memory Collections prototype. Collections
+  separates library/detail, picker/editor, components, styling and temporary data; Core
+  contains Scripture domain contracts and selection mapping plus remaining placeholder protocols.
+  Infrastructure contains reader SQLite/SwiftData adapters plus SP-010's API.Bible,
+  encrypted-store and Keychain adapters; Resources/Scripture bundles WEBP content.
+  DesignSystem owns reader appearance tokens and font registration; Resources/Fonts
+  contains the selected offline font families, licenses and provenance.
+- `service/`: no runtime backend; strict local WEBP USFM importer and independent VPL validation. Content permissions must
+  be verified before implementing downloads.
+- `shared/`: book-code and prompt-preset seed JSON; not a completed shared runtime.
+- `tests/`: cross-cutting manual and automated tests. Native SP-006 targets live in
+  `application/SophiaScriptura/SophiaScripturaTests/` and `SophiaScripturaUITests/`.
+  The isolated prototype lives in `Features/Notes/CanvasExperiment/`; its physical
+  walkthrough is `docs/testing/sp006-ipad-guide.md`.
+- `docs/`: project intent, contracts, architecture, operations, and quality
+  documentation (this repository's wiki). Canonical technical intent lives in
+  `docs/tdd/tdd.md`; the reader data contract lives in `docs/data/`; work tracking lives
+  in `docs/development-plan/development-plan.md`.
 - `.agents/`: canonical reusable AI roles, skills, overlays, workflows, and tool policies.
 - `.ai/`: context routing, maps, prompt recipes, and generated-index guidance.
 - Tool adapters: `.claude/`, `.codex/`, `.cursor/`, `.github/`, `.opencode/`, and other generated folders expose canonical assets in each tool's expected format.
@@ -47,9 +105,9 @@ Update this map whenever the project structure changes.
 
 ## Documentation Rules
 
-- Keep `wiki/tdd/tdd.md` canonical for technical intent.
-- Update API, data, diagram, testing, deployment, and project-structure wiki pages when behavior or architecture changes.
-- If work is tracked in `wiki/development-plan/development-plan.md`, update the matching status.
+- Keep `docs/tdd/tdd.md` canonical for technical intent.
+- Update API, data, diagram, testing, deployment, and project-structure docs pages when behavior or architecture changes.
+- If work is tracked in `docs/development-plan/development-plan.md`, update the matching status.
 - Do not add project-specific requirements to reusable template files unless the project has adopted them.
 
 ## Security Rules
@@ -112,10 +170,11 @@ Reusable skills live in `.agents/skills/`. Tool-specific skill copies are genera
 
 ## Verification Commands
 
-Replace these placeholders with the project commands.
-
-- `[lint command]`: static style and quality checks.
-- `[typecheck command]`: type or compile checks, if applicable.
-- `[test command]`: automated test suite.
-- `[build command]`: production build, package, or release artifact check.
-- `[e2e command]`: end-to-end or system verification, if applicable.
+Use `docs/testing/test-specification.md` for the current native test command and
+`docs/deployment/deployment.md` for builds, signing and physical-device execution.
+The actual project exists at `application/SophiaScriptura/SophiaScriptura.xcodeproj`.
+Use the SophiaScriptura scheme and an installed iPad simulator; do not assume an M4
+simulator exists. Set DEVELOPER_DIR per command where the Mac selects Command Line Tools.
+Keep result bundles in ignored `build/` and summarize evidence in the ticket.
+Documentation-only changes require relevant link/path and `git diff --check` validation;
+do not rerun native tests without a code change or unresolved verification need.

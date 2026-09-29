@@ -1,18 +1,24 @@
-# Service Placeholder
+# Service — Content Preparation
 
-This folder is intended for backend services, APIs, workers, jobs, integrations, or process-level logic.
+No runtime backend. `ingestion/ingest.py` prepares the public-domain WEBP Bible from
+publisher archives downloaded separately. It never accesses accounts or provider keys.
 
-Use it only when the project has a service layer. If the project is a static site, local tool, library, or single-process application, this folder may be unnecessary.
+```sh
+python3 service/ingestion/ingest.py \
+  --usfm build/sp009/source/engwebp_usfm.zip \
+  --vpl build/sp009/source/engwebp_vpl.zip \
+  --output build/sp009/generated
+python3 -m unittest discover -s service/ingestion -v
+```
 
-## Suggested Sections To Fill
+Follow the USFM and VPL links on the [publisher listing](https://ebible.org/find/details.php?id=engwebp).
+Keep original bytes in ignored build inputs. The importer rejects unsafe archives, unknown
+syntax, duplicate/missing/extra books and unexplained independent-format differences.
+It preserves structural runs and ancillary source files, creates read-only SQLite content
+plus a provenance manifest, and never operates on user databases. Reusing an output directory
+replaces only its generated artifact; use `build/`, not a personal-data directory.
 
-- API handlers or service entrypoints.
-- Business logic.
-- Persistence and repositories.
-- External integrations.
-- Background jobs, queues, or scheduled tasks.
-- Service-level tests.
-
-## Boundaries
-
-Document what the service may call, what may call the service, and which data or external systems it owns.
+See [reader evidence](../docs/testing/sp009-reader-evidence.md) and the
+[content policy](../docs/integrations/scripture-content.md). Copy verified artifacts to
+`application/SophiaScriptura/SophiaScriptura/Resources/Scripture/` only after comparison,
+repeat-build checks and source inspection. Copyrighted provider ingestion is not implemented.

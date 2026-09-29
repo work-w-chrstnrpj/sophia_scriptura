@@ -1,28 +1,21 @@
-# Context Routing
+# Sophia context routing
 
-Use this guide before reading broad wiki pages or source folders.
+1. Read `AGENTS.md` and the owner's request.
+2. Read `docs/development-plan/development-plan.md` and the selected ticket to establish
+   stage and scope. No ticket selection means no automatic feature execution.
+3. Select the smallest relevant role/skill via `.ai/maps/agent-map.md`.
+4. Follow one relevant map below, then read exact source before editing.
+5. Execute the selected scope, verify, update evidence, and return control to the owner.
 
-## Default Flow
-
-1. Read `AGENTS.md`.
-2. Identify the task type and lead role from `.ai/maps/agent-map.md` or `.ai/maps/agent-map.md` if the project creates one.
-3. Pick the smallest relevant map from `.ai/maps/`.
-4. Inspect generated index files only if file discovery is still unclear.
-5. Use search or approved context tools for exact symbol, route, dependency, and document discovery.
-6. Read exact source files, tests, contracts, wiki pages, or configs.
-7. Edit narrowly, then verify.
-
-## Task Routing
-
-| Task Type | Read First | Then Inspect |
+| Task | Discovery map | Intent |
 | --- | --- | --- |
-| Application behavior | `.ai/maps/application-map.md` | Entry points, feature modules, state, tests |
-| Service or API behavior | `.ai/maps/service-map.md` | Handlers, services, contracts, tests |
-| Data model or persistence | `.ai/maps/data-map.md` | Schemas, repositories, migrations, data wiki pages |
-| API contract | `.ai/maps/api-map.md` | Contracts, clients, handlers, contract tests |
-| Tests or failing checks | `.ai/maps/testing-map.md` | Exact failing test, subject file, setup |
-| Deployment or runtime config | `.ai/maps/deployment-map.md` | Deployment wiki pages, config, environment examples |
+| UI, Notes, Pencil | `.ai/maps/application-map.md` | TDD and `docs/design/` |
+| Persistence and recovery | `.ai/maps/data-map.md` | TDD §7; reader contract; SP-005/006/009 |
+| Content or AI providers | `.ai/maps/api-map.md` | TDD §8; SP-002 |
+| Offline ingestion | `.ai/maps/service-map.md` | No runtime backend; content-policy constraints |
+| Tests | `.ai/maps/testing-map.md` | Ticket acceptance and test specification |
+| Signing and device run | `.ai/maps/deployment-map.md` | Deployment guide |
+| Planning or documentation | `docs/README.md` | Owner workflow, roadmap, selected ticket |
 
-## Hard Rule
-
-Maps, generated indexes, graphs, summaries, and embeddings are navigation aids. They are not implementation truth. Always read exact source files before edits.
+Maps are discovery aids, never implementation or test evidence. Generated indexes are
+optional; do not generate broad context when these paths and exact reads suffice.

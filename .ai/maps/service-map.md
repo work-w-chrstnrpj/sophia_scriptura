@@ -1,13 +1,6 @@
-# Service Map
+# Ingestion map
 
-Fill this file after the service or backend structure is known.
-
-## Suggested Content
-
-- Service entry points.
-- Handlers, controllers, or message consumers.
-- Business services.
-- Data access modules.
-- External integrations.
-- Service tests.
-- Important boundaries and forbidden dependencies.
+Sophia has no runtime backend. `service/README.md` and `service/ingestion/` describe a
+the implemented WEBP USFM importer, independent VPL comparison and tests. Read TDD §8,
+SP-002 and `docs/testing/sp009-reader-evidence.md` before changing bundled content. Do not infer bulk/offline permissions from an API's existence.
+`shared/usfm-books.json` holds book seed data. No server deployment or service API exists.

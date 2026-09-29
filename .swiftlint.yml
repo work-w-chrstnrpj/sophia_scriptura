@@ -1,0 +1,12 @@
+# Optional SwiftLint config for Sophia Scriptura. Install with: brew install swiftlint
+# Run from repo root with: swiftlint --config .swiftlint.yml
+included:
+  - application/SophiaScriptura/SophiaScriptura
+excluded:
+  - "**/DerivedData"
+  - "**/.build"
+disabled_rules:
+  - todo
+line_length:
+  warning: 120
+  error: 200

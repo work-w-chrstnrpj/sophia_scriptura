@@ -222,3 +222,11 @@ SP-013 workspace refinement: `NoteObjectStyle.swift` adds optional shape/tint va
 `NoteInsertGallery.swift` owns shape/emoji choices, `NoteInkAppearance.swift` adapts neutral
 ink to theme, and `NoteLinkPreview.swift` fetches explicit link previews. The editor owns
 contextual selection actions; Root overlays the dock while editing to reclaim writing space.
+
+## SP-015 structure update
+
+`Features/Collections/` now persists through `Infrastructure/Collections/CollectionsFileRepository.swift`.
+`CollectionsStore` owns folder, membership, move/assign and saved-passage commands; No Folder
+is virtual (`StudyCollection.unfiledID`). `CollectionDestinationPicker.swift` holds the shared
+folder chooser; `PassageSaveSheet.swift` and `PassageCardSheet.swift` own bookmark/gleaning
+save and centered cards. Scripture builds ellipsis excerpts via `ChapterTextMap.excerpt(in:)`.

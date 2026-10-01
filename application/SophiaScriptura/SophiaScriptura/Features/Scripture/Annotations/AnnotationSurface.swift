@@ -7,11 +7,17 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     let reader: ReaderSession
     let session: AnnotationSession
     let stateToken: String
+    var saveToNote: ((ChapterTextMap.Selection) -> Void)? = nil
+    var saveBookmark: ((NSRange) -> Void)? = nil
+    var saveGleaning: ((NSRange) -> Void)? = nil
     func makeUIViewController(context: Context) -> AnnotationController {
         AnnotationController(document: document, preferences: preferences, reader: reader, session: session)
     }
     func updateUIViewController(_ controller: AnnotationController, context: Context) {
         controller.preferences = preferences
+        controller.saveToNote = saveToNote
+        controller.saveBookmark = saveBookmark
+        controller.saveGleaning = saveGleaning
         DispatchQueue.main.async { [weak controller] in controller?.apply() }
     }
     static func dismantleUIViewController(_ controller: AnnotationController, coordinator: ()) { controller.dispose() }
@@ -46,6 +52,9 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     private var pickerVisible = false
     private var pickerActive = false
     private var navigationID: UUID?
+    var saveToNote: ((ChapterTextMap.Selection) -> Void)?
+    var saveBookmark: ((NSRange) -> Void)?
+    var saveGleaning: ((NSRange) -> Void)?
     private var renderKey = ""
     private var matched = false
     private var lastMode: AnnotationSession.Mode?
@@ -184,12 +193,22 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         }
         if lastMode == .hidden && session.mode != .hidden, let range = text.map?.range(for: reader.targetVerse) { reveal(range) }
         lastMode = session.mode
+        coordinator?.parent.saveToNote = saveToNote
+        coordinator?.parent.saveBookmark = saveBookmark
+        coordinator?.parent.saveGleaning = saveGleaning
         if navigationID != reader.navigationID {
             navigationID = reader.navigationID
             if let location = reader.restorationLocation, let id = location.blockID,
                let run = text.map?.runs.first(where: { $0.block.id == id }), let offset = location.utf16Offset {
-                reveal(NSRange(location: run.range.location + min(offset, max(0, run.range.length - 1)), length: 1))
-            } else if let range = text.map?.range(for: reader.targetVerse) { reveal(range) }
+                reveal(NSRange(location: run.range.location + min(offset, max(0, run.range.length - 1)), length: 1), focusAfter: false)
+            } else if let range = text.map?.range(for: reader.targetVerse) {
+                reveal(range, focusAfter: false)
+            }
+            if reader.emphasisSpans.isEmpty {
+                text.focus(verse: reader.targetVerse)
+            } else {
+                text.focus(spans: reader.emphasisSpans, holds: true)
+            }
         }
     }
     private func makeCanvas(_ layer: AnnotationLayer, color: UIColor) -> PKCanvasView {
@@ -249,13 +268,13 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     }
     func scrollViewDidZoom(_ scrollView: UIScrollView) { centerStage() }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { stage }
-    func reveal(_ range: NSRange) {
+    func reveal(_ range: NSRange, focusAfter: Bool = true) {
         text.layoutManager.ensureLayout(for: text.textContainer)
         let glyphs = text.layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
         let rect = text.layoutManager.boundingRect(forGlyphRange: glyphs, in: text.textContainer)
         viewport.setContentOffset(CGPoint(x: 0, y: max(0, min(viewport.contentSize.height - viewport.bounds.height,
             (rect.minY + text.frame.minY + paper.frame.minY) * viewport.zoomScale - 20))), animated: false)
-        text.focus(verse: text.map?.verse(at: range.location) ?? reader.targetVerse)
+        if focusAfter { text.focus(verse: text.map?.verse(at: range.location) ?? reader.targetVerse) }
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         guard scrollView.isDragging || scrollView.isDecelerating, scrollView.zoomScale > 0 else { return }

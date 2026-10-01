@@ -9,8 +9,9 @@ acceptance pending, 2026-09-29.
 | `application/SophiaScriptura/SophiaScriptura/Features/` | Six tabs; `Notes/` has the SP-013 library and editor plus an isolated DEBUG `CanvasExperiment/` |
 | `application/SophiaScriptura/SophiaScriptura/Core/` | `Scripture/` domain and selection mapping, `Annotations/` contracts, `Notes/` document values and contracts; other boundaries remain placeholders |
 | `application/SophiaScriptura/SophiaScriptura/Infrastructure/Notes/` | SP-013 validated Notes generations, recovery and Notes-only Files archives |
-| `application/SophiaScriptura/SophiaScriptura/Features/Collections/` | SP-007 in-memory prototype: separate library/detail views, cards/rows, picker/editor sheets, adaptive style, models and observable store; no file/provider access |
-| `application/SophiaScriptura/SophiaScriptura/DesignSystem/` | Shared seven-preset palette roles and offline font registration; UI-only, no content or storage access |
+| `application/SophiaScriptura/SophiaScriptura/Features/Collections/` | SP-015 persisted folders/subfolders, No Folder, bookmarks and gleanings: library/detail, cards/rows, folder chooser (save, move, assign), passage save and card sheets, editor, twelve-accent style and observable store |
+| `application/SophiaScriptura/SophiaScriptura/Infrastructure/Collections/` | SP-015 checksummed Collections generations with current/previous pointers and damaged-file preservation |
+| `application/SophiaScriptura/SophiaScriptura/DesignSystem/` | Shared seven-preset palette roles, offline font registration and responsive library command controls; UI-only, no content or storage access |
 | `application/SophiaScriptura/SophiaScriptura/Resources/Fonts/` | Nine bundled font families, OFL notices and source/checksum manifest |
 | `service/ingestion/` | Strict offline USFM importer, VPL comparison and importer tests; generated WEBP SQLite/manifest |
 | `shared/` | Book-code and prompt seed JSON; schema/guardrails still need review |

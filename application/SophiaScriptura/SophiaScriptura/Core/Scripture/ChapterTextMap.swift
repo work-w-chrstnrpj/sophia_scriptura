@@ -69,4 +69,53 @@ struct ChapterTextMap {
     func verse(at offset: Int) -> Int? {
         runs.last { $0.range.location <= offset && !$0.block.verses.isEmpty }?.block.verses.first
     }
+
+    struct VerseExcerpt {
+        var startVerse: Int
+        var endVerse: Int
+        var text: String
+        var ranges: [NSRange]
+    }
+
+    /// Keeps only the highlighted words. A verse that is cut off keeps its number and an ellipsis at the cut.
+    func excerpt(in range: NSRange) -> VerseExcerpt? {
+        let source = text as NSString
+        var verses: [Int] = []
+        for run in runs {
+            let intersection = NSIntersectionRange(run.range, range)
+            guard intersection.length > 0, run.block.kind == "body" else { continue }
+            for verse in run.block.verses where !verses.contains(verse) { verses.append(verse) }
+        }
+        guard let start = verses.min(), let end = verses.max() else { return nil }
+        var pieces: [String] = []
+        var highlights: [NSRange] = []
+        for verse in verses {
+            let body = runs.filter { $0.block.kind == "body" && $0.block.verses.contains(verse) && $0.range.length > 0 }
+            guard let first = body.first, let last = body.last else { continue }
+            let coversStart = range.location <= first.range.location && NSMaxRange(range) > first.range.location
+            let coversEnd = range.location < NSMaxRange(last.range) && NSMaxRange(range) >= NSMaxRange(last.range)
+            var fragment = ""
+            var separator = ""
+            for run in runs {
+                let intersection = NSIntersectionRange(run.range, range)
+                guard intersection.length > 0 else { continue }
+                if run.block.kind == "body" && run.block.verses.contains(verse) {
+                    fragment += separator + source.substring(with: intersection)
+                    separator = ""
+                    highlights.append(intersection)
+                } else if run.block.kind == "break" || run.block.kind == "label" {
+                    if !fragment.isEmpty && !fragment.hasSuffix(" ") && !fragment.hasSuffix("\n") {
+                        separator = run.block.kind == "break" ? "\n" : " "
+                    }
+                }
+            }
+            let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            var piece = coversStart ? "\(verse) \(trimmed)" : "\(verse)...\(trimmed)"
+            if !coversEnd { piece += "..." }
+            pieces.append(piece)
+        }
+        guard !pieces.isEmpty else { return nil }
+        return VerseExcerpt(startVerse: start, endVerse: end, text: pieces.joined(separator: " "), ranges: highlights)
+    }
 }

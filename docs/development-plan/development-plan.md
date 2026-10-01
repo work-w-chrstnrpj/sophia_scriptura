@@ -1,6 +1,6 @@
 # Development Plan — Sophia Scriptura
 
-Revision: 2026-09-29. This is the main phase/progress tracker. Owner-requested roadmap
+Revision: 2026-10-02. This is the main phase/progress tracker. Owner-requested roadmap
 revision under SP-001; phase outcomes are ready for review, not authorization to code.
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
@@ -93,7 +93,7 @@ by a final integrated acceptance pass. No date or effort estimate is implied.
 | M2 | Scripture reader | done; owner-revised acceptance | Offline WEB reader plus authorized encrypted NIV11/NLT/NKJV download, 30-day lock/renewal, Version control, selection, Copy/Share and initial verse hub | Owner closure 2026-09-29; VoiceOver waived; visual/renewal accepted as addressed |
 | M3 | Scripture annotations | in_progress; SP-012 implemented; verification/device acceptance pending | Multiple layers, three states, native tools, blank surrounding space and aligned persistent ink on continuous chapters | M2; demonstrated layout/gesture strategy; ink storage and recovery contract |
 | M4 | Study Notes | done; owner accepted 2026-10-01 | Canvas and Page editors sharing a library, citations, v3 recovery, a persisted Scripture-pane toggle and Scripture-to-note routing | M2 passage identity; M1 canvas evidence; tagged content/recovery plan; follows M3 in visible delivery |
-| M5 | Collections and full Save flow | blocked | Nested topic folders, shared membership, bookmarks/gleanings/note quotes, attached links, organized verse hub and remove-versus-delete recovery rules | M4 note links and relevant SP-005 membership/deletion contracts |
+| M5 | Collections and full Save flow | done; owner accepted SP-015 on iPad 2026-10-02 | Nested topic folders, shared membership, bookmarks/gleanings/note quotes, attached links, organized verse hub and remove-versus-delete recovery rules | M4 note links and relevant SP-005 membership/deletion contracts |
 | M6 | Stateful Companion | blocked | Four approved contexts in working chat; follow-ups, passage Ask, panel/tab continuity, attributed sources and provider configuration | M5 integrated study artifacts; provider/source choice, privacy/context contracts and evaluations |
 | M7 | Scripture audio | blocked | Permitted human narration with playback controls and tested interruptions; explicit edition/availability handling | M2 reader and permitted audio source; follows M6 in visible delivery |
 | M8 | Activity and habits | blocked | Manual tagged timer, pause/corrections/manual entries, goals, streaks and local analytics | Session/day/goal rules reviewed; follows M7 in visible delivery |

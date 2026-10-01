@@ -27,7 +27,18 @@ SP-002 content/import cases CONTENT-01–10 are specified in
 [Scripture content feasibility](../integrations/scripture-content.md). They are planned,
 not executed. Research validates a source/license candidate, not an imported Bible.
 
-Latest Collections evidence (2026-09-21): `build/sp007-20260921-r2.xcresult` reports
+Latest Collections evidence (2026-10-01, SP-015): `build/sp015-final.xcresult` on iPad
+(A16) Simulator / iOS 26.5 passed all 108 unit tests, all four `CollectionsUITests`
+(folder nesting/color/deletion, filing a note, saving a bookmark to a new collection then
+moving it and opening a centered card, gleaning Edit/Save/Clear) and the four
+`AnnotationUITests`. Collections now persist through `CollectionsFileRepository`. UI
+tests use the `SP009_TEST_STORE` directory, so they never touch personal data. The two
+Collections shell-navigation tests create their own folder instead of using the removed
+demo data. `testAppearancePresetPersistsAcrossRelaunch` and the Settings final-row test
+fail with Settings content off-screen; the first was reproduced on unmodified `HEAD`.
+See [SP-015](../../tickets/SP-015-collections-and-save-flow.md).
+
+Earlier SP-007 prototype evidence (2026-09-21): `build/sp007-20260921-r2.xcresult` reports
 **9 passed, 0 failed, 0 skipped** on iPad A16 Simulator / iPadOS 27.0, destination
 `709D6F70-328D-4458-8F8A-B2C47A945A80`. This includes seven store tests and two UI tests.
 `build/sp007-device-20260921.xcresult` reports **2 passed, 0 failed, 0 skipped** for
@@ -504,3 +515,17 @@ draws twenty strokes and checks their persistence after relaunch. An earlier dia
 run recorded application memory during repeated drawing; the retained evidence is in
 SP-013. Physical test stores are isolated by `SP009_TEST_STORE`; launch normally afterward
 to restore owner data.
+
+## SP-015 Notes and Collections minimal-header refinement — 2026-10-02
+
+`ShellNavigationUITests.testLibraryHeadersUsePresetTitleAndExpandableSearch` checks the
+shared landscape hierarchy: the tab name leads; Search begins as a symbol and expands into
+an inline field when tapped; the remaining symbol-only controls follow on the same baseline;
+and no duplicate navigation title appears. The test also retains screenshots for visual
+inspection. Font-family selection is source-driven by the active appearance preset and is
+part of light/dark/preset visual review rather than an accessibility-tree assertion.
+
+`build/sp015-library-header-r3.xcresult` records the focused test passing. The follow-up
+`build/sp015-library-header-regression-r1.xcresult` records **5 passed, 0 failed, 0
+skipped**, covering the new geometry plus note creation/relaunch, Notes backup access,
+collection creation/deletion and navigation retention. Compact-width wrapping, larger

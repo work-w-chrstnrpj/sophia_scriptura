@@ -1,48 +1,98 @@
 import SwiftUI
 
+/// Creates a collection or subfolder, or edits one. No Folder only exposes its color.
 struct CollectionEditorSheet: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: CollectionsStore
     let parentID: UUID?
+    var editingID: UUID? = nil
 
-    @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var detail = ""
-    @State private var accent: CollectionAccent = .oxblood
+    @State private var accent: CollectionAccent = .sage
+    @FocusState private var nameFocused: Bool
+
+    private var editing: StudyCollection? { editingID.flatMap(store.collection(id:)) }
+    private var unfiled: Bool { editing?.isUnfiled == true }
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var title: String {
+        if unfiled { return "No Folder Color" }
+        if editing != nil { return "Edit Collection" }
+        return parentID == nil ? "New Collection" : "New Subfolder"
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Topic") {
-                    TextField("Name", text: $name)
-                    TextField("Description", text: $detail, axis: .vertical)
-                        .lineLimit(2...4)
-                }
-
-                Section("Folder accent") {
-                    Picker("Accent", selection: $accent) {
-                        ForEach(CollectionAccent.allCases) { option in
-                            Label(option.rawValue.capitalized, systemImage: "circle.fill")
-                                .tag(option)
+                Section {
+                    HStack(spacing: 14) {
+                        CollectionFolderGlyph(accent: accent, unfiled: unfiled, size: 52)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(unfiled ? "No Folder" : (trimmedName.isEmpty ? "Untitled" : trimmedName))
+                                .font(.system(.headline, design: .serif))
+                                .foregroundStyle(trimmedName.isEmpty && !unfiled ? Color(theme.palette.secondary) : Color(theme.palette.ink))
+                            if let parent = parentID.flatMap(store.collection(id:)) {
+                                Text("Inside \(parent.name)")
+                                    .font(.caption)
+                                    .foregroundStyle(Color(theme.palette.secondary))
+                            }
                         }
                     }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
                 }
+                .listRowBackground(Color(theme.palette.soft))
+
+                if !unfiled {
+                    Section("Details") {
+                        TextField("Name", text: $name)
+                            .focused($nameFocused)
+                            .submitLabel(.done)
+                        TextField("Description (optional)", text: $detail, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
+                    .listRowBackground(Color(theme.palette.soft))
+                }
+
+                Section("Color") {
+                    CollectionColorGrid(selection: $accent)
+                }
+                .listRowBackground(Color(theme.palette.soft))
             }
             .appSurface()
-            .navigationTitle(parentID == nil ? "New Collection" : "New Child Folder")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
-                        guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent) != nil else { return }
-                        dismiss()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(editing == nil ? "Create" : "Save", action: commit)
+                        .fontWeight(.semibold)
+                        .disabled(!unfiled && trimmedName.isEmpty)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .onAppear {
+            if let editing {
+                name = editing.isUnfiled ? "" : editing.name
+                detail = editing.detail
+                accent = editing.accent
+            } else {
+                accent = parentID.flatMap(store.collection(id:))?.accent ?? .sage
+                nameFocused = true
+            }
+        }
+    }
+
+    private func commit() {
+        if let editingID {
+            guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent) else { return }
+        } else {
+            guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent) != nil else { return }
+        }
+        dismiss()
     }
 }

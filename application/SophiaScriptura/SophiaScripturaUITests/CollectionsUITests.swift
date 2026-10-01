@@ -1,107 +1,199 @@
 import XCTest
 
 final class CollectionsUITests: XCTestCase {
-    private func openCollections() -> XCUIApplication {
+    private func launch() -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
+        app.launchEnvironment["SP009_TEST_STORE"] = UUID().uuidString
         app.launch()
-        let tab = app.buttons["Collections"].firstMatch
-        XCTAssertTrue(tab.waitForExistence(timeout: 10))
-        tab.tap()
-        XCTAssertTrue(app.staticTexts["collections.demoNotice"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20))
         return app
     }
 
-    private func capture(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+    private func showTab(_ id: String, in app: XCUIApplication) {
+        let tab = app.buttons[id]
+        let show = app.buttons["navigation.showTabs"]
+        if show.waitForExistence(timeout: 2) { show.tap() }
+        XCTAssertTrue(tab.waitForExistence(timeout: 5))
+        tab.tap()
     }
 
-    func testMembershipRemovalPreservesDescendantAndFiltersWork() {
-        let app = openCollections()
-        app.buttons["collections.folder.Assurance"].tap()
-        XCTAssertTrue(app.staticTexts["Romans 8:1"].waitForExistence(timeout: 5))
-        app.buttons["collections.itemActions.Romans 8:1"].tap()
-        let removeButton = app.buttons["Remove from This Collection"].firstMatch
-        let removeMenuItem = app.menuItems["Remove from This Collection"].firstMatch
-        if removeButton.waitForExistence(timeout: 5) {
-            removeButton.tap()
-        } else {
-            XCTAssertTrue(removeMenuItem.waitForExistence(timeout: 5))
-            removeMenuItem.tap()
-        }
-        XCTAssertFalse(app.staticTexts["Romans 8:1"].exists)
-        app.buttons["Study material view options"].tap()
-        app.buttons["Include child folders"].tap()
-        XCTAssertTrue(app.staticTexts["Romans 8:1"].waitForExistence(timeout: 5))
-        app.buttons["collections.itemActions.Romans 8:1"].tap()
-        // Native menus can expose informational Text as a disabled button.
-        let childFolderHint = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@", "Open the child folder to manage this item."))
-            .firstMatch
-        XCTAssertTrue(childFolderHint.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Remove from This Collection"].exists)
-        XCTAssertFalse(app.menuItems["Remove from This Collection"].exists)
-        app.tap()
-        app.buttons["collections.filter"].tap()
-        app.buttons["Links"].tap()
-        XCTAssertTrue(app.staticTexts["Historical context article"].exists)
-        XCTAssertFalse(app.staticTexts["Romans 8:1"].exists)
-        capture(app, name: "Collections — filtered detail")
+    private func openCollections(_ app: XCUIApplication) {
+        showTab("tab.collections", in: app)
+        XCTAssertTrue(app.buttons["collections.folder.No Folder"].waitForExistence(timeout: 10))
     }
 
-    func testCreateAddDeletePromotesChildAndSearchFindsIt() {
-        let app = openCollections()
+    private func back(_ app: XCUIApplication) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    private func createCollection(_ name: String, in app: XCUIApplication) {
         app.buttons["collections.newCollection"].tap()
-        XCTAssertFalse(app.buttons["Create"].isEnabled)
-        app.textFields["Name"].tap()
-        app.textFields["Name"].typeText("Study Review")
+        let field = app.textFields["Name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(name)
         app.buttons["Create"].tap()
+    }
+
+    private func item(_ prefix: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.open.\(prefix)")).firstMatch
+    }
+
+    func testFolderColorNestingAndDeletionReturnsItemsToNoFolder() {
+        let app = launch()
+        openCollections(app)
+        createCollection("Study Review", in: app)
         let created = app.buttons["collections.folder.Study Review"]
         XCTAssertTrue(created.waitForExistence(timeout: 5))
         created.tap()
-        app.buttons["Add Study Material"].tap()
-        app.buttons["collections.pick.Romans 8:1"].tap()
-        XCTAssertEqual(app.buttons["collections.pick.Romans 8:1"].value as? String, "Included")
-        app.buttons["Done"].tap()
-        XCTAssertTrue(app.staticTexts["Romans 8:1"].waitForExistence(timeout: 5))
-        app.buttons["Collection actions"].tap()
-        app.buttons["Create Child Folder"].tap()
-        app.textFields["Name"].tap()
-        app.textFields["Name"].typeText("Study Child")
+        XCTAssertTrue(app.descendants(matching: .any)["collections.detail.counts"].waitForExistence(timeout: 3))
+
+        app.buttons["collections.newSubfolder"].tap()
+        let childName = app.textFields["Name"]
+        XCTAssertTrue(childName.waitForExistence(timeout: 5))
+        childName.tap()
+        childName.typeText("Study Child")
+        app.buttons["collections.color.plum"].tap()
         app.buttons["Create"].tap()
         XCTAssertTrue(app.buttons["collections.folder.Study Child"].waitForExistence(timeout: 5))
-        app.buttons["collections.folder.Study Child"].tap()
-        XCTAssertTrue(app.navigationBars["Study Child"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Study Review"].tap()
-        XCUIDevice.shared.orientation = .landscapeLeft
-        capture(app, name: "Collections — landscape with child")
-        XCUIDevice.shared.orientation = .portrait
+        let detail = XCTAttachment(screenshot: app.screenshot())
+        detail.name = "Collection detail with subfolder"; detail.lifetime = .keepAlways; add(detail)
+
         app.buttons["Collection actions"].tap()
         app.buttons["Delete Collection"].tap()
-        app.alerts.buttons["Delete Folder"].tap()
+        app.alerts.buttons["Delete Collection"].tap()
         XCTAssertTrue(app.buttons["collections.folder.Study Child"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["collections.folder.No Folder"].exists)
         XCTAssertFalse(app.buttons["collections.folder.Study Review"].exists)
-        app.buttons["Sort collections"].tap()
-        app.buttons["Name"].tap()
-        let assurance = app.buttons["collections.folder.Assurance"].frame
-        let studyChild = app.buttons["collections.folder.Study Child"].frame
-        XCTAssertTrue(assurance.minY < studyChild.minY ||
-                      (abs(assurance.minY - studyChild.minY) < 1 && assurance.minX < studyChild.minX))
-        // iPadOS 26 exposes searchable as a toolbar button until opened.
-        let searchButton = app.buttons["Search"].firstMatch
-        if searchButton.waitForExistence(timeout: 5) {
-            searchButton.tap()
-        }
-        let search = app.searchFields.firstMatch
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
-        search.tap()
-        search.typeText("Study Child")
-        XCTAssertTrue(app.buttons["collections.folder.Study Child"].exists)
-        XCTAssertFalse(app.buttons["collections.folder.Assurance"].exists)
-        capture(app, name: "Collections — search after promotion")
+        let library = XCTAttachment(screenshot: app.screenshot())
+        library.name = "Collections library"; library.lifetime = .keepAlways; add(library)
+
+        app.buttons["collections.folder.No Folder"].tap()
+        app.buttons["Collection actions"].tap()
+        XCTAssertTrue(app.buttons["Change Color"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["Delete Collection"].exists)
+    }
+
+    func testUnfiledNoteCanBeFiledAndReturnsWhenItsFolderIsDeleted() {
+        let app = launch()
+        showTab("tab.notes", in: app)
+        XCTAssertTrue(app.buttons["notes.new"].waitForExistence(timeout: 10))
+        app.buttons["notes.new"].tap()
+        app.buttons["notes.new.page"].tap()
+        let close = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        XCTAssertTrue(item("Untitled Note", in: app).waitForExistence(timeout: 5))
+        back(app)
+
+        createCollection("Grace", in: app)
+        app.buttons["collections.folder.Grace"].tap()
+        app.buttons["collections.addMaterial"].tap()
+        let pick = app.buttons["collections.pick.Untitled Note"]
+        XCTAssertTrue(pick.waitForExistence(timeout: 5))
+        pick.tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(item("Untitled Note", in: app).waitForExistence(timeout: 5))
+
+        back(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        XCTAssertFalse(item("Untitled Note", in: app).waitForExistence(timeout: 2))
+        back(app)
+        app.buttons["collections.folder.Grace"].tap()
+        app.buttons["Collection actions"].tap()
+        app.buttons["Delete Collection"].tap()
+        app.alerts.buttons["Delete Collection"].tap()
+        app.buttons["collections.folder.No Folder"].tap()
+        XCTAssertTrue(item("Untitled Note", in: app).waitForExistence(timeout: 5))
+    }
+
+    func testBookmarkIsSavedToNewCollectionMovedAndOpenedAsCenteredCard() {
+        let app = launch()
+        let verse = app.links.firstMatch
+        XCTAssertTrue(verse.waitForExistence(timeout: 10))
+        verse.tap()
+        XCTAssertTrue(app.navigationBars["Verse hub"].waitForExistence(timeout: 5))
+        app.buttons["scripture.bookmark"].tap()
+
+        XCTAssertTrue(app.navigationBars["New Bookmark"].waitForExistence(timeout: 5))
+        app.buttons["collections.chooser.new"].tap()
+        let name = app.textFields["collections.chooser.newName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3))
+        name.typeText("Creation")
+        app.buttons["collections.chooser.create"].tap()
+        XCTAssertEqual(app.buttons["collections.choose.Creation"].value as? String, "Selected")
+        let save = XCTAttachment(screenshot: app.screenshot())
+        save.name = "Save bookmark to a collection"; save.lifetime = .keepAlways; add(save)
+        app.buttons["collections.save.confirm"].tap()
+
+        openCollections(app)
+        app.buttons["collections.folder.Creation"].tap()
+        let bookmark = item("Genesis 1:1", in: app)
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+        let actions = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.itemActions.Genesis 1:1")).firstMatch
+        actions.tap()
+        app.buttons["Move to…"].tap()
+        XCTAssertTrue(app.navigationBars["Move"].waitForExistence(timeout: 5))
+        app.buttons["collections.chooser.new"].tap()
+        let moveName = app.textFields["collections.chooser.newName"]
+        XCTAssertTrue(moveName.waitForExistence(timeout: 3))
+        moveName.typeText("Beginnings")
+        app.buttons["collections.chooser.create"].tap()
+        app.buttons["collections.destination.confirm"].tap()
+        XCTAssertFalse(bookmark.waitForExistence(timeout: 2))
+
+        back(app)
+        app.buttons["collections.folder.Beginnings"].tap()
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+        bookmark.tap()
+        let reference = app.staticTexts["collections.card.reference"]
+        XCTAssertTrue(reference.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["collections.seeChapter"].exists)
+        let center = reference.frame.midY
+        XCTAssertLessThan(center, app.frame.height * 0.7, "The card should present as a centered sheet, not a bottom drawer.")
+        let card = XCTAttachment(screenshot: app.screenshot())
+        card.name = "Bookmark card"; card.lifetime = .keepAlways; add(card)
+    }
+
+    func testGleaningInsightEditsSavesAndClearsFromItsCard() {
+        let app = launch()
+        let verse = app.links.firstMatch
+        XCTAssertTrue(verse.waitForExistence(timeout: 10))
+        verse.tap()
+        XCTAssertTrue(app.navigationBars["Verse hub"].waitForExistence(timeout: 5))
+        app.buttons["scripture.gleaning"].tap()
+        XCTAssertTrue(app.navigationBars["New Gleaning"].waitForExistence(timeout: 5))
+        let insight = app.textFields["collections.save.insight"]
+        XCTAssertTrue(insight.waitForExistence(timeout: 3))
+        insight.tap()
+        insight.typeText("God speaks order into chaos.")
+        app.buttons["collections.save.confirm"].tap()
+
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let gleaning = item("Genesis 1:1", in: app)
+        XCTAssertTrue(gleaning.waitForExistence(timeout: 5))
+        gleaning.tap()
+        XCTAssertEqual(app.staticTexts["collections.insight.text"].label, "God speaks order into chaos.")
+        XCTAssertTrue(app.buttons["collections.insight.clear"].exists)
+        let reading = XCTAttachment(screenshot: app.screenshot())
+        reading.name = "Gleaning card"; reading.lifetime = .keepAlways; add(reading)
+
+        app.buttons["collections.insight.edit"].tap()
+        let field = app.textFields["collections.insight.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["collections.insight.save"].exists)
+        app.buttons["collections.insight.clear"].tap()
+        field.typeText("Light comes first.")
+        let editing = XCTAttachment(screenshot: app.screenshot())
+        editing.name = "Gleaning card editing"; editing.lifetime = .keepAlways; add(editing)
+        app.buttons["collections.insight.save"].tap()
+        XCTAssertEqual(app.staticTexts["collections.insight.text"].label, "Light comes first.")
+        XCTAssertTrue(app.buttons["collections.insight.edit"].exists)
     }
 }

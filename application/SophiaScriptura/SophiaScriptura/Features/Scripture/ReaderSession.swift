@@ -18,6 +18,8 @@ import Observation
     private(set) var error: String?
     private(set) var notice: String?
     private(set) var targetVerse = 1
+    private(set) var emphasisVerses: [Int] = []
+    private(set) var emphasisSpans: [PassageSpan] = []
     private(set) var navigationID = UUID()
     private(set) var restorationLocation: ReadingLocation?
     var beforeNavigation: (@MainActor () async -> Bool)?
@@ -66,7 +68,7 @@ import Observation
         await refreshTranslations()
     }
 
-    func navigate(book: String, chapter: Int, verse: Int = 1, restoring: ReadingLocation? = nil) async {
+    func navigate(book: String, chapter: Int, verse: Int = 1, restoring: ReadingLocation? = nil, emphasis: [Int] = [], spans: [PassageSpan] = []) async {
         if let beforeNavigation, !(await beforeNavigation()) { return }
         let request = UUID(); requestID = request
         let repository = content
@@ -86,7 +88,10 @@ import Observation
             } else if !loaded.verseNumbers.contains(verse) {
                 throw ScriptureError.passageUnmapped
             }
-            document = loaded; targetVerse = nearest; navigationID = UUID()
+            document = loaded; targetVerse = nearest
+            emphasisSpans = spans.filter { $0.length > 0 }
+            emphasisVerses = emphasisSpans.isEmpty ? emphasis.filter { loaded.verseNumbers.contains($0) } : []
+            navigationID = UUID()
             let validBlock = restoring.flatMap { location in
                 loaded.blocks.first { $0.id == location.blockID && $0.kind == "body" &&
                     $0.verses.contains(nearest) && (0...$0.text.utf16.count).contains(location.utf16Offset ?? -1) &&

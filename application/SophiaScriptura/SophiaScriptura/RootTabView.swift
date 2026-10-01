@@ -27,6 +27,7 @@ struct RootTabView: View {
     private var palette: ReaderPalette { theme.palette }
     @State private var annotations = AnnotationSession()
     @State private var notes = NotesSession()
+    @StateObject private var collections = CollectionsStore(repository: CollectionsFileRepository(directory: CollectionsFileRepository.defaultDirectory()))
     @State private var selection: Tab = .scripture
     @State private var reader = ReaderSession(content:BundledScriptureRepository(),state:Self.makeStateStore(),library:OfflineTranslationLibrary())
     private static func makeStateStore() -> ReaderStateStore? {
@@ -44,9 +45,9 @@ struct RootTabView: View {
     var body: some View {
         GeometryReader { geometry in
                 ZStack {
-                    ScriptureView(session:reader, annotations:annotations, notes:notes, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    CollectionsView().tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    NotesView(session: notes, reader: reader).tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    CollectionsView(store:collections, notes:notes, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    NotesView(session: notes, reader: reader, collections: collections).tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView().tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     ActivityView().tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     SettingsView(reader:reader).tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
@@ -63,7 +64,7 @@ struct RootTabView: View {
         .preferredColorScheme(reader.preferences.appearance == .midnightLibrary ? .dark : reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
         .environment(notes)
-        .task { await notes.load() }
+        .task { await notes.load(); await collections.load() }
         .onChange(of: selection) { _, tab in notes.active = tab == .notes; if tab != .notes { notes.flushSurface?(); Task { await notes.save() } } }
         .onAppear { chrome.reveal() }
         .onDisappear { chrome.stop() }
@@ -71,7 +72,17 @@ struct RootTabView: View {
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && selection == .notes
             if phase == .active { chrome.reveal() }
-            else { chrome.stop() }
+            else { chrome.stop(); Task { await collections.flush() } }
+        }
+    }
+    private func openPassage(_ passage: SavedPassage) {
+        selection = .scripture
+        chrome.reveal()
+        Task {
+            if reader.edition?.id != passage.editionID {
+                await reader.selectEdition(passage.editionID)
+            }
+            await reader.navigate(book: passage.bookID, chapter: passage.chapter, verse: passage.startVerse, spans: passage.spans)
         }
     }
     private var navigationDock: some View {

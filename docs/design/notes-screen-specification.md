@@ -248,8 +248,7 @@ The library is the entry point from the Notes tab.
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
-│ Notes                                      [Search] [Sort] [New Note]  │
-│ [All] [Tagged] [Recent]                         [Cards ▣] [List ≡]   │
+│ Notes                           [⌕] [Filter] [More] [＋]             │
 ├───────────────────────────────────────────────────────────────────────┤
 │                                                                       │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐    │
@@ -264,6 +263,13 @@ The library is the entry point from the Notes tab.
 ```
 
 ### Library behavior
+
+The root library uses **Notes** as a quiet leading header in the active appearance preset's
+heading font. Minimal symbol-only controls sit
+at the trailing edge: Search, view/filter, More/Backups and Add. Tapping Search replaces its
+symbol with a compact inline field and focuses it; closing the field clears the query and
+restores the symbol. Every symbol retains a 44-point target and an explicit accessibility
+label. There are no decorative button capsules or duplicated navigation titles.
 
 - **New Note** creates a blank note immediately, gives it a temporary title such as
   `Untitled Note`, and opens the canvas. The first title edit is optional; the user can

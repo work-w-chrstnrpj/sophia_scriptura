@@ -3,55 +3,55 @@ import SwiftUI
 struct CollectionCard: View {
     @Environment(\.appTheme) private var theme
     let collection: StudyCollection
-    let directCount: Int
-    let descendantCount: Int
-    let childCount: Int
+    let itemCount: Int
+    let subfolderCount: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Image(systemName: "folder.fill")
-                    .font(.title2)
-                    .foregroundStyle(collection.accent.color)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color(theme.palette.secondary))
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, size: 46)
+                .padding(.bottom, 16)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(collection.name)
-                    .font(.system(.headline, design: .serif).weight(.semibold))
-                    .foregroundStyle(Color(theme.palette.ink))
-                    .lineLimit(2)
-                Text(collection.detail.isEmpty ? "No description" : collection.detail)
-                    .font(.caption)
+            Text(collection.name)
+                .font(.system(.headline, design: .serif).weight(.semibold))
+                .foregroundStyle(Color(theme.palette.ink))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            if !collection.detail.isEmpty {
+                Text(collection.detail)
+                    .font(.footnote)
                     .foregroundStyle(Color(theme.palette.secondary))
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .padding(.top, 4)
             }
 
-            HStack(spacing: 8) {
-                Text("\(directCount) direct")
-                if childCount > 0 {
-                    Text("· \(childCount) child")
-                }
-                if descendantCount != directCount {
-                    Text("· \(descendantCount) total")
-                }
-            }
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(Color(theme.palette.secondary))
+            Spacer(minLength: 14)
+
+            Text(subfolderCount > 0
+                 ? "\(CollectionCount.items(itemCount)) · \(CollectionCount.subfolders(subfolderCount))"
+                 : CollectionCount.items(itemCount))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color(theme.palette.secondary))
+                .monospacedDigit()
         }
         .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 172, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 180, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(theme.palette.soft))
         )
+        .overlay(alignment: .top) {
+            UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
+                .fill(collection.accent.color)
+                .frame(height: 4)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(collection.accent.color.opacity(0.18), lineWidth: 1)
+                .stroke(collection.accent.color.opacity(0.22), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.06), radius: 12, y: 5)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }

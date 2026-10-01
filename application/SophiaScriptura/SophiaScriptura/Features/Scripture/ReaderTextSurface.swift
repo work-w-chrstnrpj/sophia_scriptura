@@ -14,6 +14,10 @@ struct ReaderTextSurface: UIViewRepresentable {
     let onChapterSwipe: (Int) -> Void
     var authorizeQuote: ((ChapterTextMap.Selection) async -> String?)? = nil
     var saveToNote: ((ChapterTextMap.Selection) -> Void)? = nil
+    var saveBookmark: ((NSRange) -> Void)? = nil
+    var saveGleaning: ((NSRange) -> Void)? = nil
+    var emphasisVerses: [Int] = []
+    var emphasisSpans: [PassageSpan] = []
 
     func makeUIView(context: Context) -> ContinuousReaderTextView {
         let view = ContinuousReaderTextView()
@@ -85,6 +89,8 @@ struct ReaderTextSurface: UIViewRepresentable {
         if coordinator.navigationID != navigationID {
             coordinator.navigationID = navigationID
             coordinator.pendingVerse = targetVerse
+            coordinator.pendingEmphasis = emphasisVerses
+            coordinator.pendingSpans = emphasisSpans
         }
         view.setNeedsLayout()
     }
@@ -94,6 +100,8 @@ struct ReaderTextSurface: UIViewRepresentable {
         var renderKey = ""
         var navigationID: UUID?
         var pendingVerse: Int?
+        var pendingEmphasis: [Int] = []
+        var pendingSpans: [PassageSpan] = []
         init(_ parent: ReaderTextSurface) { self.parent = parent }
         func restoreIfNeeded(_ view: ContinuousReaderTextView?) {
             guard let view, let verse = pendingVerse, let range = map?.range(for:verse) else { return }
@@ -102,7 +110,15 @@ struct ReaderTextSurface: UIViewRepresentable {
                let run = map?.runs.first(where: { $0.block.id == id }), let offset = location.utf16Offset {
                 view.reveal(NSRange(location:run.range.location + min(offset,max(0,run.range.length - 1)),length:1))
             } else { view.reveal(range) }
-            view.focus(verse:verse)
+            if !pendingSpans.isEmpty {
+                view.focus(spans: pendingSpans, holds: true)
+                pendingSpans = []
+            } else if pendingEmphasis.isEmpty {
+                view.focus(verse: verse)
+            } else {
+                view.focus(verses: pendingEmphasis, holds: true)
+                pendingEmphasis = []
+            }
         }
         func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
             if URL.scheme == "sophia-verse", let verse = Int(URL.absoluteString.replacingOccurrences(of:"sophia-verse:",with:"")) {
@@ -144,6 +160,12 @@ struct ReaderTextSurface: UIViewRepresentable {
             var actions: [UIMenuElement] = [copy, share]
             if let save = parent.saveToNote {
                 actions.append(UIAction(title: "Save to note", image: UIImage(systemName: "note.text")) { _ in save(selection) })
+            }
+            if let bookmark = parent.saveBookmark {
+                actions.append(UIAction(title: "Bookmark", image: UIImage(systemName: "bookmark")) { _ in bookmark(range) })
+            }
+            if let gleaning = parent.saveGleaning {
+                actions.append(UIAction(title: "Gleaning", image: UIImage(systemName: "text.quote")) { _ in gleaning(range) })
             }
             return UIMenu(children: actions)
         }
@@ -213,12 +235,26 @@ final class ContinuousReaderTextView: UITextView, UIGestureRecognizerDelegate {
         }
         focusedRanges = []
     }
-    func focus(verse: Int) {
-        clearFocus()
-        focusedRanges = map?.focusRanges(for:verse) ?? []
-        for range in focusedRanges where NSMaxRange(range) <= textStorage.length {
-            textStorage.addAttribute(.backgroundColor,value:focusColor,range:range)
+    func focus(verse: Int) { focus(verses: [verse], holds: false) }
+    func focus(spans: [PassageSpan], holds: Bool) {
+        focus(ranges: spans.map { NSRange(location: $0.location, length: $0.length) }, holds: holds)
+    }
+    func focus(verses: [Int], holds: Bool) {
+        var ranges: [NSRange] = []
+        for verse in verses {
+            for range in map?.focusRanges(for: verse) ?? [] where range.length > 0 && !ranges.contains(where: { NSEqualRanges($0, range) }) {
+                ranges.append(range)
+            }
         }
+        focus(ranges: ranges, holds: holds)
+    }
+    private func focus(ranges: [NSRange], holds: Bool) {
+        clearFocus()
+        focusedRanges = ranges
+        for range in focusedRanges where NSMaxRange(range) <= textStorage.length {
+            textStorage.addAttribute(.backgroundColor, value: focusColor, range: range)
+        }
+        guard !holds else { return }
         let focus = focusID
         DispatchQueue.main.asyncAfter(deadline:.now() + 1.5) { [weak self] in
             guard let self, self.focusID == focus else { return }

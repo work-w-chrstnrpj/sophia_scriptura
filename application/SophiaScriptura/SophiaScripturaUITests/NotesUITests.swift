@@ -13,16 +13,16 @@ final class NotesUITests: XCTestCase {
     }
     private func notes(_ app: XCUIApplication) {
         let tab = app.buttons["tab.notes"]
-        if !tab.isHittable {
-            let reveal = app.buttons["navigation.showTabs"]
-            XCTAssertTrue(reveal.waitForExistence(timeout: 10)); reveal.tap()
+        let create = app.buttons["notes.new"]
+        for _ in 0..<3 {
+            if !(tab.exists && tab.isHittable) {
+                let reveal = app.buttons["navigation.showTabs"]
+                if reveal.waitForExistence(timeout: 3) { reveal.tap() }
+            }
+            if tab.isHittable { tab.tap() }
+            if create.waitForExistence(timeout: 2), create.isHittable { return }
         }
-        tab.tap()
-        if !app.buttons["notes.new"].waitForExistence(timeout: 3) {
-            if app.buttons["navigation.showTabs"].exists { app.buttons["navigation.showTabs"].tap() }
-            tab.tap()
-        }
-        XCTAssertTrue(app.buttons["notes.new"].waitForExistence(timeout: 10))
+        XCTAssertTrue(create.waitForExistence(timeout: 5) && create.isHittable)
     }
     func testBlankNoteDirectTextMetadataAndRelaunch() {
         let app = launch(); notes(app)

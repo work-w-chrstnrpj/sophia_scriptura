@@ -92,6 +92,28 @@ final class ScriptureReaderTests: XCTestCase {
         XCTAssertNil(view.textStorage.attribute(.backgroundColor,at:map.runs[4].range.location,effectiveRange:nil))
         XCTAssertEqual(view.text,map.text)
     }
+
+    func testPartialHighlightKeepsEllipsesInsteadOfTheWholeVerse() {
+        let blocks = [
+            ScriptureBlock(id: "l2", kind: "label", text: "2", label: "2", verses: [2], style: "p"),
+            ScriptureBlock(id: "b2", kind: "body", text: "Before sample verse etc.", label: "2", verses: [2], style: "p"),
+            ScriptureBlock(id: "l3", kind: "label", text: "3", label: "3", verses: [3], style: "p"),
+            ScriptureBlock(id: "b3", kind: "body", text: "And it was continue until night.", label: "3", verses: [3], style: "p")
+        ]
+        let map = ChapterTextMap(document: ChapterDocument(schemaVersion: 1, editionID: "web.engwebp", contentRevision: "test", book: "GEN", chapter: 1, blocks: blocks))
+        let source = map.text as NSString
+        let start = source.range(of: "sample").location
+        let end = source.range(of: "continue")
+        let range = NSRange(location: start, length: NSMaxRange(end) - start)
+        let excerpt = map.excerpt(in: range)
+        XCTAssertEqual(excerpt?.text, "2...sample verse etc. 3 And it was continue...")
+        XCTAssertEqual(excerpt?.startVerse, 2)
+        XCTAssertEqual(excerpt?.endVerse, 3)
+        let whole = map.focusRanges(for: 2)
+        let covered = NSUnionRange(whole.first!, whole.last!)
+        XCTAssertEqual(map.excerpt(in: covered)?.text.hasPrefix("2 Before"), true)
+        XCTAssertFalse(map.excerpt(in: covered)?.text.contains("...") == true)
+    }
     @MainActor func testPickerPreviewDoesNotSaveOrNavigate() async throws {
         let store = MemoryReaderState()
         let session = ReaderSession(content:repository(),state:store)

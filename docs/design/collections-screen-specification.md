@@ -45,8 +45,7 @@ The Collections tab opens to a quiet folder library rather than a dense file man
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────┐
-│ Collections                              [Search] [Sort] [New Folder] │
-│ [All] [Recent] [Unfiled]                                  [Cards ▣]  │
+│ Collections                                      [⌕] [Sort] [＋] │
 ├───────────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐    │
 │  │ Assurance        │  │ Romans           │  │ Prayer            │    │
@@ -59,6 +58,13 @@ The Collections tab opens to a quiet folder library rather than a dense file man
 ```
 
 ### Library behavior
+
+The root library uses **Collections** as a quiet leading header in the active appearance
+preset's heading font. Minimal symbol-only Search,
+Sort and Add controls sit at the trailing edge. Tapping Search replaces its symbol with a
+compact inline field and focuses it; closing the field clears the query and restores the
+symbol. Every symbol retains a 44-point target and an explicit accessibility label. There
+are no decorative button capsules or duplicated navigation titles.
 
 - **New Folder** creates a collection with an editable name and optional description.
   It opens the new collection so the owner can add the first item immediately.

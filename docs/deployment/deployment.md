@@ -24,6 +24,15 @@ Personal Team signing is temporary; use Xcode to rebuild/redeploy when it expire
 Reinstall over the existing app rather than deleting it to preserve local data. This
 experiment has no production backup; use synthetic content only.
 
+## SP-015 Notes and Collections minimal-header refinement — 2026-10-02
+
+The current Notes and Collections minimal-header build passed strict signature validation,
+installed in place on the paired iPad A16, and launched normally as
+`com.personal.SophiaScriptura`. No uninstall or data reset was performed. Build, signature,
+install and launch evidence is retained under `build/sp015/library-toolbar-device/`.
+Installation proves deployment only; review the preset-font titles and expandable search
+across portrait/landscape, light/dark appearance, Dynamic Type, and VoiceOver on the device.
+
 For terminal verification, set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
 per command: this Mac currently defaults to Command Line Tools. Simulator builds use
 `CODE_SIGNING_ALLOWED=NO`; this does not produce an installable physical-device app.

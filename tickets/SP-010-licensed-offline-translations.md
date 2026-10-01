@@ -1,6 +1,6 @@
 # SP-010 — Licensed offline translations
 
-Status: implementation and physical download complete; offline/accessibility acceptance pending. Milestone: M2. Owner selected NIV11, NLT and NKJV and supplied
+Status: done under owner-revised M2 acceptance (2026-09-29). Milestone: M2. Owner selected NIV11, NLT and NKJV and supplied
 provider approval in the task conversation. The subsequent owner-supplied license update
 permits unlimited personal bulk Copy/Share and text extraction. This is the recorded
 source of authorization; no independent correspondence verification is claimed.
@@ -84,3 +84,12 @@ app and launched on the physical iPad. Fresh `SP010-access.json` diagnostics fro
 build reported cached=true and available=true for all three approved editions. No sync
 or redownload was performed. This proves cache authorization availability; it does not
 claim a complete manual reading or accessibility walkthrough.
+
+## Owner M2 closure — 2026-09-29
+
+The owner accepts the visual refinements and reports expiry/renewal addressed in the
+other conversation. SP-010 records the implemented Debug development authorization and
+cached-access recovery; the standard Release/Archive lease remains unchanged. VoiceOver
+is explicitly waived for this closure, not passed. Earlier unrun cases remain historical
+verification gaps; this closure does not claim a new physical expiry or accessibility
+test. M2 is closed and SP-008 is selected as the first M3 validation ticket.

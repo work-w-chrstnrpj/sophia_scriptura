@@ -14,6 +14,16 @@ The previous bounded-page design below is retained as historical context and an 
 M3 annotation candidate. Revisit annotation geometry before M3; do not reintroduce visible
 reading pages merely to match that proposal.
 
+## M3 validation selection — 2026-09-29
+
+SP-008 is now selected. Test one continuous, fixed-width chapter coordinate space shared
+by TextKit 1 and PencilKit in a zooming viewport, with a permanently reserved margin.
+Viewport resize/rotation must not reflow annotated text. Larger-type reading uses a
+separate ink-hidden view with an explicit return to the preserved layout. This is a
+candidate awaiting physical evidence, not a production architecture approval. The older
+page/pagination details below are historical candidates; they do not override the
+continuous reader or require cross-page selection. VoiceOver is waived for this gate.
+
 ## Decision and alternatives
 
 Use a custom native TextKit-backed reader hosted by SwiftUI. Prefer TextKit 2, a
@@ -196,3 +206,10 @@ one chapter text storage and provides explicit line-fragment exclusion geometry.
 a deliberate implementation choice, not evidence of a TextKit 2 failure. The domain range
 map and repository remain renderer-independent. Native cross-page selection and physical
 accessibility remain acceptance gates; M3 preserved ink geometry is not implemented.
+
+## SP-008 bounded acceptance — 2026-09-29
+
+The owner reported all validation criteria successful. The fixed continuous-chapter
+coordinate-space candidate is accepted for production design. This closes the physical
+experiment gate; exact dimensions, durable storage/recovery and long-chapter performance
+remain production design/verification work. VoiceOver remains waived for this ticket.

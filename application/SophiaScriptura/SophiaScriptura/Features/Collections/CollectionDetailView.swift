@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CollectionDetailView: View {
+    @Environment(\.appTheme) private var theme
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
 
@@ -40,7 +41,8 @@ struct CollectionDetailView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 28)
                 }
-                .background(CollectionSurface.background.ignoresSafeArea())
+                .accessibilityIdentifier("collections.detailContent")
+                .appSurface()
                 .navigationTitle(collection.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -88,10 +90,10 @@ struct CollectionDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(collection.name)
                         .font(.system(.title2, design: .serif).weight(.semibold))
-                        .foregroundStyle(CollectionSurface.ink)
+                        .foregroundStyle(Color(theme.palette.ink))
                     Text(collection.detail.isEmpty ? "No description" : collection.detail)
                         .font(.subheadline)
-                        .foregroundStyle(CollectionSurface.secondaryInk)
+                        .foregroundStyle(Color(theme.palette.secondary))
                 }
                 Spacer()
             }
@@ -102,7 +104,7 @@ struct CollectionDetailView: View {
                 Label("\(store.children(of: collectionID).count) child folders", systemImage: "folder")
             }
             .font(.caption)
-            .foregroundStyle(CollectionSurface.secondaryInk)
+            .foregroundStyle(Color(theme.palette.secondary))
         }
         .padding(.top, 4)
     }
@@ -114,7 +116,7 @@ struct CollectionDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Child folders")
                     .font(.headline)
-                    .foregroundStyle(CollectionSurface.ink)
+                    .foregroundStyle(Color(theme.palette.ink))
 
                 ForEach(children) { child in
                     NavigationLink {
@@ -126,18 +128,18 @@ struct CollectionDetailView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(child.name)
                                     .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(CollectionSurface.ink)
+                                    .foregroundStyle(Color(theme.palette.ink))
                                 Text("\(store.membershipCount(for: child.id, includingDescendants: true)) items")
                                     .font(.caption)
-                                    .foregroundStyle(CollectionSurface.secondaryInk)
+                                    .foregroundStyle(Color(theme.palette.secondary))
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(CollectionSurface.secondaryInk)
+                                .foregroundStyle(Color(theme.palette.secondary))
                         }
                         .padding(14)
-                        .background(CollectionSurface.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("collections.folder.\(child.name)")
@@ -151,7 +153,7 @@ struct CollectionDetailView: View {
             HStack(alignment: .center) {
                 Text("Study material")
                     .font(.headline)
-                    .foregroundStyle(CollectionSurface.ink)
+                    .foregroundStyle(Color(theme.palette.ink))
                 Spacer()
                 Menu {
                     Toggle("Include child folders", isOn: $includeDescendants)

@@ -1,51 +1,91 @@
-# SP-008 — Scripture page selection and ink validation
+# SP-008 — Continuous Scripture ink geometry and gesture validation
 
-- Type: bounded native validation. Status: split; annotation portion not selected.
-- Milestone: M1 evidence for M3 annotations. Reader cases are assigned to SP-009.
+- Type: bounded native validation. Status: done; owner reported all validation criteria successful 2026-09-29.
+- Milestone: first M3 ticket, after owner-revised M2 closure.
 - Requirements: REQ-004/005/006/007/016.
 - Design: [SP-003 decision](../docs/design/scripture-rendering-decision.md).
-- Proposed owner: Frontend UI/UX Developer.
+- Owner: Frontend UI/UX Developer; QA records physical observations.
+
+## Owner decision and visible outcome
+
+The owner requested revision/selection of SP-008, then physical iPad Pencil validation,
+then production annotation layers. VoiceOver is waived for this gate, not passed.
+M2 visual refinements and expiry/renewal are accepted as addressed. Larger-text geometry
+remains in scope independently of VoiceOver.
+
+Settings → Experiments → SP-008 Pencil validation opens a DEBUG-only disposable harness
+using bundled WEB John 3. It tests a continuous chapter, not artificial pages. TextKit 1
+and PencilKit share an 800-point-wide chapter coordinate space with a 540-point text
+column and reserved writing margin. These dimensions are experimental, not product design
+approval. A single outer viewport pans/zooms both surfaces; resize must not rewrap text.
 
 ## Scope and file ownership
 
-SP-009 validates the chapter-level TextKit selection owner over real bundled content as
-part of the product reader. This remaining ticket validates one page-local PencilKit
-layer under a shared viewport. Use disposable geometry/ink fixtures; no provider accounts.
-Proposed isolated folder: `Features/Scripture/LayoutValidation/`, with separate document,
-layout, surface and session files; final paths must be checked before implementation.
-Native tests belong in existing XCTest/XCUITest targets. Do not modify the Notes experiment.
+`application/SophiaScriptura/SophiaScriptura/Features/Scripture/LayoutValidation/`:
 
-Excludes full reader UI, ingestion, production persistence, cross-feature routing and
-large-document benchmarking. Stop after these gates; do not grow a second app prototype.
+- `InkValidationView.swift`: experiment controls and separate larger-text reading view.
+- `InkValidationSurface.swift`: fixed text geometry, shared viewport, Pencil-only canvas,
+  palette, input ownership and per-layer history reset on transition.
+- `InkValidationSession.swift`: two disposable drawings, isolated atomic save/reopen,
+  mismatch handling and stroke transition guard. Saves only test ink and layout signature.
+
+Settings adds the DEBUG entry; existing XCTest target owns `InkValidationTests.swift`.
+The harness uses the read-only bundled repository; it does not access licensed providers,
+reader preferences/storage, Notes fixtures or production annotation stores.
+
+Excludes production layers, layer management/deletion, production export/restore,
+cross-feature routing, chapter swipes while drawing, cross-edition ink migration and
+large-chapter performance approval. Physical validation of one chapter does not establish
+long-document viability. SP-005 must define durable ink/recovery contracts before real
+study handwriting ships. Undo is deliberately cleared on layer change/reopen; preserving
+independent undo stacks is a production decision, not claimed here.
 
 ## Acceptance cases
 
 | Case | Procedure | Expected result |
 | --- | --- | --- |
-| LAYOUT-01 | **Assigned to SP-009.** Select part of a verse, extend across adjacent verses and beyond one viewport; Copy | Exact body substring and source range, no duplicated text or headings |
-| LAYOUT-02 | **Assigned to SP-009.** Tap verse number or the labeled hub control; long-press body | Correct hub intent; selection gesture remains functional |
-| LAYOUT-03 | **Assigned to SP-009.** Use missing verse, bridge 3–4, repeated text, emoji/combining marks and RTL fixture | Explicit mapping/overlap and correct UTF-16 boundaries; no guessed text |
-| LAYOUT-04 | Underline one word and write in margin; save/reopen, rotate and resize | Word/ink geometry agrees with saved page transform; ink bytes unchanged by viewport changes |
-| LAYOUT-05 | Change font, open Companion-sized panel, toggle margin rules | Preserved layout or explicit separate reading view; no reflow beneath ink |
-| LAYOUT-06 | Switch Hidden/Visible/Draw and layers; switch during stroke | Correct input owner, no lost stroke, one visible layer, native palette in Draw |
-| LAYOUT-07 | Finger pan/zoom with Pencil resting; draw then Undo/Redo; switch page | No palm strokes; undo affects active page/layer only; no frozen controls |
-| LAYOUT-08 | Simulate revoked text and renderer/font mismatch | Ink/reference data retained; explicit unavailable background; no wrong-text overlay |
-| LAYOUT-09 | VoiceOver reading and larger type; return to annotated layout | Semantic order and reachable actions; accessible reflow does not mutate ink |
+| LAYOUT-01–03 | Assigned to SP-009 | Product reader owns continuous selection, verse hit testing and UTF-16 mapping |
+| LAYOUT-04 | Underline a word, write in margin; Save/Reopen; rotate, resize, zoom and pan | Text/ink remain aligned in fixed chapter coordinates; viewport actions do not rewrite strokes |
+| LAYOUT-05 | Narrow viewport; toggle rules; enter larger reading view and return | Fixed margin/text geometry; separate reading view hides ink; return preserves original alignment |
+| LAYOUT-06 | Hidden/Visible/Draw; switch Study 1/2; attempt transitions during a stroke | One visible layer, native palette in Draw, selection only in read modes, no lost stroke or layer leakage |
+| LAYOUT-07 | Finger pan/zoom with Pencil/palm resting; draw, erase, lasso, Undo/Redo; change layer | No palm strokes; controls remain usable; history never affects another layer (reset at transition) |
+| LAYOUT-08 | Toggle unavailable background; restore it; load saved ink with mismatched layout signature | No wrong-text overlay; stored ink retained; actual mismatch remains blocked; simulation makes no provider call |
+| LAYOUT-09 | Larger reading view, return to annotated view | Larger text does not mutate ink; VoiceOver explicitly waived by owner |
 
-Automate range mapping, transforms, revision mismatch and history isolation; use UI tests
-for selection/menu/state transitions. Physical Pencil/palm and VoiceOver observations
-require explicit evidence, with minimal owner assistance only where automation cannot
-observe them. Record actual OS and retained result paths under ignored `build/`.
+See the [physical walkthrough and results](../docs/testing/sp008-ipad-guide.md).
+Automated tests cover save/reopen, corrupt-file retention, signature mismatch and active
+stroke save/reopen guard. They do not prove physical Pencil accuracy or palm rejection.
 
-## Exit and fallback
+## Exit and production handoff
 
-Record pass/fail once per case after necessary fixes. If UITextView/TextKit 2 cannot meet
-cross-page selection, document the failing boundary and recommend TextKit 1 containers
-or custom selection handling before changing architecture. Do not claim a passing Notes
-test proves Scripture behavior. Product renderer acceptance in SP-009 depends on
-LAYOUT-01–03. This ticket's annotation delivery depends on LAYOUT-04–09. No checks
-executed yet.
+Record pass/fail/not-run with actual iPadOS/Pencil model and retained evidence under
+ignored `build/sp008/`. Fix failures inside this ticket and repeat the affected cases.
+Production annotation layers must wait for physical LAYOUT-04–09 acceptance (excluding
+waived VoiceOver), an explicit geometry decision, and the SP-005 ink/recovery contract.
+If the shared continuous canvas fails gestures, alignment or practical memory limits,
+record the boundary and revise the candidate; do not silently restore visible pagination.
+Notes experiment results cannot substitute for Scripture evidence.
 
-2026-09-22 owner revision: M2 uses continuous chapters. LAYOUT-01 now validates long
-continuous selection, not an artificial page break. Page-based annotation cases 04–09
-remain unselected candidates and must be reconciled with this direction before M3.
+Current status: harness implemented; five focused tests passed on iPad A16 Simulator /
+iOS 26.5 in `build/sp008/unit-r2.xcresult`. Tests cover save/reopen, corrupt retention,
+layout mismatch, active-stroke save guard, and UIKit resize/zoom geometry with ink bytes
+unchanged. The first build had an ambiguous CGFloat literal; corrected before this run.
+Signed device build and in-place install passed (`build/sp008/device-build.log`,
+`device-install.log`). Physical iPad launch succeeded (`build/sp008/device-launch.log`).
+Physical LAYOUT-04–09 are now owner-reported passed; see closure below.
+No production annotation layer implemented.
+
+## Owner physical acceptance — 2026-09-29
+
+The owner stated: “All criteria for validation is successful.” This explicitly accepts
+all physical LAYOUT-04–09 procedures in the linked walkthrough, including geometry,
+mode/layer changes, gestures/history, save/reopen, unavailable-background simulation and
+larger reading-view return. VoiceOver remains waived. These are owner-reported results,
+not agent-instrumented physical traces. The exact test OS and Pencil model were not
+provided; the paired iPad A16 was used for delivery.
+
+SP-008 is closed as a bounded validation ticket. The shared fixed continuous-chapter
+coordinate space is accepted for the next annotation design; experimental dimensions
+and disposable storage do not become production contracts. Production ink/recovery
+contracts remain SP-005 work. The owner next selected SP-011 tab-shell refinement before
+proceeding with production annotations.

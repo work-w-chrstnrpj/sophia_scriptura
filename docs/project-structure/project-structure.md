@@ -1,12 +1,14 @@
 # Project Structure — Sophia Scriptura
 
-Status: native SP-006/SP-007 prototypes plus SP-009 reader implementation, 2026-09-22.
+Status: M2 reader, M3 annotations and M4/SP-013 Notes implementation; physical Notes
+acceptance pending, 2026-09-29.
 
 | Path | Responsibility and present state |
 | --- | --- |
 | `application/SophiaScriptura/SophiaScriptura.xcodeproj/` | App, unit and UI targets; simulator build verified |
-| `application/SophiaScriptura/SophiaScriptura/Features/` | Six tabs; Notes contains `CanvasExperiment/` model, session, UIKit surface, SwiftUI controls, fixture store and opt-in DEBUG-only memory probe |
-| `application/SophiaScriptura/SophiaScriptura/Core/` | `Scripture/` domain models, repository contracts and UTF-16 selection map; other boundary protocols remain placeholders |
+| `application/SophiaScriptura/SophiaScriptura/Features/` | Six tabs; `Notes/` has the SP-013 library and editor plus an isolated DEBUG `CanvasExperiment/` |
+| `application/SophiaScriptura/SophiaScriptura/Core/` | `Scripture/` domain and selection mapping, `Annotations/` contracts, `Notes/` document values and contracts; other boundaries remain placeholders |
+| `application/SophiaScriptura/SophiaScriptura/Infrastructure/Notes/` | SP-013 validated Notes generations, recovery and Notes-only Files archives |
 | `application/SophiaScriptura/SophiaScriptura/Features/Collections/` | SP-007 in-memory prototype: separate library/detail views, cards/rows, picker/editor sheets, adaptive style, models and observable store; no file/provider access |
 | `application/SophiaScriptura/SophiaScriptura/DesignSystem/` | Shared seven-preset palette roles and offline font registration; UI-only, no content or storage access |
 | `application/SophiaScriptura/SophiaScriptura/Resources/Fonts/` | Nine bundled font families, OFL notices and source/checksum manifest |
@@ -136,3 +138,75 @@ future feature.
 Dependencies flow from views to session/domain contracts to injected adapters. Renderer
 receives chapter values only. `RootTabView` composes dependencies and retains all tab state.
 No empty App/Domain/Application folders or extra packages were created.
+
+## SP-008 validation boundary — 2026-09-29
+
+`Features/Scripture/LayoutValidation/` is a DEBUG-only experiment opened from Settings.
+View owns controls, Surface owns shared TextKit/PencilKit geometry and input, and Session
+owns two disposable layers and isolated atomic fixture save/reopen. It uses bundled WEB
+and has no provider calls or production ink persistence. Tests live in
+`SophiaScripturaTests/InkValidationTests.swift`; physical results are tracked in the
+[walkthrough](../testing/sp008-ipad-guide.md).
+
+## SP-011 shell presentation — 2026-09-29
+
+`AppShell/ShellChromeState.swift` owns the transient monotonic three-second idle timer.
+`AppShell/ScrollActivityObserver.swift` observes direct finger movement without competing
+with native gestures or observing Pencil strokes. `RootTabView.swift` composes these and
+owns dock/reveal styling and animated mounted-tab presentation. Shell timing does not
+modify feature persistence or provider policy. Focused tests are `ShellChromeStateTests`
+and `ShellNavigationUITests`, with reader scroll/navigation regressions.
+
+SP-011 footer follow-up: RootTabView allocates separate vertical regions to tab content
+and the dock, plus shared SwiftUI bottom scroll-content clearance. Settings, Collections
+and Notes expose end-of-content UI identifiers; footer-bound checks live in
+`ShellNavigationUITests`. Native reader/canvas surfaces receive the bounded viewport.
+
+## SP-012 persistent Scripture annotations — 2026-09-29
+
+- `Core/Annotations/`: platform-independent identity, layout/layer values and repository interface.
+- `Infrastructure/Annotations/`: actor-isolated file generations, SHA-256 integrity, recovery and ink-only archive validation.
+- `Features/Scripture/Annotations/`: annotation session, layer/Files controls, captured layout renderer and shared UIKit/PencilKit viewport.
+- `AnnotationTests.swift` / `AnnotationUITests.swift`: temporary-store recovery fixtures and actual-reader layer journeys.
+
+Root retains the annotation session; ReaderSession gates navigation through a save callback.
+LayoutValidation remains disposable DEBUG evidence. Notes and Collections persistence are
+unchanged. See the annotation contract and SP-012 for acceptance boundaries.
+
+## SP-013 production Notes — 2026-09-29
+
+`Core/Notes/NoteDocument.swift` defines independent document/object values, flat groups,
+geometry, source quotes and repository contracts. `Infrastructure/Notes/NotesFileRepository.swift`
+implements serialized integrity-checked generations, previous/pre-restore recovery and
+media validation. `Features/Notes/NotesSession.swift` owns edits, bounded differential
+history and autosave; `NotesView` owns the library/Files UI; `Editor/` owns controls,
+object inspection and the native zooming canvas. Root composes the shared session and
+routes verse-hub quotes into the same library. `CanvasExperiment/` remains isolated and
+DEBUG-accessible. No prototype-data migration or Collections membership is performed.
+
+SP-013 study-page revision: `Core/Notes/NoteDocument.swift` adds `NotePage` and
+`NoteCitation`. `Features/Notes/Editor/NoteCanvasSurface.swift` renders the fixed body,
+floating objects and Pencil overlay; `NoteScripturePane.swift` composes the existing
+reader beside the note. `NotePageTypography.swift` shares fixed-column measurement and
+text styling. Root passes the shared ReaderSession into Notes.
+
+## Canvas/Page implementation — 2026-10-01
+
+`NoteDocument` stores a tagged `NoteContent` with `CanvasContent` or `PageContent`.
+`NoteCanvasSurface.swift` contains dedicated Canvas/Page controller entry points and shared
+viewport/input plumbing. `NoteCanvasInk.swift` reconciles PencilKit scenes into framed ink
+objects; `NotePageAttachments.swift` renders inline images/tables/links, using shared fixed
+column measurement from `NotePageTypography.swift`. `NoteEditorView` owns the persisted
+Scripture visibility preference. `NotesFileRepository` writes v3 and preserves exact prior
+generation bytes; `NotesSession` never converts legacy object-only notes on open.
+
+SP-013 workspace refinement adds `Core/Notes/NoteObjectStyle.swift` for optional shape/tint
+values, `Editor/NoteInsertGallery.swift` for shape/emoji selection, and
+`Editor/NoteInkAppearance.swift` for theme-aware neutral ink. LinkPresentation loading is
+isolated in `Infrastructure/Notes/NoteLinkPreview.swift`; cached thumbnails use the existing
+validated object payload. The surface owns contextual controls tied to selection geometry.
+
+
+`DesignSystem/AppTheme.swift` shares the selected paper/ink palette across tab bodies,
+status/navigation backgrounds and native Notes rendering. RootTabView owns the full-height
+viewport and overlaid dock; `ThemeWorkspaceUITests` covers this shared presentation boundary.

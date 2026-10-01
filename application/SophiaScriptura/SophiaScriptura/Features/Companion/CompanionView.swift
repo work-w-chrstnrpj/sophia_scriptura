@@ -10,6 +10,7 @@ struct CompanionView: View {
                 systemImage: "bubble.left.and.bubble.right",
                 description: Text("The guardrailed AI study companion (bring-your-own-key) arrives in Phase 5.")
             )
+            .appSurface()
             .navigationTitle("Companion")
         }
     }

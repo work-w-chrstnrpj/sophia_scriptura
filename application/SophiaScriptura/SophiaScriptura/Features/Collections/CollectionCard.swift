@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CollectionCard: View {
+    @Environment(\.appTheme) private var theme
     let collection: StudyCollection
     let directCount: Int
     let descendantCount: Int
@@ -15,17 +16,17 @@ struct CollectionCard: View {
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(CollectionSurface.secondaryInk)
+                    .foregroundStyle(Color(theme.palette.secondary))
             }
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(collection.name)
                     .font(.system(.headline, design: .serif).weight(.semibold))
-                    .foregroundStyle(CollectionSurface.ink)
+                    .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(2)
                 Text(collection.detail.isEmpty ? "No description" : collection.detail)
                     .font(.caption)
-                    .foregroundStyle(CollectionSurface.secondaryInk)
+                    .foregroundStyle(Color(theme.palette.secondary))
                     .lineLimit(2)
             }
 
@@ -39,13 +40,13 @@ struct CollectionCard: View {
                 }
             }
             .font(.caption2.weight(.medium))
-            .foregroundStyle(CollectionSurface.secondaryInk)
+            .foregroundStyle(Color(theme.palette.secondary))
         }
         .padding(18)
         .frame(maxWidth: .infinity, minHeight: 172, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(CollectionSurface.card)
+                .fill(Color(theme.palette.soft))
         )
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)

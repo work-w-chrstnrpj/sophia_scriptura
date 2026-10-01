@@ -6,6 +6,7 @@ final class CanvasExperimentUITests: XCTestCase {
         let notes = app.buttons["Notes"].firstMatch
         XCTAssertTrue(notes.waitForExistence(timeout: 10))
         notes.tap()
+        app.buttons["notes.backups"].tap()
         let link = app.buttons["notes.openCanvasExperiment"]
         XCTAssertTrue(link.waitForExistence(timeout: 5))
         link.tap()

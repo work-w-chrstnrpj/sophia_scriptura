@@ -41,6 +41,7 @@ struct CollectionArtifactPicker: View {
                 .accessibilityIdentifier("collections.pick.\(artifact.title)")
                 .accessibilityValue(store.contains(artifact.id, in: collectionID) ? "Included" : "Not included")
             }
+            .appSurface()
             .navigationTitle("Add Study Material")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Search saved material")

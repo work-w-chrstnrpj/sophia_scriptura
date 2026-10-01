@@ -1,6 +1,8 @@
 # Personal iPad deployment
 
-Current product slice: SP-009/SP-010 / M2 reader, with SP-006 retained as a Notes experiment; Xcode 26.6. No server or App Store deployment.
+Current product slice: M4/SP-013 Notes alongside the M2 reader and M3 annotations,
+with SP-006 retained as a DEBUG Notes experiment; current verification uses Xcode 27.0. No server or App Store
+deployment.
 
 1. Open `application/SophiaScriptura/SophiaScriptura.xcodeproj` in Xcode.
 2. Press Command-1, select the blue project icon, then **TARGETS → SophiaScriptura**.
@@ -97,3 +99,145 @@ launched on the connected iPad A16. Evidence: `build/oldpaper/device-build.log`,
 `install.log`, and `launch.log`. Settings → Appearance presets offers all seven selected
 styles. No app deletion or licensed-content store migration was performed. Launch success
 is not physical visual, VoiceOver, or airplane-mode acceptance.
+
+## SP-008 validation build — 2026-09-29
+
+M2 is closed under revised owner acceptance. SP-008 is the first M3 validation ticket;
+the Debug build exposes Settings → Experiments → SP-008 Pencil validation. Follow the
+[physical Pencil walkthrough](../testing/sp008-ipad-guide.md). Install over the existing
+app; no licensed translation download is required. Experiment saves contain disposable
+ink only and do not establish production annotation durability.
+
+## SP-011 tab-shell update — 2026-09-29
+
+The signed update built, passed local code-sign verification, installed over the existing
+app and launched on the paired physical iPad. No app deletion or translation sync was
+performed. Evidence: `build/sp011/device-final-build.log`, `device-final-install.log`,
+`device-launch.log`. Review five-second dock hiding, scroll/manual reveal and tab slide/glow
+on the device; Reduce Motion should fade content and selection. See
+[SP-011](../../tickets/SP-011-tab-shell-motion.md) for automated evidence and pending review.
+
+SP-011 footer fix: the physical UI test installed the signed fix over the existing app
+and passed Settings final-row visibility/opening in portrait and landscape
+(`build/sp011/footer/ipad-r6.xcresult`). Afterward, local signature verification passed
+and Sophia relaunched normally with the test environment cleared
+(`build/sp011/footer/normal-launch.log`). No app deletion or translation sync occurred.
+
+## SP-013 M4 closure build — 2026-10-01
+
+The final M4 Debug build passed strict signature verification, installed in place on the
+paired iPad A16 and launched `com.personal.SophiaScriptura` normally. Evidence is retained
+under `build/sp013/m4-final/`: `final-device-build.log`, `final-signature.log`,
+`final-install.log` and `final-launch.log`. The install preserved the existing app data;
+no uninstall, migration, reset or translation sync occurred.
+
+## SP-012 actual-reader annotation update — 2026-09-29
+
+Signed physical-device tests install in place and use a UUID-isolated reader/annotation
+store. Both layer-management and font reading-view journeys passed in `build/sp012/ipad-r1.xcresult`.
+After testing, launch normally with CoreDevice `--terminate-existing` to clear test process
+environment; this does not delete the app or its data. Final signing/build/install/launch
+logs are under `build/sp012/`. Existing licensed downloads and Keychain state are retained.
+
+Open Scripture → Annotations → New layer; this is separate from the SP-008 Settings
+experiment. Follow the [actual annotation walkthrough](../testing/sp012-ipad-guide.md).
+Use test handwriting until the owner completes the Files backup/restore drill. Annotation
+backups contain only ink, identities and layout metadata; full-app backup remains future work.
+
+SP-012 owner revision: `build/sp012/revision/device-final-build.log` records a successful
+signed build. The first in-place install succeeded, but iPadOS denied launch because the
+Personal Team profile was not yet trusted. The owner then accidentally deleted the app;
+`device-reinstall.log` and `reinstall-launch.log` record a successful fresh install and
+normal launch. App deletion may have removed earlier local data, including annotations,
+reader state and licensed downloads. Installation and launch do not establish whether
+those data survived or whether the revised Pencil workflow passes physical acceptance.
+
+Latest SP-012 layer-appearance revision: signed build and in-place install succeeded
+(`build/sp012/revision/layer-device-build.log`, `layer-device-install.log`). The first
+normal launch was denied pending Personal Team profile trust. After the owner trusted
+the profile and opened Sophia, the CoreDevice retry launched successfully
+(`layer-device-launch-retry.log`). The in-place install did not delete the app; physical
+Pencil and annotation-backup acceptance remain separate checks.
+
+The selected-layer color refinement also built, installed in place, and launched on
+the paired iPad (`build/sp012/revision/layer-color-device-build.log`,
+`layer-color-device-install.log`, `layer-color-device-launch.log`). This verifies
+deployment, while the owner's physical visual and Pencil checks remain open.
+
+The SP-012 hidden-reader responsiveness, layer-action and exact eye-icon revision
+also built, installed in place and launched on the paired iPad. Final evidence:
+`build/sp012/revision/hollow-eye-device-build.log`, `hollow-eye-device-install.log`
+and `hollow-eye-device-launch.log`. This is deployment evidence, not completion of
+the physical Pencil and Files recovery walkthrough.
+
+## SP-013 M4 Notes test build — 2026-09-29
+
+The signed Debug build succeeded for the paired iPad A16 and retained
+`com.personal.SophiaScriptura`. It installed in place and launched normally through
+CoreDevice. Evidence: `build/sp013/device-build.log`, `device-install.log`, and
+`device-launch.log`. No app deletion or Notes data migration was performed. Open
+Notes and follow the [M4 iPad walkthrough](../testing/sp013-ipad-guide.md) for Pencil,
+Files recovery, VoiceOver, orientation and realistic-capacity checks. Installation
+and launch alone do not establish physical feature acceptance.
+
+### SP-013 study-page revision — 2026-09-30
+
+The final signed Debug build succeeded (`build/sp013/redesign/device-final-build.log`)
+and installed over the existing app on the paired iPad, followed by a successful launch.
+Evidence: `build/sp013/redesign/device-install.log` and `device-launch.log`. No uninstall
+was performed. On first save, Notes retains the original v1 generation before writing
+the study-page format. Follow the revised [iPad guide](../testing/sp013-ipad-guide.md).
+
+## Canvas and Page Notes — 2026-10-01
+
+The signed SP-013 Canvas/Page build was installed over `com.personal.SophiaScriptura`
+on the paired iPad A16 and launched successfully through CoreDevice. No uninstall, data
+reset or translation sync was performed. Build evidence is
+`build/sp013/two-types/device-handoff.log`; installation and launch are recorded in
+`install.log` and `launch.log` beside it. Signature verification passed with normal Mac
+certificate access (the sandboxed check could not establish certificate trust).
+
+Open Notes → New Note → Canvas or Page. Follow the
+[updated iPad acceptance guide](../testing/sp013-ipad-guide.md), especially Pencil with
+Scribble on/off and typing-to-annotation transitions. Use Hide Pencil tools when the native
+palette covers the bottom tab controls. Schema v3 retains legacy types and preserves the
+exact prior generation before the first upgraded save. Installation/launch does not prove
+physical Pencil routing, palm rejection, Files recovery or resolution of the old crash.
+
+
+### Canvas/Page workspace refinement — 2026-10-01
+
+Final signed build and strict signature verification passed. CoreDevice installed the
+update in place on the paired iPad A16 and launched `com.personal.SophiaScriptura`. No
+uninstall, data reset or translation sync occurred. Evidence under
+`build/sp013/ux-refinement/`: `device-release.log`, `signature.log`, `install.log`,
+`launch.log`. All 33 distinct Notes checks passed across regression/focused result bundles;
+see SP-013 for the initial failures, corrections and remaining physical acceptance.
+
+
+### Ink appearance and full-height theme correction — 2026-10-01
+
+The follow-up signed build passed strict signature verification, installed in place on the
+paired iPad A16 and launched normally. Evidence: `build/sp013/theme-edge/device.log`,
+`signature.log`, `install.log`, `launch.log`. Existing app storage was retained, with no
+uninstall, reset or translation sync. Thirty-five distinct selected checks passed across
+`verification.xcresult` and the successful focused `cycles.xcresult`; SP-013 records the
+initial failures and corrections. Follow the new theme/screen-edge section in the
+[iPad guide](../testing/sp013-ipad-guide.md). Physical acceptance remains pending.
+
+
+### Canvas ink memory correction and active pen indicator — 2026-10-01
+
+The final signed app was installed in place by the physical Notes regression and passed
+strict signature verification. The twenty-stroke/save/reopen iPad test passed in
+`build/sp013/ink-stability/ipad-persistence.xcresult`. CoreDevice then launched normally
+without test-store variables (`normal-launch.log`); owner storage remains intact. The
+SP-013 ticket records 29 distinct passing checks, the ~210 MB diagnostic memory peak,
+initial test/trust failures and the remaining physical Pencil acceptance.
+
+### Page viewport recursion correction — 2026-10-01
+
+The corrected app passed strict signature verification and was installed in place on the
+paired iPad A16. Page ink theme-cycle and save/reopen tests passed on that device before
+installation (`build/sp013/page-crash/ipad-page.xcresult`). CoreDevice then launched the
+normal app (`launch.log`); no reset, uninstall, or translation sync occurred.

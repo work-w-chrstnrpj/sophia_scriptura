@@ -41,14 +41,32 @@ legible and calm; avoid paper-grain decoration and dense dashboard chrome.
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-The primary tab bar is always at the bottom, as the owner requested. It is the stable
-place for the six top-level destinations and does not move to the top when the device
-rotates. The active tab uses label, icon, tint and a shape/selection treatment so color
+The primary tab bar is anchored at the bottom, as the owner requested. The owner
+selected timed visibility in SP-011: show on launch/resume, tab taps and finger pans,
+then hide after three seconds without activity. A small reveal handle remains reachable
+on non-scrolling screens. It does not move to the top when the device rotates. The active tab uses label, icon, tint and a shape/selection treatment so color
 is not the only cue.
 
 The shell owns the safe-area relationship between content, the optional audio mini-player
-and the tab bar. A screen must receive the available content region rather than guessing
-its own bottom inset.
+and the tab bar. The dock overlays the full-height tab viewport; no footer height is reserved, even
+while navigation is visible. Library/settings SwiftUI scroll content receives 100 points
+of bottom scroll clearance so final rows remain reachable above the dock. Open Notes
+editors receive no shell scroll clearance and extend through the bottom safe area.
+Native surfaces retain their own keyboard and document insets.
+
+### Owner-selected visibility and motion — 2026-09-29
+
+[SP-011](../../tickets/SP-011-tab-shell-motion.md) implements a quiet floating dock with
+a three-second idle deadline. Finger movement is observed passively across native and
+SwiftUI surfaces; Pencil strokes do not reveal the menu. The bottom content inset stays
+constant when the dock hides, preventing reader/ink geometry changes. A 44-point-tall
+reveal target offers access from screens without scrolling.
+
+Tab surfaces remain mounted and slide in their left/right order. The selected capsule
+and icon use a subtle glow from the current appearance accent, with the capsule gliding
+to the destination. Reduce Motion fades content without lateral travel or glow animation.
+Timer work is cancelled while inactive and restarted on resume. Other shell capabilities
+below remain proposed until separately selected and implemented.
 
 ## Top-level destinations
 
@@ -239,3 +257,13 @@ After owner review, create detailed specifications in this order:
 
 Each handoff must link back to this shell and the Scripture specification, then identify a
 bounded implementation ticket only after the design and contracts are accepted.
+
+
+## Shared edge-to-edge workspace — SP-013 owner correction, 2026-10-01
+
+All tabs now use the floating idle-hiding dock without a reserved footer. Notes reaches
+the bottom screen edge while fixed Page coordinates remain unchanged. The shared AppTheme
+uses the selected appearance and light/dark preference for status/navigation backgrounds,
+body paper, readable text and cards across all six tabs. System status icons remain visible.
+Spring Leaf dark therefore uses its green-tinted paper throughout, rather than a green
+header over a system-black body. Other presets follow their own existing palettes.

@@ -7,6 +7,7 @@ Start with the [development plan](development-plan/development-plan.md) and
 | --- | --- |
 | [Product specification](product-specification/product-specification.md) | Full-design feature map, requirements, theological brief and open decisions |
 | [TDD](tdd/tdd.md) | Technical intent, candidate architecture, data and integration decisions |
+| [Scripture annotation contract](data/scripture-annotation-contract.md) | M3 preserved layouts, durable ink commits, recovery and annotation-only backup/restore |
 | [Scripture reader data contract](data/scripture-reader-contract.md) | Edition/reference identity, bundled SQLite content, reader state and restore behavior |
 | [Scripture content](integrations/scripture-content.md) | SP-002 sources, offline baseline, provider permissions and import acceptance plan |
 | [Development plan](development-plan/development-plan.md) | M0–M9 roadmap and current position |
@@ -28,3 +29,6 @@ Confirmed intent, proposed design, implemented behavior, and passing tests are d
 states. The reader data and Scripture integration contracts are maintained; later feature
 contracts will be added only through their tickets. Empty placeholder pages were removed.
 Keep diagrams beside the relevant design.
+
+- [Notes document/recovery contract](data/notes-contract.md), [SP-013](../tickets/SP-013-freeform-notes.md)
+  and [M4 iPad acceptance](testing/sp013-ipad-guide.md): production Notes and remaining device evidence.

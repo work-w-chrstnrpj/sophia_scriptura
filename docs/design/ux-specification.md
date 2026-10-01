@@ -19,10 +19,10 @@ popovers/sheets/panels, audio mini-player, local search, DesignSystem responsibi
 shared empty/offline/error/accessibility states. Feature-specific specifications must use
 that shell rather than inventing parallel navigation or visual tokens.
 
-The Notes tab is now detailed in the [Notes library and expandable canvas specification](notes-screen-specification.md).
-It carries forward the accepted expandable canvas, explicit grouping, plain/ruled/grid
-backgrounds, card/list library, tags, rich object vocabulary, native Pencil workflow and
-recovery/accessibility gates. The document remains a design proposal until owner review.
+Notes behavior is detailed in the [Notes design and implementation plan](notes-screen-specification.md).
+SP-013 now implements a movable-object Canvas and a flowing Page with fixed overlay ink,
+inline attachments and a remembered Scripture visibility toggle. Physical acceptance is
+pending, including Scribble on/off after failures reported against the previous build.
 
 The Collections tab is now detailed in the [Collections library and detail specification](collections-screen-specification.md).
 It defines nested topic folders, shared artifact memberships, collection detail filters,
@@ -82,7 +82,7 @@ feedback. M9 is the final cross-app refinement pass, not the first time quality 
 Bottom placement (D-11) and the OldPaper UI direction are owner-selected. The detailed
 [Scripture screen specification](scripture-screen-specification.md) is now the interaction
 and visual source for the reader: OldPaper's black-and-white base, seven selected
-color-and-type presets, landscape verse-hub popovers, Reserved margin by default, stable
+color-and-type presets, landscape verse-hub popovers, blank surrounding space through Margin, stable
 compact reader controls, and optional two-edition comparison synchronized by canonical
 verse anchors. Presets do not change the planned feature set. Font packaging, final tokens,
 contrast, accessibility and detailed navigation acceptance remain open.
@@ -152,7 +152,16 @@ choosing a state determines whether it is hidden, readable or editable.
 
 New layers start empty and transparent. At most one layer is visible; other layers keep
 their content. Show the selected layer name and active state. Hiding ink must not delete
-it. The ruled margin belongs to the saved annotation layout, not a reason to shift marks.
+it. The surrounding writing space belongs to the saved annotation layout; viewport cropping does not shift marks.
+The layer menu marks the selected layer with a blue name and checkmark, and shows its saved preset/typeface and size in
+muted text. The toolbar layer button uses the standard control appearance. Selecting a layer restores that reader appearance. A deliberate font change
+recaptures only that layer's layout and warns if existing marks may shift. Draw opens
+with a compact palette affordance that expands the native picker; Clear Ink is red.
+Read Hidden has no Margin control or duplicate reading-view action.
+The layer picker separates management buttons from the layer list: New uses a plus,
+Rename a pencil, and Delete a red trash icon. Read Visible uses an eye with a dark
+pupil, Read Hidden an eye with a hollow pupil, and Draw the pencil icon. Hidden annotation layout checks must
+not delay a verse tap opening Verse Hub.
 Do not depend on Pencil Pro gestures. Palette tools and precise gesture routing require
 native validation; approval of this design is not a completed implementation.
 
@@ -204,16 +213,17 @@ scrolling, with manual collapse. The earlier page-based annotation proposal belo
 M3 review; it is not a reason to paginate the M2 reader.
 
 Page-based ink needs stable text geometry. Rotation or an open panel could scale/pan a
-saved page rather than rewrap its text. Larger type or a ruled-margin layout change needs
+saved page rather than rewrap its text. Larger type or a writing-space layout change needs
 an explicit policy for existing marks; never silently remap ink by page number. These are
 SP-003 feasibility questions. Do not freeze reading accessibility or silently duplicate
 layouts without review. Per-translation spatial ink is approved by Q3; preservation of the original annotated
-layout is approved by Q4. The independently adjustable reading view needs a clear transition.
+layout is approved by Q4. The SP-012 layer-owned layout revision supersedes the
+separately adjustable reading-view proposal for annotation controls.
 This is Scripture pagination, separate from the accepted expandable canvas for Notes.
 
 The refined reader behavior is specified in the [Scripture screen specification](scripture-screen-specification.md):
 the Scripture typeface is selectable in Settings, the verse hub is a landscape popover,
-Reserved margin is the default, reader controls collapse into a compact bar while scrolling,
+Margin now exposes blank space on all sides (owner revision 2026-09-29), reader controls collapse into a compact bar while scrolling,
 and Compare opens one optional second edition. Comparison columns synchronize by canonical
 verse anchors; the comparison edition is read-only until the owner explicitly makes it
 primary. These choices preserve the original annotated layout and do not authorize reader
@@ -242,8 +252,9 @@ for Q1–Q12 and unresolved details.
   contrast, legibility and discoverability as acceptance requirements.
 - A single margin toggle applies across pages of the current Scripture reading layout.
   Keep its space reserved when hidden so Scripture and existing marks do not shift.
-- Preserve annotated page geometry; expose a separately adjustable reading view. Detailed
-  transitions and narrow-window behavior require mockups and native validation.
+- Preserve each layer's annotated geometry until the owner deliberately changes that
+  layer's font settings; show a warning when existing marks may shift. Narrow-window
+  behavior still requires native validation.
 - Notes default to plain with ruled/grid choices; library defaults to stacked cards with
   list alternative. Type directly on canvas. SP-006's edit sheet remains experimental.
 - Collections support owner-created topics, nested folders and multiple memberships.

@@ -3,6 +3,7 @@ import SwiftUI
 /// M5 prototype: a local Collections library with nested folders and shared memberships.
 /// Persistence and cross-feature repositories remain intentionally outside this slice.
 struct CollectionsView: View {
+    @Environment(\.appTheme) private var theme
     @StateObject private var store = CollectionsStore.demo()
     @State private var searchText = ""
     @State private var sort: CollectionLibrarySort = .modified
@@ -34,7 +35,7 @@ struct CollectionsView: View {
             ScrollView {
                 Text("Sample workspace · Changes reset when the app closes. Items are examples and cannot be opened yet.")
                     .font(.footnote)
-                    .foregroundStyle(CollectionSurface.secondaryInk)
+                    .foregroundStyle(Color(theme.palette.secondary))
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
                     .accessibilityIdentifier("collections.demoNotice")
@@ -80,7 +81,8 @@ struct CollectionsView: View {
                     .padding(.top, 12)
                 }
             }
-            .background(CollectionSurface.background.ignoresSafeArea())
+            .accessibilityIdentifier("collections.content")
+            .appSurface()
             .navigationTitle("Collections")
             .searchable(text: $searchText, prompt: "Search collections")
             .toolbar {
@@ -116,10 +118,10 @@ struct CollectionsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Gather what you are learning")
                 .font(.system(.title2, design: .serif).weight(.semibold))
-                .foregroundStyle(CollectionSurface.ink)
+                .foregroundStyle(Color(theme.palette.ink))
             Text("Keep passages, notes, conversations, and links together without duplicating them.")
                 .font(.subheadline)
-                .foregroundStyle(CollectionSurface.secondaryInk)
+                .foregroundStyle(Color(theme.palette.secondary))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

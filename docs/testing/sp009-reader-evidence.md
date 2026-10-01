@@ -260,3 +260,10 @@ current reader has one continuous selectable text stream rather than page surfac
 adding a visual transform over it would compromise selection, VoiceOver navigation and
 restoration. This is recorded as a future interaction ticket rather than a partial
 implementation.
+
+## M2 owner closure — 2026-09-29
+
+The owner accepts the visual refinements as addressed and requests moving to SP-008.
+VoiceOver is waived for M2 closure, not tested or passed. SP-010 expiry/renewal work is
+also accepted as addressed. Historical automated results and unrun cases remain unchanged;
+this is revised owner acceptance, not a new physical test report.

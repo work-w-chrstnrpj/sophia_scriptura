@@ -27,6 +27,7 @@ struct CollectionEditorSheet: View {
                     }
                 }
             }
+            .appSurface()
             .navigationTitle(parentID == nil ? "New Collection" : "New Child Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

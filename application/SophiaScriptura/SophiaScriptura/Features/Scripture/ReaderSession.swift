@@ -20,6 +20,7 @@ import Observation
     private(set) var targetVerse = 1
     private(set) var navigationID = UUID()
     private(set) var restorationLocation: ReadingLocation?
+    var beforeNavigation: (@MainActor () async -> Bool)?
     var hubVerse: VerseID?
     private(set) var translations: [TranslationStatus] = []
     private(set) var syncMessage: String?
@@ -66,6 +67,7 @@ import Observation
     }
 
     func navigate(book: String, chapter: Int, verse: Int = 1, restoring: ReadingLocation? = nil) async {
+        if let beforeNavigation, !(await beforeNavigation()) { return }
         let request = UUID(); requestID = request
         let repository = content
         error = nil
@@ -140,6 +142,7 @@ import Observation
         catch { syncMessage = error.localizedDescription }
     }
     func selectEdition(_ id: String) async {
+        if let beforeNavigation, !(await beforeNavigation()) { return }
         let token = UUID(); requestID = token
         do {
             let repository: any ScriptureContentRepository

@@ -19,8 +19,9 @@ and execute them with importer/repository/state implementations. All are current
 
 SP-003 cases LAYOUT-01–03 move into SP-009 so the actual product reader proves passage
 selection, hit testing and source mapping. Annotation cases LAYOUT-04–09 remain in
-[SP-008](../../tickets/SP-008-scripture-layout-validation.md) as a later pre-M3 gate.
-All are Not Run; Notes tests do not prove Scripture pagination or alignment.
+[SP-008](../../tickets/SP-008-scripture-layout-validation.md) as the selected first M3 validation gate (2026-09-29).
+Physical annotation cases LAYOUT-04–09 are owner-reported successful on 2026-09-29; VoiceOver is waived for this gate.
+See the [SP-008 walkthrough](sp008-ipad-guide.md). Notes tests do not prove Scripture alignment.
 
 SP-002 content/import cases CONTENT-01–10 are specified in
 [Scripture content feasibility](../integrations/scripture-content.md). They are planned,
@@ -310,3 +311,196 @@ standard policy, then reopens the same store under the development exception and
 a chapter. The standard-policy denied-access regression still passes. The signed Debug
 update launched on the owner's iPad; availability-only diagnostics confirmed NIV11, NLT
 and NKJV remain cached and available without redownloading.
+
+## M2 owner closure — 2026-09-29
+
+M2 is closed under revised acceptance: the owner accepts the visual work and reports
+expiry/renewal addressed. VoiceOver is waived, not passed. Historical unrun checks above
+remain evidence limitations. SP-010 records the Debug cache exception and recovery checks;
+this closure does not imply a new physical Release expiry test. SP-008 now owns the first
+M3 experiment and physical Pencil gate.
+
+## SP-008 closure and SP-011 shell verification — 2026-09-29
+
+The owner explicitly reported all SP-008 criteria successful. The bounded physical gate
+is accepted; the [walkthrough](sp008-ipad-guide.md) records owner evidence separately
+from automated tests. Production ink persistence/recovery remains separate.
+
+SP-011 adds `ShellChromeStateTests` for deadline extension and timer cancellation and
+`ShellNavigationUITests` for three-second hiding, manual reveal, stable
+reader frames, retained Collections navigation and dark/landscape dock appearance.
+Affected reader regressions cover chapter swipes, Settings navigation and relaunch
+restoration. Result status is maintained in [SP-011](../../tickets/SP-011-tab-shell-motion.md).
+The existing reader UI tests now explicitly reveal the dock before tab navigation.
+
+SP-011 final verification: seven distinct focused checks passed across
+`build/sp011/shell-r1.xcresult`, `hide-reveal-r2.xcresult` and `landscape-r3.xcresult`.
+The first hide assertion was corrected to check touch reachability, and the affected
+journey passed on rerun. Exported light/dark/landscape screenshots were reviewed.
+Physical build/install/launch succeeded; subjective motion and a device Reduce Motion
+walkthrough remain owner review. No full-suite or physical accessibility pass is claimed.
+
+### SP-011 footer reachability regression
+
+The Settings final-row test reproduced footer overlap before the fix in
+`build/sp011/footer/baseline-r1.xcresult`. It now checks that the entire experiment row
+is above the footer in portrait/landscape and that tapping opens the experiment. The
+Collections/Notes landscape case checks their final content above the dock. Retest
+reader scrolling/chapter swipes and menu hide/reveal after shared shell layout changes.
+Assertions use whole-element bounds, not only tap reachability. See SP-011 for final
+result bundles and physical installation evidence.
+
+Footer final results: `build/sp011/footer/fix-r2.xcresult` passed 3/3 simulator cases,
+`other-tabs-r5.xcresult` passed the Collections/Notes check, and `ipad-r6.xcresult` passed
+the actual iPad Settings test in both orientations, including opening the experiment.
+Simulator and physical Settings screenshots were visually reviewed. Early cross-tab/device
+queries assumed UIKit container types; corrected queries retain the same final-row bounds
+assertions. Normal physical launch passed after the isolated test run.
+
+## SP-012 annotations — 2026-09-29
+
+Owner-selected actual-reader implementation. Run `SophiaScripturaTests/AnnotationTests`
+and `SophiaScripturaUITests/AnnotationUITests` with the existing simulator command, plus
+reader navigation and continuous-scroll regressions. Temporary repositories and UUID
+SP009_TEST_STORE environments protect the owner stores. Generation corruption, interrupted
+commits, stale revisions, dirty-save retry, deletion/undo, archive rejection/restore and
+fixed-layout viewport checks are implemented.
+
+`build/sp012/checks-r4.xcresult` passed 12 unit/component + 3 simulator UI tests;
+`checks-r2.xcresult` also passed reader navigation/settings/relaunch. Both annotation UI
+journeys passed on the actual iPad (`ipad-r1.xcresult`). Dark default-ink contrast has a
+separate focused run (`contrast-r6.xcresult`). Reviewed retained landscape screenshots.
+Dense fixture: Psalm 119 / 176 verses / 820 × 16,825 pt / 2,000 strokes / 311,887 bytes.
+No physical Pencil or long-chapter memory acceptance is inferred. Next gate is the
+[SP-012 walkthrough](sp012-ipad-guide.md); ticket contains current status and delivery logs.
+
+Final restore safety check: `build/sp012/restore-r7.xcresult` passed backup canvas
+invalidation and dark default-ink contrast. Restore increments a surface generation before
+publishing the restored snapshot; dismantling an old canvas cannot flush stale ink over
+it. Unique passing checks: 14 annotation unit/component tests, 4 simulator UI journeys
+(including the two existing reader regressions), and 2 physical-iPad UI journeys.
+Actual Pencil and Files acceptance remain pending. No unperformed case is counted passed.
+
+SP-012 owner-revision verification: `build/sp012/revision/final-sim.xcresult` passed
+16 annotation unit/component tests, three annotation UI journeys and two reader UI
+regressions. The revised journeys cover centered controls, surrounding blank space,
+Hidden returning to the ordinary reader, palette dismissal at stroke start and autosave.
+Simulator checks do not establish Pencil feel, palm rejection or device persistence.
+The signed revision was installed and launched on the owner's iPad after a fresh reinstall;
+physical annotation acceptance remains pending in the [walkthrough](sp012-ipad-guide.md).
+
+Layer-owned appearance revision: `build/sp012/revision/layer-final.xcresult` passed
+17 annotation unit/component tests, three annotation UI journeys and four reader UI
+regressions. Unit checks cover per-layer geometry/appearance persistence, selection
+restoration, unchanged ink bytes and isolation of another layer's layout. UI checks cover
+the selected row's preset/size metadata, appearance restoration, hidden Margin and layer
+recovery. The compact palette's separate collapse-to-edge state is checked in
+`palette-final.xcresult`; physical Pencil and visual acceptance are still pending.
+The signed revision installed in place and launched normally after the owner trusted
+the Personal Team profile; `build/sp012/revision/layer-device-launch-retry.log` records
+the successful CoreDevice retry. This does not pass physical annotation behavior.
+
+## SP-013 production Notes — 2026-09-29
+
+`build/sp013/seventh.xcresult` passed 15 selected tests (9 Notes model/recovery,
+4 Notes UI journeys, 2 shell regressions) on iPad A16 / iOS 26.5. Production fixtures
+use UUID-scoped Notes stores through `SP009_TEST_STORE`. The DEBUG-only
+`SP013_FINGER_INK=1` switch permits synthetic simulator drawing; real use stays Pencil-only.
+This flag does not prove physical Pencil acceptance. Run:
+
+`build/sp013/final.xcresult` subsequently passed 9 Notes model/recovery tests and
+5 Notes UI journeys, including ink reopening after tab change and relaunch. The later
+`build/sp013/quote-policy.xcresult` passed 10 Notes model/recovery tests and the WEB
+verse-hub journey after restricting saved source quotes to WEB. The earlier selected
+shell checks remain 2/2 in `seventh.xcresult`. These runs do not establish physical
+Pencil, VoiceOver, Files picker restore or representative-capacity acceptance.
+The focused `landscape-visual.xcresult` passed object/group/rotation interaction, but
+simulator captures disagree about orientation framing, so landscape visual acceptance
+remains in the physical guide.
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+  -scheme SophiaScriptura \
+  -destination 'platform=iOS Simulator,id=523DDB8A-9EF6-44ED-A4F8-F8059ECB7725' \
+  -derivedDataPath build/sp013/DerivedData \
+  -resultBundlePath build/sp013/next-run.xcresult \
+  -only-testing:SophiaScripturaTests/NotesTests \
+  -only-testing:SophiaScripturaUITests/NotesUITests \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+```
+
+Use a fresh result path. See [SP-013](../../tickets/SP-013-freeform-notes.md) for exact
+checks/fixes and the [iPad guide](sp013-ipad-guide.md) for unrun Pencil, Files,
+VoiceOver, narrow-window and representative-capacity acceptance. M3 acceptance is separate.
+
+### Study-page redesign verification — 2026-09-30
+
+The earlier WEB-only and object-ink behavior above is historical. The owner-approved
+study page supports authorized translation quotations, a fixed central body, one fixed
+ink overlay and floating objects. `build/sp013/redesign/final.xcresult` passed 16 Notes
+model/recovery checks and five of six UI journeys. After correcting touch-down targeting
+for corner drags, `build/sp013/redesign/resize-fix.xcresult` passed the remaining direct
+move/resize journey. All 22 selected checks therefore passed across those runs.
+The successful portrait object-editing screenshot was visually inspected.
+The signed iOS build was installed and launched on the paired iPad. On 2026-10-01 the
+owner reported Pencil-to-text input, trouble exiting typing, an incomplete tool palette,
+and Pencil input failing with Scribble disabled. These are owner-reported failures pending
+reproduction and correction on hardware. The Canvas/Page source implementation now adds
+typed v3 storage, inline Page attachments, Canvas ink transforms and a Scripture toggle;
+its current verification is recorded in SP-013 and the updated physical guide. These checks do not establish the cause
+or resolution of the original unsupported-data/crash report. The signed build was
+subsequently installed and launched on the physical iPad.
+
+
+### SP-013 Canvas/Page verification — 2026-10-01
+
+19 Notes model/recovery tests and nine distinct UI journeys passed across
+`build/sp013/two-types/acceptance.xcresult` and `final-ui.xcresult` (28 unique selected
+checks). The first suite had one new Canvas test target error; the corrected workspace
+input and all five affected UI retests passed. Coverage includes legacy type inference
+and exact-generation retention, independent/duplicate drawing identity, Canvas transforms
+and reopen, Page attachment/citation offsets, typing/ink persistence, pane visibility,
+hidden-pane citation navigation and the existing quote/experiment journeys.
+
+Xcode 27.0 signed build and normal-access signature validation passed. Installation over
+the existing app and launch on the paired iPad succeeded. Final Canvas screenshot inspected;
+document links and whitespace checked. Physical Pencil with Scribble on/off, palm rejection,
+Files recovery, dense-note performance and the original crash remain unverified. Follow
+[the current iPad guide](sp013-ipad-guide.md); M4 remains in progress pending owner acceptance.
+
+### SP-013 workspace refinement checks
+
+`NotesTests` covers neutral-ink appearance without geometry/raw-payload changes, styled
+object insertion/duplicate/undo/archive and validated cached thumbnails in addition to
+existing migration, citation and recovery cases. `NotesUITests` now uses contextual actions
+instead of the removed Objects list, and covers direct title rename, dotted paper, shape
+and sticker galleries, full-height viewport, finger transforms, rotation and ink reopening.
+
+`testCanvasWebsitePreviewLoadsAndReopens` and `testCanvasYouTubePreviewLoadsAndReopens`
+are live metadata integration checks requiring internet access. They verify a real cached
+thumbnail, insertion Undo/Redo and reopening. For an intentionally offline regression run,
+exclude those two with `-skip-testing:SophiaScripturaUITests/NotesUITests/<testName>`;
+the cached-thumbnail model/repository test remains network-independent. Site metadata
+availability is outside the app's control; a failed fetch must retain a usable domain card.
+See SP-013 for recorded result bundles and the iPad guide for physical acceptance.
+
+
+### Theme and full-height workspace regression
+
+`NotesTests.testInkPixelsRemainReadableAcrossDarkLightDark` checks actual PencilKit
+raster pixels through both appearance transitions and preserves original drawing bytes.
+`ThemeWorkspaceUITests` checks Canvas/Page ink pixels across Dark → Light → Dark,
+Notes viewport alignment with the bottom screen edge, and Spring Leaf status/body edge
+colors across all six tabs. Its DEBUG-only neutral-pen setting avoids inheriting a
+simulator's previously selected colored pen. Existing shell tests cover dock deadlines,
+stable reader geometry, retained navigation and final-row reachability in both orientations.
+Evidence and remaining physical acceptance are recorded in SP-013.
+
+
+`NotesUITests.testCanvasRepeatedInkUsesViewportAndActivePenIndicator` asserts live ink
+view bounds equal the editor viewport, checks the pen's accessible active/hidden state,
+draws twenty strokes and checks their persistence after relaunch. An earlier diagnostic
+run recorded application memory during repeated drawing; the retained evidence is in
+SP-013. Physical test stores are isolated by `SP009_TEST_STORE`; launch normally afterward
+to restore owner data.

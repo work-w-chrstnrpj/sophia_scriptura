@@ -59,9 +59,11 @@ through a provider-agnostic bring-your-own-key adapter without leaking secrets.
 - Application/runtime: `SwiftUI on iPadOS 17+ (Swift 5.9+, Xcode 16+)`
 - Service/API layer: no runtime backend. SP-010 implements a direct on-device API.Bible
   client and encrypted licensed-content sync for the owner-approved NIV11, NLT and NKJV IDs.
-- Current runtime store: SP-006 atomic JSON fixture with drawing/image bytes. SP-009 implements bundled read-only SQLite plus local-only SwiftData reader state.
+- Current runtime stores: SP-006 retains an isolated atomic JSON experiment fixture;
+  SP-013 adds validated Notes generations with ink/images and Notes-only recovery.
+  SP-009 implements bundled read-only SQLite plus local-only SwiftData reader state.
   SP-010 adds AES-GCM-encrypted Core Data payloads and device-only Keychain state for
-  licensed editions; drawing/media and remaining study data contracts remain proposed.
+  licensed editions; remaining study data contracts are still staged by feature.
 - Testing: `XCTest (unit and UI); manual test cases under tests/ and docs/testing.`
 - Deployment: `Personal sideload from Xcode to the owner's iPad (free Apple Developer account, 7-day signing validity). No CI/CD, no server, no App Store distribution.`
 
@@ -71,12 +73,18 @@ Update this map whenever the project structure changes.
 
 - `application/`: the SwiftUI iPad app. `application/SophiaScriptura/` holds the Xcode
   project: the six tabs (Scripture, Collections, Notes, Companion, Activity, Settings)
-  with the SP-006 Notes experiment and SP-007 in-memory Collections prototype. Collections
+  with the SP-013 Notes library/editor, isolated SP-006 experiment, and SP-007 in-memory
+  Collections prototype. Collections
   separates library/detail, picker/editor, components, styling and temporary data; Core
-  contains Scripture domain contracts and selection mapping plus remaining placeholder protocols.
-  Infrastructure contains reader SQLite/SwiftData adapters plus SP-010's API.Bible,
+  contains Scripture domain contracts, selection mapping, annotation and Notes contracts,
+  plus remaining placeholder protocols. Infrastructure contains Notes recovery,
+  reader SQLite/SwiftData adapters and SP-010's API.Bible,
   encrypted-store and Keychain adapters; Resources/Scripture bundles WEBP content.
-  DesignSystem owns reader appearance tokens and font registration; Resources/Fonts
+  Features/Scripture/LayoutValidation holds the DEBUG-only SP-008 continuous-chapter
+  PencilKit experiment; its disposable ink is separate from production study storage.
+  AppShell owns the tab-dock idle timer and passive finger-scroll observation; RootTabView
+  preserves mounted tab state while animating navigation.
+  DesignSystem owns reader appearance tokens, shared AppTheme surfaces across tabs, and font registration; Resources/Fonts
   contains the selected offline font families, licenses and provenance.
 - `service/`: no runtime backend; strict local WEBP USFM importer and independent VPL validation. Content permissions must
   be verified before implementing downloads.
@@ -178,3 +186,39 @@ simulator exists. Set DEVELOPER_DIR per command where the Mac selects Command Li
 Keep result bundles in ignored `build/` and summarize evidence in the ticket.
 Documentation-only changes require relevant link/path and `git diff --check` validation;
 do not rerun native tests without a code change or unresolved verification need.
+
+## SP-012 structure update
+
+`application/SophiaScriptura/SophiaScriptura/Core/Annotations/` contains annotation values
+and repository contracts. `Infrastructure/Annotations/` owns generation persistence and
+ink-only backup/recovery. `Features/Scripture/Annotations/` owns actual-reader layers,
+layout and PencilKit integration. `docs/data/scripture-annotation-contract.md` and
+`docs/testing/sp012-ipad-guide.md` define contract and acceptance. These are separate from
+SP-008's disposable LayoutValidation harness and SP-006's Notes fixture.
+
+## SP-013 structure update
+
+`Core/Notes/` owns production document/object geometry and repository contracts;
+`Infrastructure/Notes/` owns validated generations and Notes-only recovery;
+`Features/Notes/Editor/` owns the production mixed-object canvas. `NotesSession` coordinates
+library edits, history and autosave. SP-006 remains a separate DEBUG experiment.
+`docs/data/notes-contract.md` and `docs/testing/sp013-ipad-guide.md` define durability
+and remaining physical acceptance. Root shares Notes with the verse hub.
+
+SP-013 study-page revision: `Core/Notes/NoteDocument.swift` adds `NotePage` and
+`NoteCitation`. `Features/Notes/Editor/NoteCanvasSurface.swift` renders the fixed body,
+floating objects and Pencil overlay; `NoteScripturePane.swift` composes the existing
+reader beside the note. `NotePageTypography.swift` shares fixed-column measurement and
+text styling. Root passes the shared ReaderSession into Notes.
+
+SP-013 Canvas/Page revision: `NoteDocument.swift` now stores one tagged `NoteContent`.
+`NoteCanvasSurface.swift` exposes Canvas/Page controllers with shared viewport/input
+plumbing. `NoteCanvasInk.swift` maps scene strokes to framed objects;
+`NotePageAttachments.swift` renders inline Page images/tables/links. New Page content
+flows within the fixed column; old Page floating items stay in `legacyObjects`.
+`NotesFileRepository` writes v3, reads v1/v2 and retains `before-note-types.notes`.
+
+SP-013 workspace refinement: `NoteObjectStyle.swift` adds optional shape/tint values;
+`NoteInsertGallery.swift` owns shape/emoji choices, `NoteInkAppearance.swift` adapts neutral
+ink to theme, and `NoteLinkPreview.swift` fetches explicit link previews. The editor owns
+contextual selection actions; Root overlays the dock while editing to reclaim writing space.

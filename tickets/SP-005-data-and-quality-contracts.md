@@ -1,6 +1,6 @@
 # SP-005 — Data, recovery, and quality contracts
 
-- Type: planning. Status: in progress — reader slice complete; remaining feature slices blocked. Owner: System Architect.
+- Type: planning. Status: in progress — reader slice complete; annotation slice specified; other feature slices remain open. Owner: System Architect.
 - Requirements: REQ-004, REQ-007, REQ-008, REQ-017, REQ-018, REQ-019.
 - Dependencies: SP-002 content policy and SP-003 layout identity are complete for the
   reader slice. SP-004 note geometry and later feature decisions still block the
@@ -66,3 +66,25 @@ The owner closed SP-006 with limitations. Its JSON roundtrip/damaged-restore evi
 and bounded physical memory observation inform contracts but do not prove full backup,
 large-note capacity or final migrations. Production contracts and implementation tickets
 must include integrity/recovery and representative-scale checks for actual supported data.
+
+## Annotation-slice specification — 2026-09-29
+
+After owner acceptance of SP-008, the [annotation data/recovery contract](../docs/data/scripture-annotation-contract.md)
+defines identity and preserved layouts, generation commits/fallback, autosave errors,
+tombstone deletion, ink-only backup/replacement restore and ANN-01–09 planned checks.
+[SP-012](SP-012-persistent-scripture-annotations.md) is ready for owner selection. This
+completes the annotation planning slice only; implementations and tests remain unperformed.
+Notes/media, memberships and full-app recovery remain open. No migration or data mutation.
+
+
+SP-012 implementation now supplies automated annotation recovery evidence, including
+commit interruption, corruption fallback, dirty-save retry and backup replacement/repair.
+Actual-reader Pencil and Files acceptance remain pending in SP-012. SP-005 as a whole
+remains open for later feature contracts; this does not establish full-app recovery.
+
+## Notes slice — 2026-09-29
+
+SP-013 implements the [Notes contract](../docs/data/notes-contract.md): UUID objects,
+geometry/grouping, source quotes, validated media, current/previous/pre-restore revisions,
+Notes-only archives and damaged/unknown-schema preservation. Cross-feature memberships
+and full-app backup remain later contracts. Physical Files recovery remains acceptance.

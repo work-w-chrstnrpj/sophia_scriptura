@@ -90,3 +90,11 @@ production editor. Inherit VoiceOver/large-text, exact window-resize, canceled-d
 direct-drag/zoom verification into production editor tickets, alongside native Pencil
 palette and direct text editing. These deferred checks are not passed; avoid reopening
 the prototype solely to complete them.
+
+## M4 implementation handoff — 2026-09-29
+
+Owner requested M4 implementation. SP-013 records the production scope and ownership;
+`docs/data/notes-contract.md` resolves initial bounded geometry, flat whole-object grouping
+versus native per-object lasso, recovery and retention. Initial safety limits are not
+measured capacity. Rich object/Pencil/VoiceOver acceptance and PDF pagination remain
+explicit review items; SP-006 is not promoted or migrated into production.

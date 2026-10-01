@@ -1,6 +1,6 @@
 # SP-009 — First offline Scripture reader
 
-- Type: product implementation. Status: in progress; selected by owner request “Develop M2” on 2026-09-22.
+- Type: product implementation. Status: done under revised acceptance (2026-09-29); originally selected by owner request “Develop M2” on 2026-09-22.
 - Milestone: M2 — Scripture reader.
 - Owner: Frontend UI/UX Developer, with Backend & Database Engineer ownership of importer/repository.
 - Requirements: REQ-002, REQ-003, REQ-004, REQ-005 (Copy/Share only), REQ-016,
@@ -222,3 +222,12 @@ contract or navigation behavior changed.
 The shell and both chooser sheets now resolve one active preset palette, including the
 explicit light/dark preference. Their list backgrounds and controls no longer fall back to
 the platform gray surface, so OldPaper and each named preset retain their own colors.
+
+## Owner M2 closure — 2026-09-29
+
+The owner accepts the visual refinements and reports expiry/renewal addressed in the
+other conversation. SP-010 records the implemented Debug development authorization and
+cached-access recovery; the standard Release/Archive lease remains unchanged. VoiceOver
+is explicitly waived for this closure, not passed. Earlier unrun cases remain historical
+verification gaps; this closure does not claim a new physical expiry or accessibility
+test. M2 is closed and SP-008 is selected as the first M3 validation ticket.

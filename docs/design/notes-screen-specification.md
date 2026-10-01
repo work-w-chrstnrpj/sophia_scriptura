@@ -1,7 +1,217 @@
+# Notes Canvas and Page — SP-013 design and implementation plan
+
+Status: owner selected implementation on 2026-10-01. Canvas/Page creation, typed storage,
+Page attachments, Canvas ink objects and Scripture visibility are implemented. Verification
+and physical acceptance are recorded in [SP-013](../../tickets/SP-013-freeform-notes.md).
+The previous build's reported Pencil failures are not considered resolved on hardware
+until the owner repeats the Scribble on/off checks.
+
+Journal and reference notes remain ungrouped and need no Collection. New-note creation
+offers **Canvas** and **Page**. They share library metadata, persistence, search,
+backup/recovery, verse identity and optional Scripture-pane visibility, but use separate
+content and editing rules.
+
+## Implemented types
+
+### Canvas
+
+- An open, zoomable workspace. Text boxes, drawings, image/media items, tables, shapes,
+  stickers and link cards are independent objects with document-space geometry.
+- A Pencil stroke creates or extends a Canvas ink object. Finger input selects, pans,
+  pinches, moves and resizes objects. Editing text requires an explicit finger action;
+  Pencil input never enters handwriting-to-text mode.
+- Canvas ink can move, resize and participate in explicit grouping because it is an
+  object. This deliberately changes the earlier rule that all note ink stays fixed.
+- A link is a preview card. Scripture can be inserted as a quoted passage object that
+  retains edition, revision, attribution and canonical reference metadata.
+
+### Page
+
+- A flowing, growing text document with a fixed-width reading column. Typing and editing
+  feel like a word-processing page, while one transparent Pencil layer stays above text
+  and all attachments. Pencil ink is page-positioned and cannot be selected, moved or
+  resized. Typing text above it does not move old ink.
+- Pencil always draws, whether iPad Scribble is on or off. Finger taps and a keyboard
+  place the text cursor. Pencil touch must be routed to PencilKit before any text-input
+  handwriting recognition can claim it. Beginning a Pencil stroke dismisses typing and restores drawing; no Done typing control is required.
+- Web links are inline, tappable links instead of cards. Scripture quotations have an
+  inline reference and preserve source/edition metadata.
+- New floating text boxes, shapes and stickers are Canvas-only. Page images and tables
+  are inline attachments that flow with text. Existing v2 Page floating objects are
+  preserved at their original positions and remain editable for compatibility.
+
+### Shared Scripture pane
+
+A visible-by-default button shows or hides the Scripture pane without destroying its
+`ReaderSession`; passage and edition remain where the owner left them. Selecting a note
+citation while the pane is hidden reveals it and navigates to that passage. The toggle
+is a persisted UserDefaults preference, outside the note archive.
+
+## Workspace refinement — owner selected 2026-10-01
+
+- Compact icon insertion bar; tap the note title to rename. More contains paper, metadata
+  and save/retry status. No footer, Objects list or Done typing button.
+- Notes editing extends through the bottom safe area. The shell tab dock floats over all
+  tabs and hides on the existing idle timer; no reserved footer remains. Hide Scripture
+  for the widest writing area. Shared theme paper/ink colors cover the header and body.
+- Canvas is a bounded 12,000 × 12,000-point workspace. New items appear in the visible
+  area; the zoom menu offers percentages and Fit content. Dots render only near the viewport.
+- Tap an object for a floating palette: edit, duplicate, delete and More. More offers
+  front/back ordering, multiple selection, grouping, and applicable color/shape controls.
+  Tap a selected text box again to type; blank space ends typing. Drag a selected object
+  to move, or its small bottom-right handle to resize. Only selection shows a border.
+- Shapes include rectangle, rounded rectangle, circle, triangle, diamond, star, hexagon,
+  heart and arrow. Stickers are an emoji gallery, not Apple's system sticker library.
+  Insert also offers a sticky-note text box. Existing objects remain editable.
+- Canvas link cards show a website thumbnail/title when available, with a domain fallback.
+  Inserting/refreshing contacts the site; cached thumbnails survive offline reopening.
+- Plain, ruled, grid and dotted paper work in both editors. Neutral black/white ink follows
+  light/dark appearance; colored ink retains its chosen color. Theme-only changes preserve
+  stored drawing bytes and geometry.
+
+Interaction references: Apple's [shape formatting](https://support.apple.com/en-euro/guide/ipad/ipadb96d65cb/ipados)
+and [text-box editing](https://support.apple.com/guide/ipad/add-text-ipad5a22ec43/ipados).
+The implementation borrows their selection-first controls; it does not claim feature parity.
+
+## Implementation plan
+
+Owner selected this plan for execution. Two defaults were announced at implementation:
+include Page images/tables inline and remember Scripture visibility across launches.
+Implementation uses dedicated `NotePageController`/`NoteCanvasController` types sharing
+`NoteSurfaceController` for viewport, input and object gestures rather than duplicating
+that tested plumbing. Physical Pencil reproduction is deferred to owner testing; the
+simulator exercises the same ancestor drawing recognizer using DEBUG finger input.
+
+
+1. **Reproduce and isolate Pencil routing.** On the paired iPad, record model/iPadOS,
+   Pencil model and Scribble setting. Verify Page ink with Scribble on and off, with the
+   text field focused and unfocused. Confirm the PencilKit surface receives the Pencil
+   touch and that typing exits reliably. Do not treat simulator finger-ink as proof.
+2. **Separate the domain content.** Keep note ID, title, tags, timestamps and deletion
+   metadata shared. Represent content as a tagged `NoteContent` value with one case:
+   `canvas(CanvasContent)` or `page(PageContent)`. Canvas owns an ordered object list,
+   including framed Pencil drawing objects. Page owns its text/citation model, fixed
+   annotation drawing and any approved inline attachments. Validate each case with its
+   own limits so a Page cannot accidentally persist movable Canvas ink.
+3. **Route creation and editing by type.** New Note presents the two choices. The library
+   remains shared. Build dedicated Canvas and Page surface controllers while reusing only
+   small proven viewport, persistence and media components. Keep text-object editing out
+   of Pencil hit testing. Use the full supported native inking/eraser palette; retain
+   lasso/object transforms for Canvas and keep fixed Page ink outside object selection.
+4. **Preserve Scripture workflows.** Page selections and quotes insert inline citations;
+   Canvas selections create a quote object/card. Both call the existing reader quote
+   authorization and keep original source, edition, revision, attribution and verse range.
+   Add the hide/show control around the existing shared reader session.
+5. **Version and migrate Notes safely.** Write an explicit type discriminator in a new
+   snapshot schema. Decode prior schemas: a stored `page` means Page; an object-only note
+   without a page means Canvas, preserving object frames and local ink bytes. Notes already
+   saved by the fixed-page release remain Pages. Preserve the exact prior generation
+   before the first new-schema save; keep envelope/pointer formats and unknown-schema
+   refusal unchanged. Do not silently convert between types.
+6. **Verify each surface, migration and device behavior.** Add focused model/storage tests,
+   UI journeys for both creation paths and the Scripture toggle, then repeat Pencil routing
+   on the physical iPad with Scribble both ways. Record the original error if it recurs.
+
+This is a feature redesign with a Pencil-routing bug fix. Expected code ownership is Notes
+domain/persistence, Frontend editor integration, and SQA physical acceptance; there is no
+provider or backend change. Anticipated files are `Core/Notes/NoteDocument.swift`,
+`Infrastructure/Notes/NotesFileRepository.swift`, `Features/Notes/NotesSession.swift`,
+`Features/Notes/Editor/NoteEditorView.swift`, the existing page surface plus new dedicated
+Canvas/Page surfaces, `NoteScripturePane.swift`, `NotesView.swift`, and `RootTabView.swift`.
+Automated coverage belongs in `SophiaScripturaTests/NotesTests.swift` and
+`SophiaScripturaUITests/NotesUITests.swift`.
+
+The main risks are incorrect legacy type inference, losing framed ink/citations, and
+PencilKit/Scribble differences across iPadOS versions. Unit tests decode historical-wire
+v1 and v2 fixtures, assert inferred type and byte/geometry preservation, validate that each
+content case contains only allowed state, and save/reopen/backup both types. UI tests should
+cover chooser, Canvas transforms, Page typing/annotation, citations, pane show/hide and
+reopen. Physical acceptance must test the paired iPad with Scribble enabled and disabled;
+simulator tests cannot establish Pencil routing or palm rejection.
+
+## Storage and runtime cost
+
+The type tag and type-specific structure add negligible archive overhead. The model should
+store one content case, not duplicate Canvas and Page versions of a note. Drawings and
+images remain the dominant bytes, as they are today. A Canvas with many visible objects may
+use more rendering memory than a Page; retain object/media limits and profile a realistic
+Canvas on the iPad before raising them. No storage increase estimate is claimed without
+measurement.
+
+## Implementation boundaries
+
+Canvas supports the listed object types within the existing bounded workspace. Link cards
+fetch available website titles/thumbnails on insertion or explicit refresh and cache them for offline use. Arbitrary video/files, rich body formatting,
+PDF export, direct Companion capture, Collection membership and cross-type conversion are
+not part of this slice. Ink/image payload and realistic Canvas memory still need device
+profiling. The native palette follows tools supported by the installed iPadOS version. Hide Pencil
+tools dismisses it when it covers the bottom tab controls; Pencil input remains enabled.
+
+## Previous fixed-page implementation (historical)
+
+The following sections describe the 2026-09-30 editor and original design history.
+The Canvas/Page behavior above supersedes its single-editor rules.
+
+## Installed Page-style editor (original design; issues reported)
+
+The following rules describe the installed 2026-09-30 build. They are its intended
+behavior, not proof of physical Pencil acceptance. The owner reports that Pencil input can
+become text, typing is hard to exit, and drawing fails with Scribble disabled. The split
+plan above supersedes the one-editor interaction rules after review.
+
+## Installed Page and input rules
+
+- A growing page has a fixed 1,200-point width and a centered 680-point flowing body.
+  Rotation, the keyboard and Scripture pane change the viewport, never column width.
+- Floating text boxes, images, link cards, tables, shapes and stickers move/resize
+  independently above the body. Overlap never wraps or pushes body text.
+- One page-coordinate Pencil drawing is intended to render above body and objects.
+  Pencil should annotate; finger input scrolls/pans, pinches, selects objects and manipulates them.
+  No Insert Handwriting or Draw mode. Ink cannot be moved, grouped or resized.
+- Tap body text to type, tap an object to select it, drag a selected object to move,
+  and drag its corner handle to resize. Two fingers pinch to zoom. Objects offers
+  accessible selection/position/edit alternatives. Pencil tools are directly available.
+- Ink stays at its coordinates when body content changes. Adding or removing earlier
+  paragraphs can change which words lie underneath old ink; that is an accepted rule.
+- The page grows down, including room below handwriting and floating objects. The current
+  12,000-point height is a safety bound, not an infinite canvas promise.
+
+## Historical 2026-09-30 study flows
+
+1. Notes → New Note opens a blank body with the full Scripture reader alongside it.
+2. Scripture selection → Save to note starts a note with selected text and an inline
+   citation. The verse hub still supports Quote verse in new note.
+3. The note's reader supports chapter/book/verse and translation navigation. Selecting
+   text → Save to note, or tapping a verse → Insert verse and citation, adds to the
+   current note at the last body cursor. Tapping a citation navigates the reader.
+4. Citation metadata retains source, passage range, edition, revision and attribution.
+   Editing through a citation removes its link instead of attaching it to unrelated text.
+5. Owner confirmed permission for personal note quotations from the existing translations.
+   Existing per-edition access/quotation limits remain; WEB-only note restriction is removed.
+6. Ordinary clipboard text can be pasted into body or text boxes. Companion response
+   provenance and a direct Save-to-note action are future Companion integration, since
+   the current Companion is a placeholder. No AI requests are introduced here.
+
+## Historical 2026-09-30 durability and acceptance
+
+See [Notes contract](../data/notes-contract.md), [SP-013](../../tickets/SP-013-freeform-notes.md)
+and [iPad walkthrough](../testing/sp013-ipad-guide.md). Old note objects retain coordinates;
+old ink is translated into the fixed overlay. Original v1 generation bytes are preserved
+before the first v2 save. Existing saved files are never silently reset after a load error.
+The owner installed the 2026-09-30 build and launch succeeded; physical interaction checks
+and the reported crash/save message remain unconfirmed until reproduced. Removal of
+box-bound ink rejection addresses one demonstrated failure boundary, not every possible crash.
+
+## Historical canvas specification
+
+The following describes the earlier object-canvas design. Where it conflicts with the
+study-page rules above, the study-page rules supersede it. Retained for prior evidence.
+
 # Notes Library and Expandable Canvas Specification
 
-Status: design proposal for owner review; implementation is not authorized by this
-document. This specification turns the accepted expandable-canvas direction into a
+Status: design baseline; the owner selected bounded implementation in SP-013 on
+2026-09-29. See the implementation scope below for shipped controls and outstanding
+acceptance. This specification turns the accepted expandable-canvas direction into a
 maintainable Notes experience while preserving the shared shell and explicit-grouping
 rules.
 
@@ -277,3 +487,30 @@ the Companion provider.
 - Canvas growth limits, viewport culling and maximum media size after native measurements.
 - Autosave interval/revision retention and the user-facing recovery history affordance.
 - PDF export scope and pagination policy; export is not implied by expandable canvas.
+
+## SP-013 implementation scope — 2026-09-29
+
+Owner requested M4 execution. The Notes library/editor now implements blank UUID notes,
+card/list presentation, title/content/tag/reference search, one-tag filtering, title/date
+sorting, recoverable deletion and Files backups. The native surface provides freely
+positioned direct text, separate ink objects, local images, bounded tables, HTTP(S) link
+cards, shapes, lists and Scripture quotes created through the verse hub. Object inspection
+supplies explicit multi-selection, group/ungroup, center, move, size and stacking actions.
+The source-text quote action currently uses WEB; licensed editions require separate
+saved-quote and backup-export permission before the same action can be enabled.
+
+One tag is selected at a time in this slice; multi-tag filtering remains a design extension.
+Tables support up to 20 rows/10 columns, images are imported from Files, and shapes are
+rounded rectangles. Lists insert a bullet/next number on Return. These bounds are visible
+controls, not claims of a complete word processor. Native lasso edits strokes inside the
+selected ink object; grouping moves the entire object. See the Notes contract for initial
+size limits, recovery and exclusions. PDF export and nested/group scaling remain outside
+this ticket. Physical acceptance is tracked in the SP-013 iPad guide.
+
+
+### Canvas drawing stability correction — 2026-10-01
+
+Keep the live PencilKit surface bounded to the editor viewport; synchronize its native
+scroll/zoom coordinates with the document instead of allocating a document-sized drawable.
+The Notes pen button uses the filled circle variant while tools are active, and hollow
+when hidden, with an accessible state value. Hiding tools does not turn Pencil into text.

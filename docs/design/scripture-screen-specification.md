@@ -6,8 +6,8 @@ interactions, accessibility and final physical acceptance remain open. See the n
 refinement section below; other proposed features are not authorized by this document.
 Owner choices incorporated: warm-paper/book-like reading, bottom primary navigation,
 compact passage and Version controls, continuous vertically scrolling chapters, three annotation states, translation-specific handwriting, and an optional
-extended ruled margin. The owner has now also chosen a selectable Scripture typeface,
-landscape verse-hub popovers, Reserved margin by default, stable compact reader chrome,
+blank surrounding writing space. The owner has now also chosen a selectable Scripture typeface,
+landscape verse-hub popovers, an optional blank surrounding margin, stable compact reader chrome,
 two-translation comparison by verse anchors, and the OldPaper UI direction with seven
 color-and-type presets. Preset selection changes appearance; it does not remove or change
 planned product workflows.
@@ -24,7 +24,7 @@ Related documents: [product specification](../product-specification/product-spec
   to validate.
 - **Verse hub:** popover in landscape and other wide iPad layouts. It may become an
   adaptive sheet in portrait or narrow windows where a popover would crowd the passage.
-- **Ruled margin:** Reserved by default so existing annotation geometry stays stable.
+- **Margin:** blank surrounding space via viewport expansion; original ink geometry stays stable.
 - **Scrolling chrome (revised 2026-09-22):** controls keep a stable height while scrolling.
   The passage and Version buttons remain visible; scrolling must not resize the viewport.
 - **Translation comparison:** one primary translation remains the default. Compare opens
@@ -37,7 +37,7 @@ Related documents: [product specification](../product-specification/product-spec
 ## Owner-selected OldPaper design and presets — 2026-09-29
 
 OldPaper is the guide for the Scripture UI and the visual baseline for the connected app:
-a clear, book-like reading surface; generous margins; a ruled writing margin; fine rules;
+a clear, book-like reading surface; generous margins; optional blank writing space;
 and quiet, floating controls with HIG-inspired hierarchy. Use restrained controls and
 reserve glass-like materials for navigation or transient controls so decoration does not
 compete with Scripture. Avoid simulated paper grain and ornamental distressing. The
@@ -109,7 +109,7 @@ when its window or study panel changes size. See the references at the end.
 │                                                                             │  scroll column
 │       3 For what the law was powerless to do...                             │
 │                                                                             │
-│                    [reserved ruled writing margin]                         │  margin toggle
+│              [optional blank surrounding writing space]                    │  margin toggle
 │  (‹)              Romans 8                                      (›)         │  chapter context
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Scripture  Collections  Notes  Companion  Activity  Settings                │  bottom tabs
@@ -224,24 +224,43 @@ revision. A new layer is empty and transparent.
 | --- | --- | --- |
 | Read Hidden | Scripture only; selected ink hidden | Read, scroll, tap verse/chapter, select text, Copy/Ask/Save/Share, audio |
 | Read Visible | Scripture plus selected ink, ink non-interactive | Same reading actions; ink must never intercept passage selection |
-| Draw | Scripture plus selected ink and optional ruled margin | Pencil drawing, native Pencil palette, eraser/lasso as supported, finger navigation; Scripture selection and verse taps pause while drawing |
+| Draw | Scripture plus selected ink and optional blank surrounding space | Pencil drawing, native Pencil palette, eraser/lasso as supported, finger navigation; Scripture selection and verse taps pause while drawing |
 
 State transitions are reversible and preserve scroll position. Entering Draw must not
 silently select a different layer. Leaving Draw flushes the current drawing transaction
 before changing the layer’s interaction mode.
 
-### Extended ruled margin
+### Blank surrounding writing space — SP-012 owner revision
 
-The margin is a layout choice for the current reading view, not a separate page identity.
-When enabled, the Scripture column keeps a stable width and a ruled writing column opens
-beside it. When disabled, the margin is hidden but its space policy is explicit:
+2026-09-29: the owner superseded the ruled side-column/Reserved-mode design. Margin
+exposes blank space above, below and on both sides of the centered Scripture column,
+with shared Pencil/text zoom and pan. New layouts preserve the ordinary reader's column
+width and typography, with fixed 200-point surrounding space. Margin off crops that
+space through the viewport; it does not move strokes or rewrap text. Read Hidden restores
+the ordinary reader surface and preferences, including its centered column.
 
-- **Reserved mode:** keep the column geometry stable so existing ink does not shift.
-- **Compact mode:** allow a deliberate reflow only after the user confirms that the
-  reading layout will change; existing ink remains attached to the original layout.
+Annotation controls stay horizontally centered; compact icon controls fit narrow windows.
+Draw starts with a compact floating palette affordance; tapping it expands the native
+Pencil picker, while its chevron collapses it to a small edge tab that can restore it.
+Beginning a stroke minimizes the palette again while drawing continues.
+Completed handwriting autosaves without a manual Save action. Clear Ink is red and
+undoable. Margin is absent in Read Hidden, which uses the ordinary reader.
+Old side-column drawings keep their original layout; creating a new layer on a legacy
+layout creates the new surrounding-space layout, retaining the old group for selection
+and backup. No silent ink conversion or deletion.
 
-The initial design should use Reserved mode. It protects the owner’s “preserve original
-annotated layout” decision and avoids surprise movement when the margin is toggled.
+Each new layer captures its current preset/typeface, size and exact text geometry.
+The Layers menu shows a blue name and checkmark on the selected layer and muted appearance details
+beside its name. The toolbar button keeps its standard appearance. Selecting one restores those settings. Deliberately changing type or
+size in Read Visible or Draw updates only the selected layer's layout; existing strokes stay
+intact and may need repositioning. The separate Preserved layouts and larger-text
+reading actions are removed. Read Hidden can use ordinary reading preferences without
+changing the saved ink layout; returning to annotation restores the layer's appearance.
+Layer management appears as a separate action group with New (plus), Rename (pencil),
+and red Delete (trash) buttons. Mode icons use a dark pupil for Read Visible, a
+hollow pupil for Read Hidden, and the pencil for Draw. While hidden, the retained
+annotation canvas skips layout validation so opening Verse Hub uses the ordinary reader
+without redundant annotation layout work.
 
 ## Verse hub
 
@@ -362,7 +381,7 @@ separate annotation implementation ticket is selected.
 5. Choose Save → Gleaning. The quote remains intact and a separate insight field appears.
 6. Enter Read Visible, then Draw. The selected layer remains the same and drawing tools
    appear without moving the passage.
-7. Enable the ruled margin, draw in it, disable the margin and confirm the saved layout
+7. Enable the blank surrounding margin, draw in it, disable the margin and confirm the saved layout
    remains available without silently shifting existing ink.
 8. Rotate or resize the iPad window. The passage remains readable and saved annotation
    geometry does not change.
@@ -422,7 +441,7 @@ system/light/dark appearance. Sepia uses Caveat only for chapter headings.
 The existing optional reader-preference record stores the stable preset identifier;
 older saved preferences continue decoding and preserve edition, typeface, size and progress.
 Changing typography restores the last observed source anchor. This is a continuous
-reader refinement: the ruled writing margin, annotation states and layers remain M3
+reader refinement: the surrounding writing space, annotation states and layers remain M3
 work and are not represented by nonfunctional buttons. Other feature interiors remain
 at their previously recorded implementation/prototype stage. Native acceptance evidence
 is recorded in the SP-009 ticket and reader evidence page.

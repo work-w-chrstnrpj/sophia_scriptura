@@ -13,6 +13,7 @@ struct ReaderTextSurface: UIViewRepresentable {
     let onVisibleLocation: (Int, String?, Int?) -> Void
     let onChapterSwipe: (Int) -> Void
     var authorizeQuote: ((ChapterTextMap.Selection) async -> String?)? = nil
+    var saveToNote: ((ChapterTextMap.Selection) -> Void)? = nil
 
     func makeUIView(context: Context) -> ContinuousReaderTextView {
         let view = ContinuousReaderTextView()
@@ -140,7 +141,11 @@ struct ReaderTextSurface: UIViewRepresentable {
             guard let view = textView as? ContinuousReaderTextView, let selection = map?.selection(in:range), !selection.text.isEmpty else { return nil }
             let copy = UIAction(title:"Copy",image:UIImage(systemName:"doc.on.doc")) { _ in view.copySelection(range) }
             let share = UIAction(title:"Share",image:UIImage(systemName:"square.and.arrow.up")) { _ in view.shareSelection(range) }
-            return UIMenu(children:[copy,share])
+            var actions: [UIMenuElement] = [copy, share]
+            if let save = parent.saveToNote {
+                actions.append(UIAction(title: "Save to note", image: UIImage(systemName: "note.text")) { _ in save(selection) })
+            }
+            return UIMenu(children: actions)
         }
     }
 }
@@ -148,6 +153,7 @@ struct ReaderTextSurface: UIViewRepresentable {
 final class ContinuousReaderTextView: UITextView, UIGestureRecognizerDelegate {
     var map: ChapterTextMap?
     var authorizeQuote: ((ChapterTextMap.Selection) async -> String?)?
+    var externalReveal: ((NSRange) -> Void)?
     var onLayout: (() -> Void)?
     var focusColor = UIColor.label.withAlphaComponent(0.18)
     private var focusID = UUID()
@@ -192,6 +198,7 @@ final class ContinuousReaderTextView: UITextView, UIGestureRecognizerDelegate {
         return translation.x < 0 ? 1 : -1
     }
     func reveal(_ range: NSRange) {
+        if let externalReveal { externalReveal(range); return }
         layoutManager.ensureLayout(for:textContainer)
         let glyphs = layoutManager.glyphRange(forCharacterRange:range,actualCharacterRange:nil)
         let rect = layoutManager.boundingRect(forGlyphRange:glyphs,in:textContainer)

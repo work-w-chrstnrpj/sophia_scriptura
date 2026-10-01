@@ -10,6 +10,7 @@ struct ActivityView: View {
                 systemImage: "chart.bar",
                 description: Text("The reading habit timer and analytics arrive in Phase 7.")
             )
+            .appSurface()
             .navigationTitle("Activity")
         }
     }

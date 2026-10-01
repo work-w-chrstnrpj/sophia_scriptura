@@ -47,7 +47,7 @@ struct SettingsView: View {
                     Stepper("Text size: \(reader.preferences.sizeStep + 1)",value:preference(\.sizeStep),in:0...8)
                     Picker("Appearance",selection:preference(\.theme)) {
                         Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark")
-                    }
+                    }.accessibilityIdentifier("settings.theme")
                 }
                 Section("Offline Bible") {
                     Text("World English Bible (WEB)")
@@ -55,10 +55,18 @@ struct SettingsView: View {
                     Link("Edition and public-domain notice",destination:URL(string:"https://ebible.org/engwebp/")!)
                 }
                 Section("Translations") { Button("Manage offline Bibles") { showVersions = true } }
+                #if DEBUG
+                Section("Experiments") {
+                    NavigationLink("SP-008 Pencil validation") { InkValidationView() }
+                        .accessibilityIdentifier("settings.pencilValidation")
+                }
+                #endif
                 if let notice = reader.notice { Section("Reader storage") { Text(notice) } }
             }
+            .accessibilityIdentifier("settings.content")
             .scrollContentBackground(.hidden)
             .background(Color(reader.preferences.palette(for:reader.preferences.appearance,colorScheme:colorScheme).paper).ignoresSafeArea())
+            .appSurface()
             .navigationTitle("Settings")
         }.sheet(isPresented:$showVersions) { ScriptureVersionsView(session:reader) }
     }

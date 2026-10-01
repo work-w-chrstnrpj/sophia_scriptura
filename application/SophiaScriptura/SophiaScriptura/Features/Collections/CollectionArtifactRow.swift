@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CollectionArtifactRow: View {
+    @Environment(\.appTheme) private var theme
     let artifact: CollectionArtifact
     let fromDescendant: Bool
     let remove: () -> Void
@@ -16,11 +17,11 @@ struct CollectionArtifactRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(artifact.title)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(CollectionSurface.ink)
+                    .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(2)
                 Text(fromDescendant ? "From child folder · \(artifact.subtitle)" : artifact.subtitle)
                     .font(.caption)
-                    .foregroundStyle(CollectionSurface.secondaryInk)
+                    .foregroundStyle(Color(theme.palette.secondary))
                     .lineLimit(2)
             }
 
@@ -34,13 +35,13 @@ struct CollectionArtifactRow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .foregroundStyle(CollectionSurface.secondaryInk)
+                    .foregroundStyle(Color(theme.palette.secondary))
                     .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Actions for \(artifact.title)")
             .accessibilityIdentifier("collections.itemActions.\(artifact.title)")
         }
         .padding(14)
-        .background(CollectionSurface.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

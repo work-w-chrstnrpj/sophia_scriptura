@@ -11,6 +11,54 @@ UI checks cover movement, Undo, grouping, text edit, save/reopen, relaunch, rota
 finger-generated PencilKit input. Tests use a DEBUG-only UUID-scoped fixture directory
 so their disposable data does not overwrite the owner's normal experiment sample.
 
+## Planned M8 Activity and background-music coverage
+
+These cases are design acceptance targets only; no Activity or music implementation/test
+exists yet. The implementation ticket should turn them into automated and physical checks:
+
+- Timer active duration equals wall-clock elapsed time minus every pause interval; background,
+  lock and relaunch preserve state without accumulating paused time.
+- Reading start selection routes to the chosen edition/reference, the focus highlight fades,
+  and finish requires a valid end reference. Cross-chapter and cross-book ranges remain
+  continuous; a disconnected range creates another record.
+- Manual records enforce title, mode, date and duration; optional start/end clock times
+  derive duration; editing and correction preserve valid records.
+- Ten active minutes is the default daily goal/streak threshold. Timer/manual records count.
+  Whether custom modes qualify is an open owner decision. Goal progress and
+  day/week/month/mode analytics agree with saved records. Midnight and overlap cases remain
+  gated on owner policy decisions.
+- The Now Active cluster appears only for in-use timer/music services, preserves paused
+  controls, disappears after stop/save, and does not obscure the tab dock or active workspace.
+- Music does not autoplay; it changes/pauses/plays on request and survives background/screen
+  lock. Starting narration pauses music; choosing Play on music pauses narration; Activity
+  elapsed time remains unaffected.
+- Every bundled track has retained source, human composer/performer, composition and
+  recording license evidence, retrieval date and digest.
+
+## Planned M6 Companion and Quiz Me coverage
+
+SP-016 defines planning targets only; no Companion runtime test is claimed. Each selected
+implementation ticket must convert its relevant targets into executable unit/integration/UI
+tests and retain provider fixtures without real keys or private responses:
+
+- Every adapter passes the same normalized streaming event, cancellation, refusal, partial
+  reply, retry-idempotency and malformed-response contract while advertising differences.
+- Multiple Keychain configurations remain isolated; replacement/deletion works; keys,
+  authorization data and private request bodies never enter logs, records or exports.
+- Conversations pin provider/model/capability/preset snapshots, remain isolated, preserve
+  panel/tab/relaunch state and branch explicitly when the provider changes.
+- Context-budget trimming, explicit attachments, unauthorized Scripture blocking and
+  deletion-driven summary invalidation are deterministic and inspectable.
+- Retrieval evidence renders as normalized sources; unavailable or unsupported retrieval is
+  never presented as a completed search or verified citation.
+- Checksummed generation publication, previous-generation recovery, corrupt preservation,
+  migration, import rollback and permitted backup round trips preserve conversations/quizzes.
+- All four presets have reviewed evaluation cases for attribution, uncertain evidence,
+  contested views, fabricated-source avoidance, original-language claims and pastoral tone.
+- Quiz fixtures cover every answer control, deterministic Scripture or Cap decoys, ambiguous
+  speaker exclusions, Nearly correct normalization, timeout/background pause, score/history,
+  Christian History provenance, deletion and Reviewing linkage without duplicated answers.
+
 ## Commands
 
 The accepted reader contract specifies `READER-DATA-01` through `READER-DATA-12` in
@@ -516,6 +564,24 @@ run recorded application memory during repeated drawing; the retained evidence i
 SP-013. Physical test stores are isolated by `SP009_TEST_STORE`; launch normally afterward
 to restore owner data.
 
+## SP-014 Pencil shapes and app icon
+
+`PencilStrokeRefinementTests` verifies conservative last-stroke refinement for line,
+single-stroke arrow, ellipse, rectangle, triangle, diamond, pentagon, hexagon and star;
+it also rejects short and clearly curved input and checks retained Pencil appearance.
+`build/sp014-shapes-r3.xcresult` records **6 passed, 0 failed, 0 skipped** on iPad (A16)
+Simulator / iOS 26.5. That run compiled the default/dark/tinted AppIcon catalog.
+`build/sp014-regression.xcresult` records **48 passed, 0 failed, 0 skipped** on the same
+destination for `PencilStrokeRefinementTests`, `NotesTests`, and `AnnotationTests`.
+`build/sp014-ui-r7.xcresult` records **9 passed, 0 failed, 0 skipped** on that destination:
+the shape unit tests, including an endpoint pause distinct from a moving stroke, plus
+`PencilShapeUITests` for the Notes ruler and the installed SophiaScriptura Home Screen icon.
+
+An XCUITest drag that pauses at the end does draw in Notes, but PencilKit does not keep
+the stationary samples a real Pencil pause leaves in the stroke. The simulator therefore
+cannot prove endpoint snap, Undo/Redo of that snap, or palm rejection. Those checks, and
+the dark and tinted Home Screen treatments, remain physical iPad acceptance.
+
 ## SP-015 Notes and Collections minimal-header refinement — 2026-10-02
 
 `ShellNavigationUITests.testLibraryHeadersUsePresetTitleAndExpandableSearch` checks the
@@ -529,3 +595,4 @@ part of light/dark/preset visual review rather than an accessibility-tree assert
 `build/sp015-library-header-regression-r1.xcresult` records **5 passed, 0 failed, 0
 skipped**, covering the new geometry plus note creation/relaunch, Notes backup access,
 collection creation/deletion and navigation retention. Compact-width wrapping, larger
+Dynamic Type, VoiceOver order and final light/dark appearance remain physical review items.

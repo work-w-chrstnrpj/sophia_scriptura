@@ -28,6 +28,8 @@ struct CollectionDetailView: View {
     @State private var conversationCard: UUID?
     @State private var organizing: Organize?
     @State private var pendingDeletion: CollectionArtifact?
+    @State private var editingSubfolder: StudyCollection?
+    @State private var deletingSubfolder: StudyCollection?
 
     private var currentCollection: StudyCollection? { store.collection(id: collectionID) }
     private var isUnfiled: Bool { currentCollection?.isUnfiled == true }
@@ -78,6 +80,9 @@ struct CollectionDetailView: View {
                 .sheet(isPresented: $showingSubfolderEditor) {
                     CollectionEditorSheet(store: store, parentID: collectionID)
                 }
+                .sheet(item: $editingSubfolder) { subfolder in
+                    CollectionEditorSheet(store: store, parentID: subfolder.parentID, editingID: subfolder.id)
+                }
                 .sheet(item: Binding(get: { passageCard.map(PassageCardID.init) }, set: { passageCard = $0?.id })) { card in
                     PassageCardSheet(store: store, passageID: card.id, seeChapter: openPassage)
                 }
@@ -100,6 +105,18 @@ struct CollectionDetailView: View {
                         dismiss()
                     }
                     Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
+                }
+                .alert(
+                    deletingSubfolder.map { "Delete \($0.name)?" } ?? "Delete Collection?",
+                    isPresented: Binding(get: { deletingSubfolder != nil }, set: { if !$0 { deletingSubfolder = nil } })
+                ) {
+                    Button("Delete Collection", role: .destructive) {
+                        if let subfolder = deletingSubfolder { store.deleteCollection(id: subfolder.id) }
+                        deletingSubfolder = nil
+                    }
+                    Button("Cancel", role: .cancel) { deletingSubfolder = nil }
                 } message: {
                     Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
                 }
@@ -154,12 +171,22 @@ struct CollectionDetailView: View {
         let detail = collection.isUnfiled ? StudyCollection.unfiled(accent: collection.accent, modifiedAt: .now).detail : collection.detail
 
         return HStack(alignment: .top, spacing: 18) {
-            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, size: 64)
+            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, icon: collection.icon ?? .folder, size: 64)
             VStack(alignment: .leading, spacing: 6) {
-                Text(collection.name)
-                    .font(.system(.largeTitle, design: .serif).weight(.semibold))
+                Button {
+                    showingEditor = true
+                } label: {
+                    HStack(spacing: 7) {
+                        Text(collection.name)
+                            .font(.system(.largeTitle, design: .serif).weight(.semibold))
+                        Image(systemName: collection.isUnfiled ? "paintpalette" : "pencil")
+                            .font(.subheadline)
+                    }
                     .foregroundStyle(Color(theme.palette.ink))
-                    .accessibilityAddTraits(.isHeader)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(collection.isUnfiled ? "Change No Folder color" : "Edit collection \(collection.name)")
+                .accessibilityIdentifier("collections.editTitle")
                 if !detail.isEmpty {
                     Text(detail)
                         .font(.body)
@@ -220,6 +247,10 @@ struct CollectionDetailView: View {
                             subfolderTile(child)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child }
+                            Button("Delete Collection", systemImage: "trash", role: .destructive) { deletingSubfolder = child }
+                        }
                         .accessibilityIdentifier("collections.folder.\(child.name)")
                     }
                 }
@@ -229,7 +260,7 @@ struct CollectionDetailView: View {
 
     private func subfolderTile(_ child: StudyCollection) -> some View {
         HStack(spacing: 12) {
-            CollectionFolderGlyph(accent: child.accent, size: 38)
+            CollectionFolderGlyph(accent: child.accent, icon: child.icon ?? .folder, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(child.name)
                     .font(.subheadline.weight(.semibold))

@@ -49,7 +49,7 @@ is a persisted UserDefaults preference, outside the note archive.
 
 ## Workspace refinement — owner selected 2026-10-01
 
-- Compact icon insertion bar; tap the note title to rename. More contains paper, metadata
+- Compact icon insertion bar; tap the note title to rename. More contains paper, note color, metadata
   and save/retry status. No footer, Objects list or Done typing button.
 - Notes editing extends through the bottom safe area. The shell tab dock floats over all
   tabs and hides on the existing idle timer; no reserved footer remains. Hide Scripture
@@ -65,7 +65,8 @@ is a persisted UserDefaults preference, outside the note archive.
   Insert also offers a sticky-note text box. Existing objects remain editable.
 - Canvas link cards show a website thumbnail/title when available, with a domain fallback.
   Inserting/refreshing contacts the site; cached thumbnails survive offline reopening.
-- Plain, ruled, grid and dotted paper work in both editors. Neutral black/white ink follows
+- Plain, ruled, grid and dotted paper work in both editors. Each note can persist a neutral,
+  rose, amber, sage, blue or lavender paper tint with light/dark variants. Neutral black/white ink follows
   light/dark appearance; colored ink retains its chosen color. Theme-only changes preserve
   stored drawing bytes and geometry.
 
@@ -480,7 +481,9 @@ the Companion provider.
    connected without duplicating the note.
 9. Background and relaunch during a completed edit. The latest recoverable revision opens;
    a failed media or metadata source is identified instead of silently disappearing.
-10. Use VoiceOver, larger text, keyboard and reduced motion. Library and canvas actions
+10. Change the note color, save and relaunch. The selected tint remains attached to that
+    note while text, ink and rules retain readable contrast in light and dark appearances.
+11. Use VoiceOver, larger text, keyboard and reduced motion. Library and canvas actions
     remain reachable without relying on precise Pencil gestures.
 
 ## Open decisions before implementation

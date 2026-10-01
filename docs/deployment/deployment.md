@@ -33,6 +33,16 @@ install and launch evidence is retained under `build/sp015/library-toolbar-devic
 Installation proves deployment only; review the preset-font titles and expandable search
 across portrait/landscape, light/dark appearance, Dynamic Type, and VoiceOver on the device.
 
+## Scripture, Collections and Notes UI fixes — 2026-10-02
+
+The owner-requested UI-fix build passed a signed generic iOS build and strict signature
+verification, installed in place on the paired physical iPad A16 named `iPad ni Paj`, and
+launched normally as `com.personal.SophiaScriptura`. No uninstall, data reset or translation
+sync was performed. Evidence is under `build/ui-bugfix-device/`: `build.log`,
+`signature.log`, `install.log` and `launch.log`. Installation verifies deployment; the
+long-book truncation, collection title/context actions and note tints still require the
+owner's visual and touch review on the iPad.
+
 For terminal verification, set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
 per command: this Mac currently defaults to Command Line Tools. Simulator builds use
 `CODE_SIGNING_ALLOWED=NO`; this does not produce an installable physical-device app.
@@ -250,3 +260,16 @@ The corrected app passed strict signature verification and was installed in plac
 paired iPad A16. Page ink theme-cycle and save/reopen tests passed on that device before
 installation (`build/sp013/page-crash/ipad-page.xcresult`). CoreDevice then launched the
 normal app (`launch.log`); no reset, uninstall, or translation sync occurred.
+
+### Verse Hub actions and collection icons — 2026-10-02
+
+The final signed Debug build passed strict signature verification and installed in place on
+the paired iPad A16 without an uninstall or data reset. The app's existing data-container
+identity was preserved. Evidence is in `build/verse-hub-device-final-build.log`,
+`build/verse-hub-device-final-signature.log`, and
+`build/verse-hub-device-final-install.log`. CoreDevice could not perform the final automated
+launch because the iPad was locked (`build/verse-hub-device-final-launch.log`); unlock the
+device and open Sophia Scriptura to complete the physical visual and interaction review.
+The simulator regression evidence is `build/verse-hub-regression.xcresult` (27 passing
+collection and reader checks), followed by `build/verse-hub-unit-final.xcresult` (14 passing
+focused collection checks) after the final compatibility adjustment.

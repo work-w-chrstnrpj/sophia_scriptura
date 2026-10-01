@@ -146,6 +146,11 @@ enum NoteContent: Equatable, Sendable, Codable {
 
 struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     enum Paper: String, Codable, CaseIterable, Sendable { case plain, ruled, grid, dotted }
+    enum Color: String, Codable, CaseIterable, Sendable {
+        case neutral, rose, amber, sage, blue, lavender
+
+        var title: String { rawValue.capitalized }
+    }
     static let extent: CGFloat = 12_000
     var id = UUID()
     var title = "Untitled Note"
@@ -154,6 +159,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     var updatedAt = Date()
     var deletedAt: Date?
     var paper = Paper.plain
+    var color = Color.neutral
     var content = NoteContent.canvas(CanvasContent())
     var kind: NoteKind { if case .page = content { return .page }; return .canvas }
     var objects: [NoteObject] {
@@ -174,13 +180,14 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     init(objects: [NoteObject] = [], page: NotePage? = nil) {
         content = page.map { .page(PageContent(page: $0, legacyObjects: objects)) } ?? .canvas(CanvasContent(objects: objects))
     }
-    private enum CodingKeys: String, CodingKey { case id, title, tags, createdAt, updatedAt, deletedAt, paper, content, objects, page }
+    private enum CodingKeys: String, CodingKey { case id, title, tags, createdAt, updatedAt, deletedAt, paper, color, content, objects, page }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
         tags = try c.decode([String].self, forKey: .tags); createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt); deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         paper = try c.decode(Paper.self, forKey: .paper)
+        color = try c.decodeIfPresent(Color.self, forKey: .color) ?? .neutral
         if c.contains(.content) {
             guard !c.contains(.objects), !c.contains(.page) else { throw NotesError.invalid }
             content = try c.decode(NoteContent.self, forKey: .content)
@@ -195,6 +202,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         try c.encode(id, forKey: .id); try c.encode(title, forKey: .title); try c.encode(tags, forKey: .tags)
         try c.encode(createdAt, forKey: .createdAt); try c.encode(updatedAt, forKey: .updatedAt)
         try c.encodeIfPresent(deletedAt, forKey: .deletedAt); try c.encode(paper, forKey: .paper)
+        try c.encode(color, forKey: .color)
         try c.encode(content, forKey: .content)
     }
     var contentSize: CGSize {

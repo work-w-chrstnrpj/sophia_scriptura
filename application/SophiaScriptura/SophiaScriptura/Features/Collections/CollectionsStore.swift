@@ -174,7 +174,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     @discardableResult
-    func createCollection(name: String, detail: String, parentID: UUID?, accent: CollectionAccent) -> UUID? {
+    func createCollection(name: String, detail: String, parentID: UUID?, accent: CollectionAccent, icon: CollectionIcon = .folder) -> UUID? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
         guard trimmedName.localizedCaseInsensitiveCompare("No Folder") != .orderedSame else { return nil }
@@ -189,6 +189,7 @@ final class CollectionsStore: ObservableObject {
                 detail: detail.trimmingCharacters(in: .whitespacesAndNewlines),
                 parentID: parentID,
                 accent: accent,
+                icon: icon,
                 modifiedAt: Date()
             )
         )
@@ -205,7 +206,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     @discardableResult
-    func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent) -> Bool {
+    func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent, icon: CollectionIcon? = nil) -> Bool {
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return false }
         if collections[index].isUnfiled {
             updateAccent(id: id, accent: accent)
@@ -216,6 +217,9 @@ final class CollectionsStore: ObservableObject {
         collections[index].name = trimmed
         collections[index].detail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
         collections[index].accent = accent
+        if let icon {
+            collections[index].icon = icon
+        }
         collections[index].modifiedAt = Date()
         enqueueWrite()
         return true
@@ -425,7 +429,7 @@ final class CollectionsStore: ObservableObject {
 
     /// Stores a web link. A blank title uses the site name. Only http and https addresses are accepted.
     @discardableResult
-    func addLink(title: String, url: String) -> UUID? {
+    func addLink(title: String, url: String, verse: VerseID? = nil, editionID: String? = nil) -> UUID? {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed),
               let scheme = parsed.scheme?.lowercased(),
@@ -434,7 +438,7 @@ final class CollectionsStore: ObservableObject {
               !host.isEmpty else { return nil }
         let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let label = name.isEmpty ? host : String(name.prefix(120))
-        let link = SavedLink(id: UUID(), title: label, url: trimmed, createdAt: Date())
+        let link = SavedLink(id: UUID(), title: label, url: trimmed, createdAt: Date(), verse: verse, editionID: editionID)
         links.append(link)
         enqueueWrite()
         return link.id

@@ -7,10 +7,11 @@
 
 ## Visible outcome
 
-- Collections are folders with nested subfolders, a name, an optional description and
+- Collections are folders with nested subfolders, a name, an optional description, a
+  personalized filled-symbol icon (folder by default), and
   one of twelve muted colors (red, rose, orange, ochre, yellow, yellow-green, green,
   teal, blue, bluish purple, purple and brown) that lighten for dark appearances.
-- **No Folder** is always first. It shows every note, bookmark and gleaning that has no
+- **No Folder** is always first. It shows every note, bookmark, gleaning and link that has no
   collection, accepts only a color change, and cannot be deleted. Deleting a collection
   moves its subfolders up one level and returns items that have no other collection to
   No Folder; nothing is deleted.
@@ -34,6 +35,12 @@
 - Add Study Material can also save an http or https link, and can file **Sample conversation**,
   a placeholder until Companion exists. Opening the link asks before leaving the app.
   Opening the sample explains that it is not a real chat and can show the Companion tab.
+- Verse Hub bookmark and gleaning rows show their direct folder names, or no folder label
+  when unfiled. Gleaning insight text no longer occupies that placement line.
+- Verse Hub can add an http/https link anchored to the current verse and edition. It starts
+  in No Folder, can be filed later, and remains compatible with older unanchored links.
+- Verse Hub exposes licensed-content-aware Copy and Share actions; Copy presents a brief
+  success message.
 - The Collections and Notes library roots use the same minimal header hierarchy: the tab
   name in the active appearance preset's heading font on the left, then symbol-only Search,
   sort/filter, optional More, and Add controls on the right. Search expands into a compact
@@ -93,6 +100,20 @@
 
 Remaining: owner review on the iPad in light and dark appearances.
 
+2026-10-02 Verse Hub and collection-icon follow-up:
+
+- `build/verse-hub-regression.xcresult`: **27 passed, 0 failed, 0 skipped** on the
+  iPad (A16) Simulator / iOS 26.5. The selection covers all collection persistence,
+  folder membership and reader regressions, including personalized-icon round trips and
+  verse-linked No Folder links.
+- The final signed Debug device build succeeded, passed strict code-sign validation and
+  installed in place on "iPad ni Paj" without changing its existing data-container identity.
+  Evidence is in `build/verse-hub-device-final-build.log`,
+  `build/verse-hub-device-final-signature.log`, and
+  `build/verse-hub-device-final-install.log`. Automated launch was denied because the iPad
+  was locked (`build/verse-hub-device-final-launch.log`), so owner launch and visual review
+  of the new Verse Hub actions and icon picker remain pending.
+
 2026-10-02 earlier library UI refinement (superseded by the minimal-header revision below):
 
 - `build/sp015-library-toolbar-r3.xcresult`: the focused command-bar geometry test passed
@@ -128,3 +149,18 @@ on the right; Search expands inline only when invoked.
 
 Owner accepted M5 on the installed iPad on 2026-10-02. Larger Dynamic Type and VoiceOver
 remain verification gaps; they are not recorded as passed.
+
+## 2026-10-02 owner-requested UI fixes
+
+- Collection detail titles now open the existing editor when tapped.
+- Long-pressing a collection card or nested subfolder exposes Edit Collection and Delete
+  Collection; No Folder retains its color-only restriction.
+- The existing safe delete behavior is unchanged: children are promoted and study material
+  is preserved.
+- The targeted Notes and Collections unit selection passed 38/38 in
+  `build/ui-bugfix-unit.xcresult`. Two attempts at a new focused context-menu UI automation
+  were killed by the simulator test runner while it failed to collect diagnostics; neither
+  produced an assertion failure, and the unstable added test was not retained.
+- The signed build passed strict signature verification, installed in place on `iPad ni
+  Paj`, and launched as `com.personal.SophiaScriptura`; evidence is in
+  `build/ui-bugfix-device/`. Owner touch/visual confirmation remains open.

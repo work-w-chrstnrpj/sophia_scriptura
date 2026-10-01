@@ -12,6 +12,12 @@ struct ScriptureView: View {
     @State private var pendingQuote: PendingQuote?
     @State private var passageCard: UUID?
     @State private var passageDraft: SavedPassage?
+    @State private var hubLinkCard: UUID?
+    @State private var addingHubLink = false
+    @State private var hubLinkTitle = ""
+    @State private var hubLinkURL = "https://"
+    @State private var hubMessage: String?
+    @State private var hubShare: HubShare?
     @State private var wideLayout = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -19,6 +25,8 @@ struct ScriptureView: View {
     enum ReaderPicker: String, Identifiable { case book, version; var id: String { rawValue } }
     private var appearance: ScriptureAppearance { session.preferences.appearance }
     private var palette: ReaderPalette { session.preferences.palette(for:appearance,colorScheme:colorScheme) }
+    private var bookButtonWidth: CGFloat { wideLayout ? 190 : 150 }
+    private var selectedBookTitle: String { session.currentBook?.title ?? session.title }
     var body: some View {
         ZStack {
             VStack(spacing:0) {
@@ -33,9 +41,10 @@ struct ScriptureView: View {
                 }
                 HStack(spacing:0) {
                 Button { picker = .book } label: {
-                    Text(session.currentBook?.title ?? session.title)
+                    Text(selectedBookTitle)
                         .lineLimit(1)
-                        .frame(minWidth:110,minHeight:44)
+                        .truncationMode(.tail)
+                        .frame(width: bookButtonWidth, height:44)
                 }.accessibilityIdentifier("reader.book")
                     .accessibilityLabel("Book, \(session.title)")
                     .accessibilityValue(session.title)
@@ -165,6 +174,10 @@ struct ScriptureView: View {
         .sheet(item: $passageDraft) { draft in
             PassageSaveSheet(store: collections, draft: draft)
         }
+        .sheet(item: Binding(get: { hubLinkCard.map(StudyLinkID.init) }, set: { hubLinkCard = $0?.id })) { card in
+            if let link = collections.link(id: card.id) { StudyLinkSheet(link: link) }
+        }
+        .sheet(item: $hubShare) { share in ScriptureActivitySheet(text: share.text) }
     }
 
     private func annotatedReader(_ document: ChapterDocument, group: AnnotationGroup) -> some View {
@@ -241,10 +254,12 @@ struct ScriptureView: View {
         Binding(get:{ wideLayout == wide ? session.hubVerse : nil },set:{ session.hubVerse = $0 })
     }
     private func hub(_ verse: VerseID) -> some View {
-            NavigationStack {
+            let verseBody = session.document?.body(for: verse.verse) ?? ""
+            let reference = "\(session.currentBook?.title ?? verse.book) \(verse.chapter):\(verse.verse) · \(session.abbreviation)"
+            return NavigationStack {
                 List {
-                    Section("\(session.currentBook?.title ?? verse.book) \(verse.chapter):\(verse.verse) · \(session.abbreviation)") {
-                        Text(session.document?.body(for:verse.verse) ?? "").font(.system(.title3,design:.serif))
+                    Section(reference) {
+                        Text(verseBody).font(.system(.title3,design:.serif))
                         Button("Copy verse") {
                             guard let document = session.document else { return }
                             let map = ChapterTextMap(document:document)
@@ -254,10 +269,25 @@ struct ScriptureView: View {
                             Task {
                                 if let text = await session.authorizeQuote(selection) {
                                     UIPasteboard.general.string = text
+                                    showHubMessage("Verse copied")
                                 }
                             }
                         }
-                        Text("Select text in the reader to share a passage.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Section("Share") {
+                        Button {
+                            guard let document = session.document else { return }
+                            let map = ChapterTextMap(document: document)
+                            let ranges = map.focusRanges(for: verse.verse)
+                            guard let first = ranges.first, let last = ranges.last else { return }
+                            let selection = map.selection(in: NSUnionRange(first, last))
+                            Task {
+                                if let text = await session.authorizeQuote(selection) { hubShare = HubShare(text: text) }
+                            }
+                        } label: {
+                            Label("Share verse", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityIdentifier("scripture.shareVerse")
                     }
                     Section("Save") {
                         Button("Bookmark", systemImage: CollectionArtifactKind.bookmark.symbolName) { saveVerse(verse, kind: .bookmark) }
@@ -300,8 +330,9 @@ struct ScriptureView: View {
                                         CollectionItemGlyph(kind: item.kind == .gleaning ? .gleaning : .bookmark, accent: collections.accent(for: item.id), size: 30)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(item.referenceLabel).foregroundStyle(.primary)
-                                            if item.kind == .gleaning && !item.insight.isEmpty {
-                                                Text(item.insight).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                            let folders = collectionNames(for: item.id)
+                                            if !folders.isEmpty {
+                                                Text(folders.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                             }
                                         }
                                     }
@@ -309,11 +340,70 @@ struct ScriptureView: View {
                             }
                         }
                     }
-                    ForEach(["Conversations","Links"],id:\.self) { name in
-                        Section(name) { Text("No \(name.lowercased()) attached to this verse.").foregroundStyle(.secondary) }
+                    Section("Links") {
+                        Button("Add Link", systemImage: "link.badge.plus") {
+                            hubLinkTitle = ""
+                            hubLinkURL = "https://"
+                            addingHubLink = true
+                        }
+                        .accessibilityIdentifier("scripture.addLink")
+                        let links = collections.links.filter { $0.verse == verse && $0.editionID == session.edition?.id }
+                        ForEach(links) { link in
+                            Button {
+                                session.hubVerse = nil
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    hubLinkCard = link.id
+                                }
+                            } label: {
+                                Label(link.title, systemImage: CollectionArtifactKind.link.symbolName)
+                            }
+                        }
+                        if links.isEmpty {
+                            Text("No links attached to this verse.").foregroundStyle(.secondary)
+                        }
                     }
-                }.navigationTitle("Verse hub").toolbar { Button("Done") { session.hubVerse = nil } }
+                    Section("Conversations") { Text("No conversations attached to this verse.").foregroundStyle(.secondary) }
+                }
+                .navigationTitle("Verse hub")
+                .toolbar { Button("Done") { session.hubVerse = nil } }
+                .alert("Add Link", isPresented: $addingHubLink) {
+                    TextField("Title (optional)", text: $hubLinkTitle)
+                    TextField("https://example.com", text: $hubLinkURL).textInputAutocapitalization(.never)
+                    Button("Add") {
+                        if collections.addLink(title: hubLinkTitle, url: hubLinkURL, verse: verse, editionID: session.edition?.id) != nil {
+                            showHubMessage("Link added to No Folder")
+                        } else {
+                            showHubMessage("Enter a valid web link")
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+                .overlay(alignment: .top) {
+                    if let hubMessage {
+                        Text(hubMessage)
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16).padding(.vertical, 10)
+                            .background(.regularMaterial, in: Capsule())
+                            .shadow(radius: 8, y: 3)
+                            .padding(.top, 8)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .accessibilityIdentifier("scripture.hubMessage")
+                    }
+                }
             }.presentationDetents([.medium,.large])
+    }
+    private func collectionNames(for artifactID: UUID) -> [String] {
+        collections.collectionIDs(containing: artifactID)
+            .compactMap { collections.collection(id: $0)?.name }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+    private func showHubMessage(_ message: String) {
+        withAnimation { hubMessage = message }
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard hubMessage == message else { return }
+            withAnimation { hubMessage = nil }
+        }
     }
     private var passageCardBinding: Binding<PassageCardID?> {
         Binding(get: { passageCard.map(PassageCardID.init) }, set: { passageCard = $0?.id })
@@ -381,6 +471,19 @@ struct ScriptureView: View {
                 .presentationDragIndicator(.visible)
         }
     }
+}
+
+private struct HubShare: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+private struct ScriptureActivitySheet: UIViewControllerRepresentable {
+    let text: String
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct PendingQuote: Identifiable {

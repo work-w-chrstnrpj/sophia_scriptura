@@ -42,7 +42,9 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     private let picker = PKToolPicker()
     private var coordinator: ReaderTextSurface.Coordinator?
     private var canvases: [UUID: PKCanvasView] = [:]
+    private var strokeRefiners: [UUID: PencilStrokeRefiner] = [:]
     private var selectedCanvas: PKCanvasView?
+    private var strokeRefiner: PencilStrokeRefiner?
     private var selectedID: UUID?
     private var layoutID: String?
     private var verifiedLayoutID: String?
@@ -58,6 +60,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     private var renderKey = ""
     private var matched = false
     private var lastMode: AnnotationSession.Mode?
+    private var refinementStatus = "rough"
     init(document: ChapterDocument, preferences: ReaderPreferences, reader: ReaderSession, session: AnnotationSession) {
         self.document = document; self.preferences = preferences; self.reader = reader; self.session = session; openedGeneration = session.reopenGeneration
         super.init(nibName: nil, bundle: nil)
@@ -107,6 +110,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     func dispose() {
         stop()
         canvases.values.forEach { picker.removeObserver($0); $0.delegate = nil; $0.undoManager?.removeAllActions() }
+        strokeRefiners.removeAll()
         text.delegate = nil; text.authorizeQuote = nil; text.externalReveal = nil
     }
     func apply() {
@@ -134,7 +138,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         if layoutID != layout.signature {
             stop()
             canvases.values.forEach { picker.removeObserver($0); $0.removeFromSuperview() }
-            canvases.removeAll(); drawingTokens.removeAll(); selectedCanvas = nil; selectedID = nil
+            canvases.removeAll(); strokeRefiners.removeAll(); drawingTokens.removeAll(); selectedCanvas = nil; selectedID = nil
             layoutID = layout.signature
             paper.frame = CGRect(x: 0, y: 0, width: layout.width, height: layout.height)
             text.frame = CGRect(x: layout.inset, y: layout.inset, width: layout.textWidth, height: layout.height - layout.inset * 2)
@@ -162,7 +166,15 @@ struct AnnotationSurface: UIViewControllerRepresentable {
             if let layer = session.selected {
                 let canvas = canvases[layer.id] ?? makeCanvas(layer, color: palette.ink)
                 canvases[layer.id] = canvas; selectedCanvas = canvas
-            } else { selectedCanvas = nil }
+                let refiner = strokeRefiners[layer.id] ?? PencilStrokeRefiner(canvas: canvas)
+                strokeRefiners[layer.id] = refiner; strokeRefiner = refiner
+                #if DEBUG
+                if PencilStrokeRefiner.simulatesPencil {
+                    refiner.trackHold(on: view)
+                    if canvas.drawingGestureRecognizer.view !== view { view.addGestureRecognizer(canvas.drawingGestureRecognizer) }
+                }
+                #endif
+            } else { selectedCanvas = nil; strokeRefiner = nil }
         }
         let draw = session.selected != nil && session.mode == .draw && session.active
         text.isSelectable = !draw; text.isUserInteractionEnabled = !draw
@@ -174,6 +186,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
             }
             canvas.isHidden = session.mode == .hidden
             canvas.isUserInteractionEnabled = draw
+            allowSimulatedPencil(canvas)
             text.isSelectable = !draw; text.isUserInteractionEnabled = !draw
             let showTools = draw && session.toolsVisible
             if view.window != nil, pickerActive != draw || pickerVisible != showTools {
@@ -215,6 +228,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         let canvas = AnnotationCanvas(frame: paper.bounds)
         canvas.backgroundColor = .clear; canvas.isOpaque = false; canvas.isScrollEnabled = false
         canvas.drawingPolicy = .pencilOnly; canvas.delegate = self
+        allowSimulatedPencil(canvas)
         canvas.tool = PKInkingTool(.pen, color: color, width: 2)
         applying = true; canvas.drawing = (try? PKDrawing(data: layer.drawing)) ?? PKDrawing(); applying = false
         canvas.accessibilityIdentifier = "annotation.canvas"
@@ -224,10 +238,34 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         drawingTokens[layer.id] = layer.revision
         return canvas
     }
-    private func replaceDrawing(_ canvas: PKCanvasView, with drawing: PKDrawing) {
+    private func replaceDrawing(_ canvas: PKCanvasView, with drawing: PKDrawing, status: String? = nil) {
         let before = canvas.drawing
-        canvas.undoManager?.registerUndo(withTarget: self) { target in target.replaceDrawing(canvas, with: before) }
-        canvas.drawing = drawing; publish()
+        let previous = refinementStatus
+        canvas.undoManager?.registerUndo(withTarget: self) { target in target.replaceDrawing(canvas, with: before, status: previous) }
+        refinementStatus = status ?? previous
+        canvas.drawing = drawing
+        publishRefinementAccessibility(canvas)
+        publish()
+    }
+    private func allowSimulatedPencil(_ canvas: PKCanvasView) {
+        #if DEBUG
+        guard PencilStrokeRefiner.simulatesPencil else { return }
+        canvas.drawingPolicy = .anyInput
+        if canvas.drawingGestureRecognizer.view !== view {
+            view.addGestureRecognizer(canvas.drawingGestureRecognizer)
+        }
+        canvas.drawingGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        strokeRefiner?.trackHold(on: view)
+        canvas.isAccessibilityElement = true
+        if canvas.accessibilityValue == nil { canvas.accessibilityValue = "0 strokes; rough" }
+        #endif
+    }
+    private func publishRefinementAccessibility(_ canvas: PKCanvasView) {
+        #if DEBUG
+        guard PencilStrokeRefiner.simulatesPencil else { return }
+        canvas.isAccessibilityElement = true
+        canvas.accessibilityValue = "\(canvas.drawing.strokes.count) strokes; \(refinementStatus)"
+        #endif
     }
     private func publish() {
         guard !applying, session.reopenGeneration == openedGeneration, let id = selectedID, let canvas = selectedCanvas else { return }
@@ -236,6 +274,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     }
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) { if canvasView === selectedCanvas { publish() } }
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        strokeRefiner?.beginStroke()
         session.beginStroke()
         if #available(iOS 26.0, *) { canvasView.pencilKitResponderState.toolPickerVisibility = .hidden }
         else { picker.setVisible(false, forFirstResponder: canvasView) }
@@ -243,6 +282,12 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         // Keep the picker active and canvas first responder while its UI is minimized.
     }
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        if let refined = strokeRefiner?.finishStroke() {
+            replaceDrawing(canvasView, with: refined, status: strokeRefiner?.lastKind.map { "refined \($0.label)" } ?? "rough")
+        } else if PencilStrokeRefiner.simulatesPencil {
+            refinementStatus = "rough"
+            publishRefinementAccessibility(canvasView)
+        }
         publish(); session.finishStroke(); Task { await session.save() }
     }
     private func configureStage(_ layout: AnnotationLayout) {

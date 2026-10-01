@@ -514,3 +514,14 @@ selection at offset zero. Page quotation insertion now always appends to the end
 body; Canvas keeps appending its quote object after existing objects. Notes-library cards
 now have a consistent 220-point height for both Page and Canvas documents. Focused iPad
 Notes regression evidence: `build/sp013/post-close-fixes/notes-r2.xcresult` (25 passed).
+
+### Post-closure note color setting — 2026-10-02
+
+Notes now persist one of six paper colors per document: neutral, rose, amber, sage, blue
+or lavender. Existing archives decode to neutral without migration, and each tint has
+light/dark variants while retaining the existing ink and rule behavior. The setting is
+available from the editor's More → Note Color menu.
+The targeted Notes and Collections unit selection passed 38/38 in
+`build/ui-bugfix-unit.xcresult`. The signed UI-fix build passed strict verification,
+installed in place on `iPad ni Paj`, and launched normally; deployment evidence is under
+`build/ui-bugfix-device/`. Owner review of all tints in both appearances remains open.

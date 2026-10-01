@@ -57,8 +57,8 @@ not only the note subset of the unapproved M2 proposal.
 | Collections | Topic folders containing mixed study material, each opening its original item | Defined in [Collections screen specification](collections-screen-specification.md); exact ordering, folder styling and deletion policy remain open |
 | Notes library | Blank-note creation, tags, title/date sort, stacked cards or list | Defined in [Notes screen specification](notes-screen-specification.md); card previews, exact tag behavior and empty state remain open |
 | Note editor | Expandable canvas with text, ink, images and rich objects; native Pencil palette while drawing | Defined in [Notes screen specification](notes-screen-specification.md); native lasso, rich-object slices, growth limits and export remain open |
-| Companion | Conversation history and messages; four reviewed presets; passage context and inspectable sources | Panel/expanded continuity, errors/offline states, provider setup, citations, typography |
-| Activity | Start/finish timer, manual session entry and readable analytics | Session rules, goal/metric choices, empty and edited history |
+| Companion | Conversation history and messages; four reviewed presets; passage context and inspectable sources | SP-016 records panel/expanded continuity, errors/offline states, provider setup, citations and Quiz Me; visual/device acceptance remains implementation work |
+| Activity | Five built-in plus custom modes; Reading start/finish passage flow; pauseable shared timer; manual entry; local insights | [Activity specification](activity-screen-specification.md) defines behavior; visual hierarchy, per-book time, overlap, concurrency and midnight rules remain open |
 | Settings / Account | Theme/font preferences and feature configuration | Confirm local Settings recommendation; review whether Account has a purpose |
 
 ## Original behavior versus later proposals
@@ -263,8 +263,10 @@ for Q1–Q12 and unresolved details.
 - Companion uses deliberate online requests with selected context and source retrieval.
   Shared foundation and Biblical Studies/Christian Living contexts are now approved in
   the prompt seed; other presets and behavior evaluation remain open.
-- Activity is manually triggered with activity-type tags, pause/corrections, streaks and
-  goals. Exact goal and qualifying-day definitions remain to be specified.
+- Activity's detailed owner-approved modes, Reading flow, timer, manual fields, daily goal
+  and streak defaults, custom modes, background music and shared shell control are recorded
+  in the [Activity specification](activity-screen-specification.md). Overlap, concurrent
+  timers, midnight attribution, custom-mode archival and per-book time allocation remain open.
 - Local Settings replaces a Sophia Account screen; Files export/import and optional
   backup reminders are accepted. This does not enable cloud sync.
 - Human narration is preferred; no silent TTS substitution is approved.

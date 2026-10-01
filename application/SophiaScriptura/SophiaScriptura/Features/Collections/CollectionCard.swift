@@ -8,7 +8,7 @@ struct CollectionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, size: 46)
+            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, icon: collection.icon ?? .folder, size: 46)
                 .padding(.bottom, 16)
 
             Text(collection.name)

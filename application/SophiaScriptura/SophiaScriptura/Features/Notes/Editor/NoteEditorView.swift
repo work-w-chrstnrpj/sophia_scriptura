@@ -68,6 +68,14 @@ struct NoteEditorView: View {
                         }
                     }
                 }
+                Menu("Note Color", systemImage: "paintpalette") {
+                    ForEach(NoteDocument.Color.allCases, id: \.self) { color in
+                        Button { session.setColor(color) } label: {
+                            Label(color.title, systemImage: session.note?.color == color ? "checkmark.circle.fill" : "circle.fill")
+                        }
+                        .accessibilityIdentifier("notes.color.\(color.rawValue)")
+                    }
+                }
                 Button("Note details", systemImage: "tag") { showDetails = true }
                 Button(session.status, systemImage: session.dirty ? "arrow.clockwise" : "checkmark.circle") { Task { await session.save() } }
             } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Note options").accessibilityIdentifier("notes.options")

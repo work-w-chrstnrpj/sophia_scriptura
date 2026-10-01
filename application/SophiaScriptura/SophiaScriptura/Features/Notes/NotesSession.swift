@@ -80,6 +80,12 @@ import ImageIO
         snapshot.notes[i].tags = Array(Set(tags.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces).prefix(60)) }.filter { !$0.isEmpty })).sorted().prefix(30).map { $0 }
         snapshot.notes[i].paper = paper; snapshot.notes[i].updatedAt = Date(); changed()
     }
+    func setColor(_ color: NoteDocument.Color) {
+        guard !restoring, let i = index else { return }
+        snapshot.notes[i].color = color
+        snapshot.notes[i].updatedAt = Date()
+        changed()
+    }
     func delete(_ id: UUID, restore: Bool = false) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes[i].deletedAt = restore ? nil : Date(); snapshot.notes[i].updatedAt = Date(); changed()

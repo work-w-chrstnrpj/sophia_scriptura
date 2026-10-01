@@ -82,6 +82,10 @@ Update this map whenever the project structure changes.
   encrypted-store and Keychain adapters; Resources/Scripture bundles WEBP content.
   Features/Scripture/LayoutValidation holds the DEBUG-only SP-008 continuous-chapter
   PencilKit experiment; its disposable ink is separate from production study storage.
+  Features/Drawing owns SP-014's shared production Pencil endpoint-hold and conservative
+  geometric stroke refinement used by Notes and Scripture annotations; feature controllers
+  retain viewport, undo and persistence ownership. Assets.xcassets owns the supplied
+  default/dark/tinted Sophia app icon catalog.
   AppShell owns the tab-dock idle timer and passive finger-scroll observation; RootTabView
   preserves mounted tab state while animating navigation.
   DesignSystem owns reader appearance tokens, shared AppTheme surfaces across tabs, and font registration; Resources/Fonts

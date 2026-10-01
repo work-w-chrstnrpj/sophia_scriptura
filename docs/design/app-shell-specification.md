@@ -91,7 +91,8 @@ Each tab owns a navigation path and restores it when the user returns. The shell
 - selected filters, folders, conversation and note;
 - unsent Companion text and an active Note editing transaction;
 - the selected Scripture translation, layer and interaction state;
-- an active Activity timer and its tag;
+- an active, paused or completion-pending Activity session;
+- selected background-music track and play/pause state;
 - transient focus only when it can be restored safely, never a stale modal.
 
 Switching tabs does not reset a screen. A destructive or ambiguous action must complete,
@@ -145,6 +146,24 @@ height from the shell. Draw, Notes and Companion may continue while audio plays;
 the primary translation or starting another chapter requires a clear replacement action.
 The player states when human narration is unavailable rather than silently implying that
 TTS or an unlicensed recording is the same edition.
+
+### Activity/music Now Active cluster
+
+M8 adds one collapsible Now Active cluster above the tab dock. It conditionally contains an
+Activity timer item and a background-music item. Keep Activity visible while running, paused,
+or awaiting final Reading-range confirmation. Show music after explicit playback has begun;
+retain its item while paused so Play and track controls remain available. Remove an item when
+its service is stopped/cleared, and hide the cluster when neither service is in use. Compact
+state exposes essential controls; expanded state shows Activity mode and elapsed time plus
+music title and next-track control.
+
+Background music is a human-composed instrumental ambient-lo-fi collection with no vocals.
+It starts only on explicit Play and continues across tabs, app backgrounding and screen lock.
+Starting Scripture narration pauses music. Choosing Play on music while narration is active
+pauses narration first. The Activity timer continues independently. The shell positions the
+cluster above the dock without covering Notes writing, the Pencil palette, Scripture controls,
+the keyboard or audio-player controls. Final track selection and rights checks are an M8 gate;
+no track is currently selected.
 
 ## Global search and continuity
 
@@ -240,7 +259,8 @@ Every screen specification must show the following states before implementation:
 - Exact tab labels/icons and whether the compact landscape bar uses the same full labels.
 - Whether global search is a visible shell control or reached through each tab’s More menu.
 - The exact persistence mechanism for tab navigation paths and draft restoration.
-- Audio interruption, background playback and lock-screen behavior after rights/source review.
+- Interruption and background/lock-screen behavior for M7 narration and M8 background music;
+  their mutual arbitration is specified, while external/system-audio policy still needs review.
 - The first DesignSystem token values after visual prototypes on the owner’s iPad.
 - Whether a future multi-window scene needs independent shell state; current scope is one
   local study session.

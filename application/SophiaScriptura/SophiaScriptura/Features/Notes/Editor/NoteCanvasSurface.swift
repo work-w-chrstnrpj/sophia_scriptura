@@ -60,11 +60,13 @@ private final class NoteInkCanvas: PKCanvasView {
     private let ink = NoteInkCanvas()
     private let placeholder = UILabel()
     private let picker: PKToolPicker
+    private lazy var strokeRefiner = PencilStrokeRefiner(canvas: ink)
     private var objects: [UUID: UIView] = [:]
     private var represented: [UUID: NoteObject] = [:]
     private var noteID: UUID?, generation: UUID?, focus: UUID?, toolsRequest: UUID?
     private var applying = false, usingPencil = false, fitted = false, wasActive = false
     private var acceptsInkChanges = false
+    private var refinementStatus = "rough"
     private var lastInk = Data()
     private var loadedPageInk: Data?
     private let palette = UIStackView()
@@ -80,7 +82,8 @@ private final class NoteInkCanvas: PKCanvasView {
         self.session = session; self.openCitation = openCitation
         if #available(iOS 18.0, *) {
             let items = PKToolPicker().toolItems.filter {
-                $0 is PKToolPickerInkingItem || $0 is PKToolPickerEraserItem || (session.note?.kind == .canvas && $0 is PKToolPickerLassoItem)
+                $0 is PKToolPickerInkingItem || $0 is PKToolPickerEraserItem || $0 is PKToolPickerRulerItem ||
+                    (session.note?.kind == .canvas && $0 is PKToolPickerLassoItem)
             }
             picker = PKToolPicker(toolItems: items)
         } else { picker = PKToolPicker() }
@@ -112,10 +115,12 @@ private final class NoteInkCanvas: PKCanvasView {
         ink.isScrollEnabled = false; ink.drawingPolicy = .pencilOnly
         ink.tool = PKInkingTool(.pen, color: .label, width: 3)
         #if DEBUG
-        ink.testingFinger = ProcessInfo.processInfo.environment["SP013_FINGER_INK"] == "1"
+        ink.testingFinger = ProcessInfo.processInfo.environment["SP013_FINGER_INK"] == "1" || PencilStrokeRefiner.simulatesPencil
         if ink.testingFinger { ink.drawingPolicy = .anyInput }
         #endif
         ink.accessibilityIdentifier = "notes.ink"; ink.accessibilityLabel = "Page annotations"
+        _ = strokeRefiner
+        strokeRefiner.trackHold(on: view)
         // PencilKit must own a screen-sized drawable, not a 12,000-point Metal surface.
         view.addSubview(ink)
         ink.minimumZoomScale = scroll.minimumZoomScale; ink.maximumZoomScale = scroll.maximumZoomScale
@@ -179,7 +184,7 @@ private final class NoteInkCanvas: PKCanvasView {
         ink.contentInset = scroll.contentInset
         if ink.contentOffset != scroll.contentOffset { ink.contentOffset = scroll.contentOffset }
         #if DEBUG
-        if ink.testingFinger {
+        if ink.testingFinger && !PencilStrokeRefiner.simulatesPencil {
             scroll.accessibilityValue = "Ink viewport \(Int(ink.bounds.width)) × \(Int(ink.bounds.height)); \(ink.drawing.strokes.count) strokes"
         }
         #endif
@@ -270,7 +275,7 @@ private final class NoteInkCanvas: PKCanvasView {
         guard isViewLoaded, let note = session.note, (note.kind == .canvas) == isCanvas else { hideTools(); return }
         let page = note.page ?? NotePage()
         view.backgroundColor = theme.palette.paper; view.tintColor = theme.palette.accent
-        paper.backgroundColor = theme.palette.paper; paper.ruleColor = theme.palette.rule
+        paper.backgroundColor = noteColor(note.color); paper.ruleColor = theme.palette.rule
         palette.backgroundColor = theme.palette.paper; palette.layer.borderWidth = 0.5
         palette.layer.borderColor = theme.palette.rule.cgColor
         bodyText.textColor = theme.palette.ink; bodyText.linkTextAttributes = [.foregroundColor: theme.palette.accent]
@@ -339,7 +344,7 @@ private final class NoteInkCanvas: PKCanvasView {
             }
         }
         if restoringSurface { ink.undoManager?.removeAllActions() }
-        ink.accessibilityValue = "\(ink.drawing.strokes.count) strokes"
+        publishRefinementAccessibility()
         let ids = Set(note.objects.map(\.id))
         for id in Array(objects.keys) where !ids.contains(id) { objects.removeValue(forKey: id)?.removeFromSuperview(); represented[id] = nil }
         for object in note.objects where isCanvas || object.kind != .ink {
@@ -393,6 +398,17 @@ private final class NoteInkCanvas: PKCanvasView {
                     reveal(bodyText.convert(bodyText.layoutManager.boundingRect(forGlyphRange: range, in: bodyText.textContainer), to: paper))
                 }
             }
+        }
+    }
+
+    private func noteColor(_ color: NoteDocument.Color) -> UIColor {
+        switch color {
+        case .neutral: return theme.palette.paper
+        case .rose: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.22, green: 0.15, blue: 0.16, alpha: 1) : UIColor(red: 0.98, green: 0.91, blue: 0.92, alpha: 1) }
+        case .amber: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.22, green: 0.18, blue: 0.10, alpha: 1) : UIColor(red: 0.98, green: 0.94, blue: 0.82, alpha: 1) }
+        case .sage: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.13, green: 0.20, blue: 0.15, alpha: 1) : UIColor(red: 0.89, green: 0.95, blue: 0.88, alpha: 1) }
+        case .blue: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.12, green: 0.18, blue: 0.23, alpha: 1) : UIColor(red: 0.88, green: 0.94, blue: 0.98, alpha: 1) }
+        case .lavender: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.18, green: 0.15, blue: 0.23, alpha: 1) : UIColor(red: 0.94, green: 0.91, blue: 0.98, alpha: 1) }
         }
     }
     private func attributedBody(_ page: NotePage) -> NSAttributedString {
@@ -627,6 +643,7 @@ private final class NoteInkCanvas: PKCanvasView {
         return false
     }
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        strokeRefiner.beginStroke()
         acceptsInkChanges = true; usingPencil = true; palette.isHidden = true
         // End text editing without resigning the active PencilKit responder mid-stroke.
         if bodyText.isFirstResponder { bodyText.resignFirstResponder() }
@@ -634,10 +651,42 @@ private final class NoteInkCanvas: PKCanvasView {
         if isCanvas { ink.layer.opacity = 1; for object in session.note?.objects ?? [] where object.kind == .ink { objects[object.id]?.isHidden = true } }
         // Do not reconfigure the tool picker or responder during an in-flight stroke.
     }
-    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) { usingPencil = false; flush(); apply() }
+    func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        usingPencil = false
+        if let refined = strokeRefiner.finishStroke() {
+            let original = ink.drawing
+            let previous = refinementStatus
+            refinementStatus = strokeRefiner.lastKind.map { "refined \($0.label)" } ?? "rough"
+            ink.undoManager?.registerUndo(withTarget: self) { target in target.replaceInkDrawing(original, status: previous) }
+            ink.drawing = refined
+        } else if PencilStrokeRefiner.simulatesPencil {
+            refinementStatus = "rough"
+        }
+        flush(); apply()
+    }
+    private func replaceInkDrawing(_ drawing: PKDrawing, status: String) {
+        let current = ink.drawing
+        let previous = refinementStatus
+        ink.undoManager?.registerUndo(withTarget: self) { target in target.replaceInkDrawing(current, status: previous) }
+        refinementStatus = status
+        ink.drawing = drawing; flush(); apply()
+    }
+    private func publishRefinementAccessibility() {
+        let count = "\(ink.drawing.strokes.count) strokes"
+        #if DEBUG
+        if PencilStrokeRefiner.simulatesPencil {
+            ink.isAccessibilityElement = true
+            let described = "\(count); \(refinementStatus)"
+            ink.accessibilityValue = described
+            scroll.accessibilityValue = described
+            return
+        }
+        #endif
+        ink.accessibilityValue = count
+    }
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !applying, !usingPencil else { return }
-        flush(); if isCanvas { apply() }; ink.accessibilityValue = "\(ink.drawing.strokes.count) strokes"
+        flush(); if isCanvas { apply() }; publishRefinementAccessibility()
     }
 }
 

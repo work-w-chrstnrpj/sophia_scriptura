@@ -126,7 +126,7 @@ final class CollectionsStoreTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("collections-" + UUID().uuidString, isDirectory: true)
         let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
         await store.load()
-        let folder = try XCTUnwrap(store.createCollection(name: "Grace", detail: "Held", parentID: nil, accent: .sage))
+        let folder = try XCTUnwrap(store.createCollection(name: "Grace", detail: "Held", parentID: nil, accent: .sage, icon: .heart))
         store.updateAccent(id: StudyCollection.unfiledID, accent: .gold)
         let passage = samplePassage(kind: .bookmark, insight: "", endVerse: 1)
         store.addPassage(passage)
@@ -136,6 +136,7 @@ final class CollectionsStoreTests: XCTestCase {
         let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
         await reopened.load()
         XCTAssertEqual(reopened.collection(id: folder)?.accent, .sage)
+        XCTAssertEqual(reopened.collection(id: folder)?.icon, .heart)
         XCTAssertEqual(reopened.collection(id: folder)?.parentID, nil)
         XCTAssertEqual(reopened.collection(id: StudyCollection.unfiledID)?.accent, .gold)
         XCTAssertEqual(reopened.passage(id: passage.id)?.referenceLabel, "Romans 8:1 (WEB)")
@@ -177,10 +178,11 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(outline[parentIndex + 1].depth, outline[parentIndex].depth + 1)
         XCTAssertFalse(outline.contains { $0.collection.isUnfiled })
 
-        XCTAssertTrue(store.updateCollection(id: parent, name: " Psalms ", detail: " Songs ", accent: .indigo))
+        XCTAssertTrue(store.updateCollection(id: parent, name: " Psalms ", detail: " Songs ", accent: .indigo, icon: .bible))
         XCTAssertEqual(store.collection(id: parent)?.name, "Psalms")
         XCTAssertEqual(store.collection(id: parent)?.detail, "Songs")
         XCTAssertEqual(store.collection(id: parent)?.accent, .indigo)
+        XCTAssertEqual(store.collection(id: parent)?.icon, .bible)
         XCTAssertFalse(store.updateCollection(id: parent, name: "No Folder", detail: "", accent: .indigo))
         XCTAssertTrue(store.updateCollection(id: StudyCollection.unfiledID, name: "Renamed", detail: "", accent: .rose))
         XCTAssertEqual(store.collection(id: StudyCollection.unfiledID)?.name, "No Folder")
@@ -219,6 +221,22 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertNil(reopened.link(id: link))
         XCTAssertEqual(reopened.conversation(id: sample.id)?.title, "Sample conversation")
         XCTAssertTrue(reopened.contains(sample.id, in: folder))
+    }
+
+    func testVerseLinkStartsInNoFolderAndRetainsItsVerseIdentity() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("collections-" + UUID().uuidString, isDirectory: true)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await store.load()
+        let verse = VerseID(referenceSystemID: "org.openbible.web", book: "GEN", chapter: 1, verse: 1)
+        let id = try XCTUnwrap(store.addLink(title: "Creation study", url: "https://example.com/creation", verse: verse, editionID: "web.engwebp"))
+        XCTAssertTrue(store.collectionIDs(containing: id).isEmpty)
+        XCTAssertTrue(store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: []).contains { $0.id == id })
+        await store.flush()
+
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await reopened.load()
+        XCTAssertEqual(reopened.link(id: id)?.verse, verse)
+        XCTAssertEqual(reopened.link(id: id)?.editionID, "web.engwebp")
     }
 
     private func samplePassage(kind: SavedPassageKind, insight: String, endVerse: Int) -> SavedPassage {

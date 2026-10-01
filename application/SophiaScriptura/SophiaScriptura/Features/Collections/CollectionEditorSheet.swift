@@ -11,6 +11,7 @@ struct CollectionEditorSheet: View {
     @State private var name = ""
     @State private var detail = ""
     @State private var accent: CollectionAccent = .sage
+    @State private var icon: CollectionIcon = .folder
     @FocusState private var nameFocused: Bool
 
     private var editing: StudyCollection? { editingID.flatMap(store.collection(id:)) }
@@ -28,7 +29,7 @@ struct CollectionEditorSheet: View {
             Form {
                 Section {
                     HStack(spacing: 14) {
-                        CollectionFolderGlyph(accent: accent, unfiled: unfiled, size: 52)
+                        CollectionFolderGlyph(accent: accent, unfiled: unfiled, icon: icon, size: 52)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(unfiled ? "No Folder" : (trimmedName.isEmpty ? "Untitled" : trimmedName))
                                 .font(.system(.headline, design: .serif))
@@ -52,6 +53,11 @@ struct CollectionEditorSheet: View {
                             .submitLabel(.done)
                         TextField("Description (optional)", text: $detail, axis: .vertical)
                             .lineLimit(2...4)
+                    }
+                    .listRowBackground(Color(theme.palette.soft))
+
+                    Section("Icon") {
+                        CollectionIconGrid(selection: $icon)
                     }
                     .listRowBackground(Color(theme.palette.soft))
                 }
@@ -80,6 +86,7 @@ struct CollectionEditorSheet: View {
                 name = editing.isUnfiled ? "" : editing.name
                 detail = editing.detail
                 accent = editing.accent
+                icon = editing.icon ?? .folder
             } else {
                 accent = parentID.flatMap(store.collection(id:))?.accent ?? .sage
                 nameFocused = true
@@ -89,9 +96,9 @@ struct CollectionEditorSheet: View {
 
     private func commit() {
         if let editingID {
-            guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent) else { return }
+            guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent, icon: icon) else { return }
         } else {
-            guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent) != nil else { return }
+            guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent, icon: icon) != nil else { return }
         }
         dismiss()
     }

@@ -387,9 +387,11 @@ final class NotesTests: XCTestCase {
         session.redo(); XCTAssertEqual(session.note?.objects.count, 2)
         session.insert(.sticker, sticker: "🌿")
         session.metadata(title: "Study", tags: "", paper: .dotted)
+        session.setColor(.sage)
         await session.save()
         let reopened = try await store.load()
         XCTAssertEqual(reopened.snapshot.notes.first, session.note)
+        XCTAssertEqual(reopened.snapshot.notes.first?.color, .sage)
         XCTAssertEqual(reopened.snapshot.notes.first?.objects.last?.text, "🌿")
     }
     @MainActor func testCachedLinkThumbnailValidationAndRoundTrip() async throws {

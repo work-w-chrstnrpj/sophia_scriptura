@@ -57,6 +57,7 @@ final class NotesUITests: XCTestCase {
         title.tap(); title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (title.value as? String ?? "").count)); title.typeText("Canvas study")
         app.alerts.buttons["Save"].tap()
         app.buttons["notes.options"].tap(); app.buttons["Paper"].tap(); app.buttons["Dotted"].tap()
+        app.buttons["notes.options"].tap(); app.buttons["Note Color"].tap(); app.buttons["notes.color.sage"].tap()
         app.buttons["notes.shapes"].tap(); app.buttons["notes.shape.star"].tap()
         XCTAssertTrue(app.buttons["notes.action.duplicate"].waitForExistence(timeout: 5))
         app.buttons["notes.action.duplicate"].tap()

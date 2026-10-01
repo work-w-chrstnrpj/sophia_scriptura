@@ -22,7 +22,9 @@ Milestone ordering lives in the [development plan](../docs/development-plan/deve
 | [SP-012](SP-012-persistent-scripture-annotations.md) | in_progress; physical acceptance pending | Actual-reader layers, durable ink, recovery and annotation-only backup |
 
 | [SP-013](SP-013-freeform-notes.md) | in_progress; Canvas/Page implemented, physical acceptance pending | M4 Canvas/Page Notes, shared library, passage quotes and Notes-only recovery |
+| [SP-014](SP-014-pencil-shapes-and-app-icon.md) | implemented; physical acceptance pending | Shared held-stroke shape refinement, Notes ruler and Sophia app icon |
 | [SP-015](SP-015-collections-and-save-flow.md) | done; owner accepted 2026-10-02 | M5 persisted folders, No Folder, bookmark/gleaning save, move and cards |
+| [SP-016](SP-016-companion-planning-and-contracts.md) | done; owner approved 2026-10-02 | M6 multi-provider BYOK, Companion/Quiz design, data/privacy/recovery contracts and verification plan |
 
 ## Owner selection
 

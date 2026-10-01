@@ -14,9 +14,18 @@ conversation. Current SP-010 source/evidence records the Debug development autho
 and cached-access recovery; Release/Archive retains the standard lease. VoiceOver is
 waived for this M2 closure and SP-008 transition, not recorded as passed. Historical
 unrun accessibility/device cases remain evidence gaps, not blockers to this decision.
-SP-001 and later-feature SP-005 contracts remain in progress. The Canvas/Page redesign and first workspace refinement are installed. The owner then
+SP-001 and later-feature SP-005 contracts remain in progress. The Activity/Music behavior
+baseline was refined with the owner on 2026-10-01; M8 still awaits M7 and a bounded
+implementation ticket. The Canvas/Page redesign and first workspace refinement are installed. The owner then
 selected dark/light/dark ink correction, removal of reserved footer space across tabs,
 and consistent theme surfaces; this follow-up is implemented and installed under SP-013, with 35 selected checks passing.
+The owner then selected [SP-014](../../tickets/SP-014-pencil-shapes-and-app-icon.md) as a
+separate pre-M5 refinement: held Pencil strokes now refine into a bounded supported shape
+set across Notes and Scripture annotations, Notes includes the native ruler, and the supplied
+Sophia icon is compiled for default/dark/tinted appearances. Focused shape tests, the
+Notes/annotation regression, the Notes ruler, and the installed Home Screen icon pass on
+the iPad simulator. Endpoint snap, its Undo/Redo, palm rejection, and dark/tinted Home
+Screen appearances remain physical iPad checks. No M5 code is included.
 
 Confirmed: OldPaper reader UI baseline with seven selected color/type presets; bottom tabs; passage/Version controls with sequential Book → Chapter → Verse navigation;
 vertically scrolling Scripture pages; multiple annotation layers and three states;
@@ -26,7 +35,9 @@ selectable Scripture typeface; landscape verse-hub popovers; optional two-transl
 comparison aligned by canonical verse anchors; stable compact reader controls;
 expandable Notes with native Pencil palette, explicit grouping and direct text editing;
 nested Collections; four approved Companion presets and contextual follow-ups; human
-narration preference; manual tagged Activity with streaks/goals; local Settings and Files
+narration preference; six built-in Activity modes plus custom modes, a Reading start-to-end
+passage flow, pause-excluded duration, ten-minute daily goal/streak defaults, and
+human-composed instrumental ambient lo-fi background music; local Settings and Files
 backup/restore with optional reminders. A free base translation is acceptable.
 
 Existing evidence: scaffold, SP-006 sample and native test targets; prior build/unit and
@@ -94,9 +105,9 @@ by a final integrated acceptance pass. No date or effort estimate is implied.
 | M3 | Scripture annotations | in_progress; SP-012 implemented; verification/device acceptance pending | Multiple layers, three states, native tools, blank surrounding space and aligned persistent ink on continuous chapters | M2; demonstrated layout/gesture strategy; ink storage and recovery contract |
 | M4 | Study Notes | done; owner accepted 2026-10-01 | Canvas and Page editors sharing a library, citations, v3 recovery, a persisted Scripture-pane toggle and Scripture-to-note routing | M2 passage identity; M1 canvas evidence; tagged content/recovery plan; follows M3 in visible delivery |
 | M5 | Collections and full Save flow | done; owner accepted SP-015 on iPad 2026-10-02 | Nested topic folders, shared membership, bookmarks/gleanings/note quotes, attached links, organized verse hub and remove-versus-delete recovery rules | M4 note links and relevant SP-005 membership/deletion contracts |
-| M6 | Stateful Companion | blocked | Four approved contexts in working chat; follow-ups, passage Ask, panel/tab continuity, attributed sources and provider configuration | M5 integrated study artifacts; provider/source choice, privacy/context contracts and evaluations |
+| M6 | Stateful Companion | ready for a bounded implementation ticket; SP-016 planning approved | Multi-provider BYOK chat with four approved contexts, follow-ups, passage Ask, panel/tab continuity, attributed sources, provider configuration, structured Quiz Me and local question/score history | M5 integrated study artifacts; approved Companion design/data/privacy contracts; current provider API feasibility must be rechecked per adapter |
 | M7 | Scripture audio | blocked | Permitted human narration with playback controls and tested interruptions; explicit edition/availability handling | M2 reader and permitted audio source; follows M6 in visible delivery |
-| M8 | Activity and habits | blocked | Manual tagged timer, pause/corrections/manual entries, goals, streaks and local analytics | Session/day/goal rules reviewed; follows M7 in visible delivery |
+| M8 | Activity and background music | blocked by M7; behavior baseline recorded | Built-in and custom modes including Reviewing; cross-book Reading timer and verse range; manual records; goal/streak/period/mode analytics; human-composed instrumental ambient lo-fi; shared Now Active cluster; opt-out linked Reviewing records for Quiz Me | M7 narration arbitration; Activity design contract; remaining overlap/concurrency/midnight/per-book allocation decisions |
 | M9 | Integrated acceptance and refinement | pending | Owner-approved complete study journey, recovery drill, accessibility/performance evidence and resolved material defects | M2–M8 acceptance |
 
 M2–M8 are feature phases, not ticket numbers. SP-009 is the first M2 implementation
@@ -175,7 +186,14 @@ and passage. Verify removal does not unexpectedly delete the original artifact.
 
 ### M6: contextual conversation
 
-Integrate one chosen provider and accessible retrieval sources. Send the approved shared
+Implement the owner-approved provider-neutral boundary from
+[SP-016](../../tickets/SP-016-companion-planning-and-contracts.md), the
+[Companion design](../design/companion-screen-specification.md) and
+[data contract](../data/companion-contract.md). Sophia supports multiple configured BYOK
+adapters; OpenAI, Anthropic and Gemini are the intended first adapters, followed by an
+OpenAI-compatible custom-endpoint adapter. Each provider still requires a compatible
+adapter. Begin with one adapter as a bounded vertical slice, then prove additional adapters
+through the same conformance suite. Send the approved shared
 foundation and selected preset on each request. Save conversations locally; preserve
 follow-up passage/argument context, corrections and panel/tab/relaunch continuity. Manage
 context limits without promising perfect recall or importing unrelated chats implicitly.
@@ -186,8 +204,30 @@ partial replies and retries. Confirm what leaves the device, Keychain handling, 
 snapshot/version behavior and export exclusions. Add actual conversations to hub/Collections.
 Prompt approval alone does not satisfy this phase.
 
+Add Quiz Me as a structured Companion session with its own local history, separate from
+ordinary conversational turns. The owner-proposed quiz types are Identify the Verse (a
+question may quote up to three verses), Complete the Verse, Scripture or Cap, Who Said It?,
+Christian History through the early Church, and identifying the Bible reference for a
+displayed verse. Difficulty presets are Easy (10 questions, 1 point each), Average (5, 3
+points each), and Difficult (3, 5 points each); timed and untimed sessions are requested.
+Show a question, accept an answer, explain correctness, and proceed; retain the result and
+per-question history. Scripture answer keys must be tied to the selected permitted edition;
+Christian History answers need inspectable source provenance. An AI-generated explanation
+does not itself establish that the answer key is correct.
+
+SP-016 resolves the initial question controls, deterministic answer-validation boundary,
+per-question timers (Easy 60 seconds, Average 45, Difficult 30), points/percentage display,
+stored history and deletion behavior. **Record this as Reviewing** defaults on and may be
+disabled before a session. Completed or intentionally ended recorded sessions create a
+linked Reviewing record whose active duration counts toward the normal goal/streak; abandoned
+sessions require manual saving. Activity owns duration/goal records, not the quiz answer key,
+answers, score or explanation. Preserve quiz score/history in the Quiz session even if no
+Activity record is created.
+
 Owner review: one multi-turn study conversation in each mode, including a clarification,
-a reopened conversation and a source inspection. No provider purchase is implicitly authorized.
+a reopened conversation and a source inspection; plus representative timed/untimed Quiz Me
+runs with checked Scripture answer keys, sourced Christian History explanations, saved history,
+and the selected Reviewing-record flow. No provider purchase is implicitly authorized.
 
 ### M7: narrated Scripture
 
@@ -199,15 +239,34 @@ for the preferred human narration; propose an alternative if narration access is
 
 Owner review: listen while reading/writing and recover from interruptions.
 
-### M8: manual study activity
+### M8: Activity and background music
 
-Set activity-type tags and explicit goals. Define which sessions qualify for streaks,
-timezones/day boundaries, overlap, pause/resume and manual corrections before coding.
-Implement tagged sessions, goal/streak feedback and meaningful local analytics. Do not
-count merely opening the app as study or introduce automatic tracking without a decision.
-Extend export/restore to activity history and goal settings.
+The owner-approved behavior is recorded in the [Activity design specification](../design/activity-screen-specification.md).
+Implement six built-in modes plus user-created modes, including Reviewing; one timestamp-based
+timer that survives backgrounding/relaunch and excludes paused intervals; Reading start/end reference capture
+with a fading start highlight and Scripture routing; manual entry with required title, mode,
+date and duration; and correction/history flows. Reading stores one continuous range across
+chapters/books. Add the default ten-active-minute daily goal and streak threshold, configurable
+goals, and local daily/weekly/monthly totals and mode summaries.
 
-Owner review: create, pause, finish and correct sessions, then verify totals and streaks.
+Provide a Background Music floating action button and track selection in Settings, plus a
+shared collapsible Now Active shell cluster. Bundle
+only a small human-composed, instrumental ambient-lo-fi, vocal-free collection after recording
+and reviewing track-level rights evidence. Playback starts only on explicit user action and
+continues when the app backgrounds or the screen locks. Starting Scripture narration pauses
+music; choosing Play for music pauses narration. The two player states remain independent of
+Activity time. If neither a timer/session nor music service is in use, hide the cluster.
+
+Before the implementation ticket is ready, settle whether one concurrent timer is supported,
+manual overlap correction, midnight metric attribution, custom-mode archival/deletion, and
+how per-book reading minutes are derived from a cross-book range. Extend Files backup/restore
+to Activity data and settings. Do not count app open as study or fabricate per-book allocation.
+
+Owner review: start Reading from a selected verse, pause/resume across tabs and relaunch,
+finish at a later verse, verify manual entry and corrections, review local metrics/streaks,
+play/change/pause music, lock/background the iPad, and exercise narration/music arbitration.
+Also verify a completed Quiz Me session can be associated with a Reviewing record according
+to the approved M6/M8 integration policy, without duplicating quiz answers or score data.
 
 ### M9: the complete Sophia workflow
 
@@ -228,7 +287,8 @@ separate; review growth in responsibilities before adding features. Packages and
 must have a purpose, not exist solely to fit a template.
 
 Settings ships with the relevant feature: reader theme/fonts in M2, drawing preferences in
-M3/M4, provider/preset configuration in M6, listening in M7 and goals in M8. No Sophia login.
+M3/M4, provider/preset configuration in M6, listening in M7, and Activity goals plus the
+Background Music library in M8. No Sophia login.
 Files backup/restore is designed in SP-005 and verified before relying on irreplaceable
 study content; M3 is the latest first durable annotation checkpoint. Extend it with every
 new data type and offer optional reminders. Do not postpone data safety until M9.
@@ -271,11 +331,11 @@ planning. Old P1–P7 scaffold comments are not the active plan.
 | --- | --- | --- |
 | Product specification | Requirements and open questions drafted | SP-001: review scope/terminology with owner |
 | TDD | Corrected planning draft; candidates distinguished from decisions | SP-002–005: replace assumptions with evidence |
-| UX specification | Scripture OldPaper direction and seven appearance presets owner-selected; other feature screens and shared shell detail remain design work | SP-001: review full shared frame and feature journey; SP-004 remaining Notes details; SP-008 accepted validation; SP-011 shell refinement |
-| Screen specifications | OldPaper Scripture direction is selected; App shell, detailed Scripture interactions, Notes and Collections still have proposed details | SP-001: review shared frame, accessibility and current detail; then design Companion, Activity and Settings |
-| Data model and recovery contract | Reader contract accepted; later Notes/ink/media, membership and full backup contracts remain open | SP-009 implementation; later SP-005 feature slices |
-| Integration specification | SP-002 findings in TDD §8 and `docs/integrations/scripture-content.md` | Import implementation and optional provider entitlements; later Companion planning |
-| Test specification/manual cases | SP-006 evidence plus twelve reader data cases and SP-009 acceptance plan documented | Execute with SP-009; add later feature recovery cases in SP-005 |
+| UX specification | Scripture OldPaper direction and seven appearance presets owner-selected; Activity design baseline recorded; some feature visuals remain open | SP-001: review full shared frame and feature journey; SP-004 remaining Notes details; SP-011 shell refinement |
+| Screen specifications | OldPaper Scripture, app shell, Notes, Collections, Companion and Activity/background music design recorded | Review Settings flows and feature-specific physical acceptance during implementation |
+| Data model and recovery contract | Reader, annotations, Notes and Companion contracts recorded; Collections generation behavior implemented | Extend integrated Files backup/recovery with each selected implementation ticket |
+| Integration specification | Scripture/content findings plus SP-016 multi-provider/retrieval boundary recorded | Recheck current official provider APIs and rights before each adapter implementation |
+| Test specification/manual cases | Existing feature evidence plus M6 adapter/context/recovery/evaluation targets documented | Convert M6 targets into executable cases with each selected implementation ticket |
 | Deployment guide | Personal signing and run guide documented | SP-001/005: signing, selected Xcode, actual simulator/device instructions |
 | Architecture decision records and diagrams | Keep diagrams beside decisions in the TDD/design pages; empty diagram files removed | Each spike records alternatives, selected approach, consequences, and evidence |
 | Project structure | Current scaffold and proposed boundaries documented | Update when approved implementation changes structure |

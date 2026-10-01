@@ -310,7 +310,16 @@ alone is not permission to retain a full text.
 - `SavedVerse(id, verseRef, versionId, snapshotText, kind, createdAt, noteId?)`
   - `kind`: gleaning | bookmark | noteQuote.
 - `LinkAttachment(id, url, title, verseRef?, createdAt)`
-- `ActivitySession(id, start, end, source, label)` — source: timer | manual.
+- `ActivityRecord` — M8 design is specified in
+  [Activity and background music](../design/activity-screen-specification.md). Persist
+  required title, mode ID/label snapshot, activity date, active duration, source, optional
+  actual start/end instants, timezone, pause intervals, optional continuous reading range
+  and edition, description, and creation/update times. Built-in/custom mode registry,
+  overlap policy, midnight allocation, concurrency, and per-book minute allocation remain
+  open; do not ship the earlier `ActivitySession(start,end,source,label)` sketch.
+- `ActivityMode(id, name, kind)` — built-in modes are Reading, Studying, Meditating,
+  Journaling, Memorizing Verses and Reviewing; user-created custom modes are supported.
+  Icon/color fields and whether a custom mode is archived or deleted remain design choices.
 - `PromptPreset(id, name, systemInstruction, isBuiltIn, options{...})`
 
 ### 7.4 File store
@@ -516,7 +525,9 @@ Proposed responsibilities:
   Do not include unrelated conversations, private notes or the entire library implicitly.
 - Provider adapter: translate the composed request into the selected provider's supported
   message roles and context limits. A new API call must not be assumed to remember earlier
-  requests automatically. Provider choice and exact composition contract remain open.
+  requests automatically. SP-016 selects the multi-adapter BYOK boundary and local
+  context-composition contract; each implementation ticket rechecks its provider's current
+  API and model capabilities.
 - Long conversations: reserve room for the answer and current question; preserve recent
   turns and important explicit corrections, using provenance-linked summaries or selected
   older messages when history exceeds the context budget. Summaries are lossy and may be
@@ -544,23 +555,107 @@ positions, including relevant non-Christian perspectives, evidence weighting and
 It remains transparent about the shared Christian foundation rather than claiming freedom
 from all bias. Both inherit the approved shared guardrail; both are owner-approved. No request, retrieval integration or model evaluation ran for these prompt edits.
 
+### 12.3 Quiz Me — owner-approved planning baseline
+
+REQ-025 adds Quiz Me as a structured mode within Companion, separate from ordinary chat
+turns. The six proposed quiz types are Identify the Verse (a passage of up to three verses),
+Complete the Verse, Scripture or Cap, Who Said It?, Christian History from Bible history
+through the early Church, and identifying the reference for a displayed verse. Difficulty
+presets are Easy (10 questions at 1 point each), Average (5 at 3 points each), and Difficult
+(3 at 5 points each). Timed and untimed sessions are requested. The question appears in a
+centered card; after an answer the session explains correctness, records the result, and
+continues. Quiz history retains session results and per-question history locally.
+
+Use distinct logical concepts for a Quiz session, its question/answer key and source metadata,
+and the user's attempt/result; final persistence schema and retention rules remain for the
+implementation ticket. Validate Scripture keys against the selected permitted edition and
+reference. Christian History answers need inspectable source provenance. The model may help
+compose questions and explanations, but free-form model output alone must not establish the
+answer key. Do not transmit full licensed Scripture text to a provider unless its content
+rights permit that use. Show edition/source context with the explanation when applicable.
+
+Quiz Me is launched and reviewed in Companion. Answer controls and authoritative validation
+are defined in the [Companion design](../design/companion-screen-specification.md): Scripture
+modes use canonical local keys and curated ambiguity-reviewed fixtures; Scripture or Cap
+uses deterministic altered decoys; Christian History uses inspectable primary, official or
+academic/reference provenance. Model output may help compose wording and explanations but
+cannot approve its own key.
+
+Untimed is the default. Timed mode uses per-question limits of 60 seconds for Easy, 45 for
+Average and 30 for Difficult; background/system interruptions, between-question transitions
+and feedback pause the timer. Expiry records Unanswered and awards zero without hiding the
+explanation. Results show points and percentage without speed bonuses. Complete the Verse
+normalizes case, surrounding punctuation and repeated whitespace while keeping Nearly
+correct distinct from exact Correct.
+
+Quiz history, deletion and recovery follow the
+[Companion contract](../data/companion-contract.md). **Record this as Reviewing** defaults on
+and may be disabled before starting. Completed or intentionally ended recorded sessions
+create a linked Reviewing record; active quiz time counts toward the normal Activity goal and
+streak. Abandoned sessions do not create one automatically. Activity stores duration/date,
+mode/title and quiz-session ID only; Quiz history owns correctness, answers, score, sources
+and explanations. This is approved design scope, not runtime implementation authorization.
+
+### 12.4 Multi-provider BYOK — owner-approved planning baseline
+
+Sophia supports multiple configured providers through compatible adapters. The intended
+first adapters are OpenAI, Anthropic and Gemini; a custom OpenAI-compatible endpoint follows.
+This does not promise automatic compatibility with arbitrary APIs. Each conversation pins
+one provider, model, capability snapshot and resolved preset snapshot. Switching provider
+creates an explicit branch after disclosing the context copied; it never silently mutates
+the existing conversation.
+
+Local history is authoritative. `LLMProviderAdapter` normalizes streaming text, sources,
+tool activity, usage, completion, refusal, interruption and failure while preserving
+provider-specific payloads inside Infrastructure. Capabilities are advertised rather than
+assumed. Provider-side continuation identifiers may optimize a request but never replace
+local messages or context composition. See the
+[Companion data contract](../data/companion-contract.md).
+
+Only displayed, deliberately selected context leaves the device. Local Scripture retrieval
+and answer keys remain Sophia-owned and permission-aware. Provider retrieval is optional and
+must return inspectable evidence; otherwise the UI states that no external sources were
+retrieved. Keys are stored per provider/account in Keychain and excluded from records, logs,
+diagnostics and exports.
+
 ## 13. Audio, Activity, Settings
 
 - Audio: human narration preferred where permitted; on-device `AVSpeechSynthesizer`
   only for content whose permissions allow it. Share playback state with the reader;
   synchronized verse highlighting depends on actual timing data. Test interruptions,
   screen lock, chapter completion, and missing voices/audio on the owner's device.
-- Activity: a manually triggered timer with activity-type tags plus manual start/end
-  entry, pause/resume and corrections writes proposed `ActivitySession`s. Streaks and goals
-  are confirmed; qualifying rules remain open.
-  Analytics (streaks, weekly minutes, per-book time) are computed locally from sessions.
-- Activity design must define book/reference capture, pause/resume, overlapping manual
-  entries, local-day boundaries, and whether listening counts. The current entity sketch
-  lacks book/reference fields, so per-book analytics are not yet implementation-ready.
+- Activity: the owner-approved M8 behavior, data shape, metrics, Reading workflow and open
+  decisions are maintained in the [Activity design](../design/activity-screen-specification.md).
+  The screen offers Reading, Studying, Meditating, Journaling, Memorizing Verses, Reviewing
+  and custom modes; only Reading automatically routes to Scripture. Reading stores one inclusive
+  continuous reference range, including cross-book ranges, with separate records for
+  disconnected passages. Starting highlights the initial verse temporarily; finish requires
+  an ending verse. A session survives backgrounding/relaunch, pauses/resumes, and computes
+  active duration excluding pause intervals. Manual records require title, mode, date and
+  duration; optional actual start/end clock times derive duration automatically.
+- A completed Activity record has required title, mode, activity date and duration, with
+  optional wall-clock range, description, and structured reading range/edition. Suggested
+  local metrics are daily/weekly/monthly active minutes, mode totals, configurable daily
+  goal, and current/best streak. The default goal and streak threshold are both ten active
+  minutes per local calendar day; completed timer and manual records count. Counting custom
+  modes under the same rule is proposed, not explicitly decided. Per-book time needs an
+  owner-approved allocation rule because an overall duration
+  and a cross-book range do not reveal time spent in each book. Overlaps, simultaneous
+  timers, midnight attribution and custom-mode deletion are also open; no silent double
+  counting or fabricated allocations.
+- Background music is human-composed instrumental ambient lo-fi without vocals. It is
+  separate from Activity timing and Scripture narration, starts only on explicit Play, and
+  continues across tabs/background/screen lock. Starting Scripture narration pauses music;
+  explicitly resuming music pauses narration. One collapsible shell cluster shows only
+  services that are currently in use and disappears when neither music nor an Activity
+  session is active, paused, or awaiting completion. Bundle only individually rights-checked
+  recordings; preserve track provenance and license evidence. The CC0 deed is a candidate
+  rights framework, not evidence that any specific recording is cleared. See the Activity
+  design for shell behavior and remaining track decisions.
 - Settings (fills the idea's gaps): theme mode; font family/size/line spacing;
   default translation; red-letter toggle; TTS voice and speed; AI provider + key + model
   + temperature; prompt-preset editor; data export/import; storage usage; cache refresh;
-  About/attribution.
+  About/attribution; and a Background Music library with track/playback controls.
 
 ## 14. Security Constraints
 
@@ -826,3 +921,17 @@ or choose an existing note; Page inserts an inline citation and Canvas inserts a
 object. The reader no longer shows transient annotation save/undo messages or repeats the
 book/chapter beneath the reader. The floating tab selector now hides after three seconds.
 This closes M4/SP-013; M3's separate actual-reader annotation acceptance remains open.
+
+## SP-014 shared Pencil refinement and app identity — 2026-10-01
+
+Production Notes and Scripture annotations share a presentation-layer Pencil refinement
+component. A Pencil-only endpoint pause marks the single new stroke as eligible; conservative
+geometry recognizes a line, arrow, ellipse, rectangle or a bounded polygon/star set and
+replaces only that stroke inside the existing `PKDrawing`. Feature controllers retain undo,
+viewport and persistence ownership. Unsupported or ambiguous input stays unchanged, and no
+new storage schema is introduced. Notes' bounded native palette now retains the ruler.
+
+The app target's existing `AppIcon` setting is fulfilled by a universal asset set using
+the owner-supplied default, dark and tinted artwork. Clear system treatments are derived by
+iPadOS rather than represented as unsupported asset-catalog roles. See SP-014 for automated
+evidence and the remaining physical Pencil/icon appearance checks. This work does not start M5.

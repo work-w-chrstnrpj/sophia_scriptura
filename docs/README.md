@@ -18,6 +18,9 @@ Start with the [development plan](development-plan/development-plan.md) and
 | [Scripture rendering decision](design/scripture-rendering-decision.md) | SP-003 page geometry, selection and native validation gates |
 | [Notes screen specification](design/notes-screen-specification.md) | Notes library, expandable canvas, objects, grouping, recovery and acceptance scenarios |
 | [Collections screen specification](design/collections-screen-specification.md) | Nested topic folders, shared memberships, mixed artifacts, removal and recovery |
+| [Companion screen specification](design/companion-screen-specification.md) | M6 multi-provider chat, selected context, sources, Quiz Me and Reviewing linkage |
+| [Companion data contract](data/companion-contract.md) | Provider adapters, local conversation/quiz identity, privacy, recovery and export boundaries |
+| [Activity and background music](design/activity-screen-specification.md) | M8 modes, Reading timer flow, manual records, metrics, music sourcing and shared controls |
 | [Canvas comparison](design/notes-canvas-review.md) | Why expandable canvas was selected |
 | [Canvas interactions](design/canvas-interactions.md) | Grouping and interaction proposal |
 | [Project structure](project-structure/project-structure.md) | Actual source responsibilities and proposed boundaries |

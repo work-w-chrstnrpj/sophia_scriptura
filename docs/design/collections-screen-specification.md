@@ -68,8 +68,11 @@ are no decorative button capsules or duplicated navigation titles.
 
 - **New Folder** creates a collection with an editable name and optional description.
   It opens the new collection so the owner can add the first item immediately.
-- **Cards** show name, direct-item count, child-folder count, optional owner-selected
-  color/icon, and modified date. The count must distinguish direct items from descendants.
+- **Cards** show name, direct-item count, child-folder count, owner-selected color and
+  one of the collection editor's consistent filled-symbol icons. The existing filled
+  folder remains the default. The count must distinguish direct items from descendants.
+- Long-pressing a collection card or child-folder tile exposes **Edit Collection** and
+  **Delete Collection**. No Folder exposes only its allowed color edit.
 - **Search** searches collection names, descriptions, tags and indexed item titles/references
   available locally. Results identify whether the match is a folder or an artifact.
 - **Sort** supports Name, Recently modified and Item count. Name sorting is locale-aware;
@@ -107,9 +110,11 @@ material** and **Create child folder**.
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-The header contains breadcrumb navigation, title, optional description, direct-item count,
+The header contains breadcrumb navigation, an editable title, optional description, direct-item count,
 child-folder count and More actions. Child folders are visible before artifacts so the
 hierarchy remains understandable. The item area supports type filters and a stable sort.
+Tapping the title opens the same collection editor used by **Edit Collection** so name,
+description and color changes follow one validation and persistence path.
 
 ### Direct items and descendants
 
@@ -181,6 +186,13 @@ When a verse hub lists collections, it shows direct membership names and a count
 additional descendant context only when the owner enables that view. Tapping a collection
 opens its detail page with the verse or artifact highlighted. Removing membership from the
 hub uses the same Remove from this collection language as the Collections tab.
+
+Saved bookmarks and gleanings show their direct collection folder names below the passage
+reference. A gleaning's insight does not replace this placement label; unfiled items show no
+folder label. The hub also supports authorized Copy and Share actions, with a short-lived
+success message after Copy. **Add Link** validates an http/https URL, anchors the link to the
+current verse/edition, and initially leaves it in No Folder. Existing links without verse
+metadata remain valid collection items but do not appear as verse-attached links.
 
 The hub and collection detail query the same membership records. They must not maintain
 separate bookmark lists that can drift apart.
@@ -269,7 +281,7 @@ stores directly.
 
 ## Open decisions before implementation
 
-- Exact folder card visual treatment, optional color/icon choices and preview policy.
+- Exact folder card preview density beyond the implemented color and filled-symbol choices.
 - Whether the initial library needs a list toggle or only an accessible row fallback.
 - Child-folder deletion policy confirmation: promote children to the former parent/root.
 - Whether parent views should default to direct items only or remember Include child folders.

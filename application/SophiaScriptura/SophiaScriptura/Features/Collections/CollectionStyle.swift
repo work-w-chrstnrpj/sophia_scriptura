@@ -59,15 +59,42 @@ enum CollectionCount {
 struct CollectionFolderGlyph: View {
     let accent: CollectionAccent
     var unfiled = false
+    var icon: CollectionIcon = .folder
     var size: CGFloat = 44
 
     var body: some View {
-        Image(systemName: unfiled ? "tray.fill" : "folder.fill")
+        Image(systemName: unfiled ? "tray.fill" : icon.symbolName)
             .font(.system(size: size * 0.46, weight: .medium))
             .foregroundStyle(accent.color)
             .frame(width: size, height: size)
             .background(accent.color.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
             .accessibilityHidden(true)
+    }
+}
+
+struct CollectionIconGrid: View {
+    @Environment(\.appTheme) private var theme
+    @Binding var selection: CollectionIcon
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 52, maximum: 60), spacing: 10)], spacing: 10) {
+            ForEach(CollectionIcon.allCases) { icon in
+                let selected = icon == selection
+                Button { selection = icon } label: {
+                    Image(systemName: icon.symbolName)
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(selected ? Color(theme.palette.paper) : Color(theme.palette.ink))
+                        .frame(width: 44, height: 44)
+                        .background(selected ? Color(theme.palette.accent) : Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 13))
+                        .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(theme.palette.rule), lineWidth: selected ? 0 : 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(icon.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("collections.icon.\(icon.rawValue)")
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

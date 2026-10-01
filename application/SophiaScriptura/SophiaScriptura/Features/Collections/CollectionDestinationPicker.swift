@@ -73,7 +73,7 @@ struct CollectionFolderChooser: View {
             toggle(folder.id)
         } label: {
             HStack(spacing: 12) {
-                CollectionFolderGlyph(accent: folder.accent, size: 32)
+                CollectionFolderGlyph(accent: folder.accent, icon: folder.icon ?? .folder, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(folder.name)
                         .font(.body)

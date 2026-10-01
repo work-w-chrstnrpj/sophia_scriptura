@@ -12,6 +12,8 @@ struct CollectionsView: View {
     @State private var searchPresented = false
     @State private var sort: CollectionLibrarySort = .modified
     @State private var showingNewCollection = false
+    @State private var editingCollection: StudyCollection?
+    @State private var deletingCollection: StudyCollection?
 
     private var unfiled: StudyCollection? { store.collection(id: StudyCollection.unfiledID) }
 
@@ -81,6 +83,21 @@ struct CollectionsView: View {
             .sheet(isPresented: $showingNewCollection) {
                 CollectionEditorSheet(store: store, parentID: nil)
             }
+            .sheet(item: $editingCollection) { collection in
+                CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collection.id)
+            }
+            .alert(
+                deletingCollection.map { "Delete \($0.name)?" } ?? "Delete Collection?",
+                isPresented: Binding(get: { deletingCollection != nil }, set: { if !$0 { deletingCollection = nil } })
+            ) {
+                Button("Delete Collection", role: .destructive) {
+                    if let collection = deletingCollection { store.deleteCollection(id: collection.id) }
+                    deletingCollection = nil
+                }
+                Button("Cancel", role: .cancel) { deletingCollection = nil }
+            } message: {
+                Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
+            }
         }
     }
 
@@ -99,13 +116,23 @@ struct CollectionsView: View {
             label()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(collection.isUnfiled ? "Change Color" : "Edit Collection", systemImage: collection.isUnfiled ? "paintpalette" : "pencil") {
+                editingCollection = collection
+            }
+            if !collection.isUnfiled {
+                Button("Delete Collection", systemImage: "trash", role: .destructive) {
+                    deletingCollection = collection
+                }
+            }
+        }
         .accessibilityIdentifier("collections.folder.\(collection.name)")
     }
 
     private func noFolderCard(_ collection: StudyCollection) -> some View {
         let count = store.unfiledCount(notes: notes.snapshot.notes)
         return HStack(spacing: 16) {
-            CollectionFolderGlyph(accent: collection.accent, unfiled: true, size: 48)
+            CollectionFolderGlyph(accent: collection.accent, unfiled: true, icon: collection.icon ?? .folder, size: 48)
             VStack(alignment: .leading, spacing: 3) {
                 Text("No Folder")
                     .font(.system(.headline, design: .serif).weight(.semibold))

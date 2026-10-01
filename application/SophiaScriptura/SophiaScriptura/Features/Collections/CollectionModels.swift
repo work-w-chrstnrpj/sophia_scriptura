@@ -68,6 +68,44 @@ enum CollectionAccent: String, Codable, CaseIterable, Hashable, Identifiable {
     }
 }
 
+enum CollectionIcon: String, Codable, CaseIterable, Hashable, Identifiable {
+    case folder, bible, bookmark, lightbulb, heart, cross, leaf, flame, star, person, people, question
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .folder: return "Folder"
+        case .bible: return "Bible"
+        case .bookmark: return "Bookmark"
+        case .lightbulb: return "Insight"
+        case .heart: return "Heart"
+        case .cross: return "Cross"
+        case .leaf: return "Growth"
+        case .flame: return "Flame"
+        case .star: return "Star"
+        case .person: return "Person"
+        case .people: return "People"
+        case .question: return "Question"
+        }
+    }
+    var symbolName: String {
+        switch self {
+        case .folder: return "folder.fill"
+        case .bible: return "book.closed.fill"
+        case .bookmark: return "bookmark.fill"
+        case .lightbulb: return "lightbulb.fill"
+        case .heart: return "heart.fill"
+        case .cross: return "cross.fill"
+        case .leaf: return "leaf.fill"
+        case .flame: return "flame.fill"
+        case .star: return "star.fill"
+        case .person: return "person.fill"
+        case .people: return "person.2.fill"
+        case .question: return "questionmark"
+        }
+    }
+}
+
 struct CollectionOutlineEntry: Identifiable {
     let collection: StudyCollection
     let depth: Int
@@ -92,6 +130,7 @@ struct StudyCollection: Codable, Identifiable, Hashable {
     var detail: String
     var parentID: UUID?
     var accent: CollectionAccent
+    var icon: CollectionIcon? = nil
     var modifiedAt: Date
     var isUnfiled: Bool = false
 
@@ -154,6 +193,8 @@ struct SavedLink: Codable, Identifiable, Hashable {
     var title: String
     var url: String
     var createdAt: Date
+    var verse: VerseID? = nil
+    var editionID: String? = nil
 }
 
 /// A conversation a collection can hold. The sample stays until Companion can create real ones.

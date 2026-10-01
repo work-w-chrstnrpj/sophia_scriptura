@@ -33,7 +33,7 @@ and export a Notes backup before replacement/restore tests.
 7. **Scripture:** hide/show with the toolbar button; passage/edition remain. Relaunch and
    confirm visibility is remembered. Select a passage → Save to note: an open note receives
    it directly; otherwise choose New Page, New Canvas or an existing note. Page gets source
-   and inline citation, Canvas gets a quote object. Try authorized translations. Hide Scripture
+   and inline citation at the end of its body, Canvas gets a quote object. Try authorized translations. Hide Scripture
    and tap the citation: it reveals and navigates to the saved edition/passage. Verse hub
    uses the same destination flow; existing linked notes reopen the same note.
 8. **Legacy notes:** old object-only notes open as Canvas without altering IDs, geometry or

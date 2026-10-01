@@ -325,6 +325,21 @@ final class NotesTests: XCTestCase {
         XCTAssertEqual(session.snapshot.notes.first { $0.id == pageID }?.page?.citations.first?.quote, quote)
         XCTAssertTrue(session.snapshot.notes.first { $0.id == canvasID }?.objects.isEmpty == true)
     }
+    @MainActor func testPageQuoteAppendsAfterExistingBodyWhenThereIsNoActiveCaret() async throws {
+        let quote = NoteQuote(verse: VerseID(book: "ROM", chapter: 8, verse: 1), editionID: "web.engwebp", contentRevision: "fixture", attribution: "WEB", source: "Fixture")
+        let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
+        await session.load()
+        _ = session.create(kind: .page)
+        session.replaceBody(NSRange(location: 0, length: 0), with: "Existing reflection\n")
+        session.open(try XCTUnwrap(session.selectedNoteID))
+
+        session.appendQuote(quote)
+
+        let page = try XCTUnwrap(session.note?.page)
+        XCTAssertTrue(page.body.hasPrefix("Existing reflection\n"))
+        XCTAssertEqual(page.citations.first?.location,
+                       "Existing reflection\n\n\nFixture\n".utf16.count)
+    }
 
     func testSemanticInkAdaptsWithoutChangingGeometryOrUneditedPayload() throws {
         var original = try PKDrawing(data: drawing())

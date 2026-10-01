@@ -266,7 +266,13 @@ import ImageIO
         guard selectedNoteID != nil else { _ = create(quote: quote); return }
         flushSurface?()
         edit { note in
-            if note.kind == .page { note.page?.insert(quote, at: bodySelection.location) }
+            if note.kind == .page {
+                // Scripture saves are append-only. A reopened Page has no active body caret,
+                // so retaining its previous selection would otherwise insert at the beginning.
+                guard var page = note.page else { return }
+                page.insert(quote, at: page.body.utf16.count)
+                note.page = page
+            }
             else {
                 var object = NoteObject(kind: .quote, quote: quote)
                 object.frame.origin.y = min(NoteDocument.extent - 600, (note.objects.last?.frame.maxY ?? 60) + 40)

@@ -183,7 +183,7 @@ plan above supersedes the one-editor interaction rules after review.
    citation. The verse hub still supports Quote verse in new note.
 3. The note's reader supports chapter/book/verse and translation navigation. Selecting
    text → Save to note, or tapping a verse → Insert verse and citation, adds to the
-   current note at the last body cursor. Tapping a citation navigates the reader.
+   current note at the end of its body. Tapping a citation navigates the reader.
 4. Citation metadata retains source, passage range, edition, revision and attribution.
    Editing through a citation removes its link instead of attaching it to unrelated text.
 5. Owner confirmed permission for personal note quotations from the existing translations.

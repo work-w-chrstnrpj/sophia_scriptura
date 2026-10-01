@@ -506,3 +506,11 @@ counted as a pass. The final signed build passed strict verification, installed 
 and launched normally (`final-device-build.log`, `final-signature.log`, `final-install.log`,
 `final-launch.log`). This closes M4/SP-013. M3's independent
 actual-reader annotation and Files-recovery acceptance remains out of scope and open.
+
+### Post-closure correction — append Scripture quotes and normalize library cards — 2026-10-01
+
+After owner testing, saving a passage to a reopened Page was found to use the reset body
+selection at offset zero. Page quotation insertion now always appends to the end of the
+body; Canvas keeps appending its quote object after existing objects. Notes-library cards
+now have a consistent 220-point height for both Page and Canvas documents. Focused iPad
+Notes regression evidence: `build/sp013/post-close-fixes/notes-r2.xcresult` (25 passed).

@@ -106,7 +106,11 @@ struct NotesView: View {
             if cards { Text((note.page?.body.isEmpty == false ? note.page?.body : nil) ?? note.objects.first.map { $0.quote?.source ?? ($0.text.isEmpty ? $0.kind.rawValue.capitalized : $0.text) } ?? "Blank note").lineLimit(4).frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading) }
             Text(note.updatedAt, style: .date).font(.caption).foregroundStyle(.secondary)
             if deleted { Button("Restore note") { session.delete(note.id, restore: true) } }
-        }.frame(maxWidth: .infinity, alignment: .leading).padding().background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: cards ? 16 : 6)).overlay(RoundedRectangle(cornerRadius: cards ? 16 : 6).stroke(.secondary.opacity(0.25)))
+        }
+        .frame(maxWidth: .infinity, minHeight: cards ? 220 : nil, maxHeight: cards ? 220 : nil, alignment: .leading)
+        .padding()
+        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: cards ? 16 : 6))
+        .overlay(RoundedRectangle(cornerRadius: cards ? 16 : 6).stroke(.secondary.opacity(0.25)))
     }
 }
 

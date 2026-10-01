@@ -77,8 +77,10 @@ final class NotesUITests: XCTestCase {
         let app = launch()
         let verse = app.links.firstMatch
         XCTAssertTrue(verse.waitForExistence(timeout: 10)); verse.tap()
-        XCTAssertTrue(app.buttons["Quote verse in new note"].waitForExistence(timeout: 5))
-        app.buttons["Quote verse in new note"].tap()
+        XCTAssertTrue(app.buttons["Save verse to note"].waitForExistence(timeout: 5))
+        app.buttons["Save verse to note"].tap()
+        XCTAssertTrue(app.buttons["scripture.saveNote.newPage"].waitForExistence(timeout: 5))
+        app.buttons["scripture.saveNote.newPage"].tap()
         XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.navigationBars["GEN 1:1"].exists)
         XCTAssertTrue(app.buttons["notes.reader.book"].waitForExistence(timeout: 5))
@@ -161,7 +163,9 @@ final class NotesUITests: XCTestCase {
     func testCitationRevealsHiddenScripture() {
         let app = launch()
         let verse = app.links.firstMatch; XCTAssertTrue(verse.waitForExistence(timeout: 10)); verse.tap()
-        app.buttons["Quote verse in new note"].tap()
+        app.buttons["Save verse to note"].tap()
+        XCTAssertTrue(app.buttons["scripture.saveNote.newPage"].waitForExistence(timeout: 5))
+        app.buttons["scripture.saveNote.newPage"].tap()
         XCTAssertTrue(app.buttons["notes.scripture.toggle"].waitForExistence(timeout: 10))
         let toggle = app.buttons["notes.scripture.toggle"]
         if toggle.label == "Show Scripture" { toggle.tap() }

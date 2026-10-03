@@ -21,6 +21,7 @@ struct ScriptureView: View {
     @State private var hubMessage: String?
     @State private var hubShare: HubShare?
     @State private var wideLayout = false
+    @State private var landscapeLayout = false
     @State private var confirmDeleteLayer = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
@@ -33,40 +34,42 @@ struct ScriptureView: View {
     var body: some View {
         ZStack {
             VStack(spacing:0) {
-            HStack(spacing:16) {
-                if wideLayout {
-                    VStack(alignment:.leading,spacing:4) {
-                        Text("Sophia Scriptura").font(.custom("Georgia",size:22,relativeTo:.title2))
-                        Text("READ · REFLECT · REMEMBER").font(.caption2).tracking(2)
-                            .foregroundStyle(Color(palette.secondary))
+            Group {
+                if landscapeLayout {
+                    HStack(spacing: 16) {
+                        if wideLayout {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Sophia Scriptura").font(.custom("Georgia", size: 22, relativeTo: .title2))
+                                Text("READ · REFLECT · REMEMBER").font(.caption2).tracking(2)
+                                    .foregroundStyle(Color(palette.secondary))
+                            }
+                            Spacer(minLength: 16)
+                        }
+                        readerBookVersionPicker
+                        if !wideLayout { Spacer(minLength: 0) }
                     }
-                    Spacer(minLength:16)
+                    .padding(.horizontal, 24)
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if wideLayout {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Sophia Scriptura").font(.custom("Georgia", size: 22, relativeTo: .title2))
+                                Text("READ · REFLECT · REMEMBER").font(.caption2).tracking(2)
+                                    .foregroundStyle(Color(palette.secondary))
+                            }
+                            .padding(.horizontal, 24)
+                        }
+                        HStack(spacing: 16) {
+                            readerBookVersionPicker
+                            if !wideLayout { Spacer(minLength: 0) }
+                        }
+                        .shellTabDockLeadingAlignment()
+                    }
                 }
-                HStack(spacing:0) {
-                Button { picker = .book } label: {
-                    Text(selectedBookTitle)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(width: bookButtonWidth, height:44)
-                }.accessibilityIdentifier("reader.book")
-                    .accessibilityLabel("Book, \(session.title)")
-                    .accessibilityValue(session.title)
-                    .disabled(session.document == nil)
-                Rectangle().fill(Color(palette.rule)).frame(width:1,height:22)
-                Button { picker = .version } label: {
-                    Text(session.abbreviation)
-                        .frame(minWidth:82,minHeight:44)
-                }.accessibilityIdentifier("reader.version")
-                    .accessibilityLabel("Version, \(session.abbreviation)")
-                }
-                .background(Color(palette.paper),in:Capsule())
-                .overlay(Capsule().stroke(Color(palette.rule),lineWidth:1))
-                .shadow(color:Color.black.opacity(0.04),radius:8,y:3)
-                if !wideLayout { Spacer(minLength:0) }
-            }.font(ScriptureFonts.interface(appearance))
-                .buttonStyle(.plain)
-                .shellTabDockLeadingAlignment()
-                .padding(.vertical, 10)
+            }
+            .font(ScriptureFonts.interface(appearance))
+            .buttonStyle(.plain)
+            .padding(.vertical, 10)
             if let notice = session.notice {
                 Text(notice).font(.caption).foregroundStyle(.secondary).padding(10).accessibilityIdentifier("reader.notice")
             }
@@ -183,8 +186,16 @@ struct ScriptureView: View {
         }
         .sheet(item:$picker) { item in pickerSheet(item) }
         .background(GeometryReader { geometry in
-            Color.clear.onAppear { wideLayout = geometry.size.width > 900; contentWidth = geometry.size.width }
-                .onChange(of:geometry.size) { _, size in wideLayout = size.width > 900; contentWidth = size.width }
+            Color.clear.onAppear {
+                wideLayout = geometry.size.width > 900
+                landscapeLayout = geometry.size.width > geometry.size.height
+                contentWidth = geometry.size.width
+            }
+            .onChange(of: geometry.size) { _, size in
+                wideLayout = size.width > 900
+                landscapeLayout = size.width > size.height
+                contentWidth = size.width
+            }
         })
         .sheet(item:hubBinding(wide:false)) { hub($0) }
         .popover(item:hubBinding(wide:true),arrowEdge:.top) { hub($0).frame(width:440,height:600) }
@@ -591,6 +602,31 @@ struct ScriptureView: View {
         let union = ranges.dropFirst().reduce(ranges[0]) { NSUnionRange($0, $1) }
         let selection = map.selection(in: union)
         askCompanion(from: selection)
+    }
+
+    private var readerBookVersionPicker: some View {
+        HStack(spacing: 0) {
+            Button { picker = .book } label: {
+                Text(selectedBookTitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: bookButtonWidth, height: 44)
+            }
+            .accessibilityIdentifier("reader.book")
+            .accessibilityLabel("Book, \(session.title)")
+            .accessibilityValue(session.title)
+            .disabled(session.document == nil)
+            Rectangle().fill(Color(palette.rule)).frame(width: 1, height: 22)
+            Button { picker = .version } label: {
+                Text(session.abbreviation)
+                    .frame(minWidth: 82, minHeight: 44)
+            }
+            .accessibilityIdentifier("reader.version")
+            .accessibilityLabel("Version, \(session.abbreviation)")
+        }
+        .background(Color(palette.paper), in: Capsule())
+        .overlay(Capsule().stroke(Color(palette.rule), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
     }
 
     private func saveToNote(_ selection: ChapterTextMap.Selection) {

@@ -64,28 +64,24 @@ struct StudyNoteDestinationPicker: View {
 
 struct StudyNoteKindPicker: View {
     let notes: NotesSession
+    let onCancel: () -> Void
     let onCreated: (UUID) -> Void
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            List {
-                Button {
+        StudyCenteredActionOverlay(
+            title: "New note",
+            actions: [
+                .init(id: "notes.new.page", title: "Page", systemImage: "doc.text") {
                     guard let id = notes.create(kind: .page) else { return }
-                    dismiss()
                     onCreated(id)
-                } label: { Label("Page", systemImage: "doc.text") }
-                .accessibilityIdentifier("notes.new.page")
-                Button {
+                },
+                .init(id: "notes.new.canvas", title: "Canvas", systemImage: "square.on.square") {
                     guard let id = notes.create(kind: .canvas) else { return }
-                    dismiss()
                     onCreated(id)
-                } label: { Label("Canvas", systemImage: "square.on.square") }
-                .accessibilityIdentifier("notes.new.canvas")
-            }
-            .navigationTitle("New note")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } } }
-        }
+                },
+            ],
+            onCancel: onCancel
+        )
     }
 }
 

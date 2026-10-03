@@ -68,17 +68,18 @@ struct NotesView: View {
                     notes: session
                 )
             }
-            .sheet(isPresented: $showingNewNote) {
-                StudyNoteKindPicker(notes: session) { id in
-                    session.open(id)
-                }
-            }
         }
         .disabled(session.restoring)
         .task { await session.load() }
         .onChange(of: scenePhase) { _, value in if value != .active { session.flushSurface?(); Task { await session.save() } } }
         .alert("Notes", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) { Button("OK") { session.notice = nil } } message: { Text(session.notice ?? "") }
         .overlay {
+            if showingNewNote {
+                StudyNoteKindPicker(notes: session, onCancel: { showingNewNote = false }) { id in
+                    showingNewNote = false
+                    session.open(id)
+                }
+            }
             if deleting != nil {
                 StudyCenteredConfirmationOverlay(
                     title: "Delete this note?",
@@ -92,6 +93,7 @@ struct NotesView: View {
                 )
             }
         }
+        .animation(.easeOut(duration: 0.18), value: showingNewNote)
         .animation(.easeOut(duration: 0.18), value: deleting != nil)
         .alert("Replace Notes from backup?", isPresented: $confirmRestore) {
             Button("Restore", role: .destructive) { if let data = pendingRestore { Task { await session.restore(data) } }; pendingRestore = nil }

@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject var companion: CompanionSession
     @ObservedObject var activity: ActivityStore
     @ObservedObject var music: MusicSession
+    @ObservedObject var shellPreferences: ShellPreferencesSession
     @Binding var showMusicLibrary: Bool
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -34,6 +35,7 @@ struct SettingsView: View {
                     translationsSection
                     providerSection
                     musicSection
+                    shellSection
                     backupSection
                     if let notice = reader.notice {
                         settingsCard {
@@ -53,6 +55,22 @@ struct SettingsView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $showVersions) { ScriptureVersionsView(session: reader) }
+    }
+
+    private var shellSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Tab shortcuts")
+                Text("Add Collection, Add Note, Start Conversation, and Start Activity appear above the tab bar on their tabs.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                Toggle("Show Add and Start buttons", isOn: Binding(
+                    get: { shellPreferences.preferences.showTabActionButtons },
+                    set: { shellPreferences.setShowTabActionButtons($0) }
+                ))
+                .accessibilityIdentifier("settings.shellTabActionsVisible")
+            }
+        }
     }
 
     private var musicSection: some View {

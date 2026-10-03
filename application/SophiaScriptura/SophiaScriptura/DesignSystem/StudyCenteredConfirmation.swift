@@ -25,9 +25,10 @@ struct StudyCenteredConfirmationOverlay: View {
                     .multilineTextAlignment(.center)
                 Button(role: .destructive, action: onConfirm) {
                     Text(confirmLabel)
-                        .frame(maxWidth: .infinity)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 48)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .tint(.red)
                 Button("Cancel", action: onCancel)
                     .font(.body.weight(.medium))
@@ -122,6 +123,64 @@ extension View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: isPresented.wrappedValue)
+    }
+}
+
+/// Center-screen card for two or more primary actions (Notes kind, Activity add, etc.).
+struct StudyCenteredActionOverlay: View {
+    struct Action: Identifiable {
+        var id: String
+        var title: String
+        var systemImage: String
+        var handler: () -> Void
+    }
+
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let actions: [Action]
+    let onCancel: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(theme.dark ? 0.55 : 0.35)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onCancel)
+                .accessibilityHidden(true)
+            VStack(spacing: 16) {
+                Text(title)
+                    .font(.system(.headline, design: .serif).weight(.semibold))
+                    .foregroundStyle(Color(theme.palette.ink))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                VStack(spacing: 12) {
+                    ForEach(actions) { action in
+                        Button(action: action.handler) {
+                            Label(action.title, systemImage: action.systemImage)
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Color(theme.palette.accent))
+                        .foregroundStyle(Color(theme.palette.ink))
+                        .accessibilityIdentifier(action.id)
+                    }
+                }
+                Button("Cancel", action: onCancel)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color(theme.palette.ink))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
+            }
+            .padding(24)
+            .frame(maxWidth: 360)
+            .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(theme.palette.rule), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.12), radius: 24, y: 8)
+            .accessibilityElement(children: .contain)
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .zIndex(50)
     }
 }
 

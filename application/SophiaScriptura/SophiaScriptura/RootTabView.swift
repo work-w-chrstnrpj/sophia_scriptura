@@ -35,6 +35,7 @@ struct RootTabView: View {
     @StateObject private var activity = ActivityStore()
     @StateObject private var music = MusicSession()
     @StateObject private var meditationJourney = MeditationJourneyCoordinator()
+    @StateObject private var shellPreferences = ShellPreferencesSession()
     @State private var selection: Tab = .scripture
     @State private var showMusicLibrary = false
     @State private var shellFABEngagedUntil = Date.distantPast
@@ -91,6 +92,7 @@ struct RootTabView: View {
                         companion: companion,
                         activity: activity,
                         music: music,
+                        shellPreferences: shellPreferences,
                         showMusicLibrary: $showMusicLibrary
                     )
                         .tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
@@ -101,10 +103,19 @@ struct RootTabView: View {
         }
         .ignoresSafeArea(.container, edges: .bottom)
         .overlay {
+            if showShellNoteKindPicker {
+                StudyNoteKindPicker(notes: notes, onCancel: { showShellNoteKindPicker = false }) { id in
+                    showShellNoteKindPicker = false
+                    selection = .notes
+                    chrome.reveal()
+                    notes.open(id)
+                }
+            }
             if meditationJourney.isActive {
                 MeditationJourneyView(coordinator: meditationJourney)
             }
         }
+        .animation(.easeOut(duration: 0.18), value: showShellNoteKindPicker)
         .overlay {
             if let draft = activity.draft {
                 ActivityFloatingRecorder(
@@ -142,13 +153,6 @@ struct RootTabView: View {
         .sheet(isPresented: $showShellNewCollection) {
             CollectionEditorSheet(store: collections, parentID: nil)
         }
-        .sheet(isPresented: $showShellNoteKindPicker) {
-            StudyNoteKindPicker(notes: notes) { id in
-                selection = .notes
-                chrome.reveal()
-                notes.open(id)
-            }
-        }
         .background(Color(palette.paper).ignoresSafeArea())
         .background(ScrollActivityObserver { chrome.reveal() })
         .tint(Color(palette.accent))
@@ -159,6 +163,7 @@ struct RootTabView: View {
             companion.onCollectionsSync = { collections.upsertCompanionConversation($0) }
             companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }
             music.load()
+            shellPreferences.load()
         }
         .task { await notes.load(); await collections.load(); await companion.load(); await activity.load(); activity.importReviewingLinks(companion.reviewingLinks) }
         .onChange(of: companion.reviewingLinks) { _, links in activity.importReviewingLinks(links) }
@@ -204,7 +209,7 @@ struct RootTabView: View {
 
     @ViewBuilder
     private var tabSpecificShellFAB: some View {
-        if editingNote { EmptyView() }
+        if editingNote || !shellPreferences.preferences.showTabActionButtons { EmptyView() }
         else if selection == .collections {
             shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "shell.addCollection") {
                 showShellNewCollection = true

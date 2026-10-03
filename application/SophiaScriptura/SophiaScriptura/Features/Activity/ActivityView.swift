@@ -30,6 +30,7 @@ struct ActivityView: View {
     @State private var meditateEndVerse = 1
     @State private var customName = ""
     @State private var showingStart = false
+    @State private var showingAddChooser = false
     @State private var showingTodayDetails = false
     @State private var showingDistribution = false
     @State private var showingManual = false
@@ -62,7 +63,9 @@ struct ActivityView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            VStack(spacing: 0) {
+                commandBar
+                List {
                 Section {
                     ActivityAnalyticsView(store: store, period: $analyticsPeriod,
                         anchor: $analyticsAnchor, modeID: $analyticsModeID,
@@ -168,6 +171,7 @@ struct ActivityView: View {
                 }
             }
             .listStyle(.plain)
+            }
             .contentMargins(.bottom, 160, for: .scrollContent)
             .accessibilityIdentifier("activity.content")
             .scrollContentBackground(.hidden)
@@ -226,6 +230,22 @@ struct ActivityView: View {
                 Button("Cancel", role: .cancel) { pendingRestore = nil }
             } message: { Text("Sophia keeps a pre-restore Activity archive on this device.") }
             .overlay {
+                if showingAddChooser {
+                    StudyCenteredActionOverlay(
+                        title: "Add activity",
+                        actions: [
+                            .init(id: "activity.add.start", title: "Start Activity", systemImage: "play.fill") {
+                                showingAddChooser = false
+                                prepareStart()
+                            },
+                            .init(id: "activity.add.manual", title: "Add Manual Record", systemImage: "plus.square") {
+                                showingAddChooser = false
+                                prepareManual()
+                            },
+                        ],
+                        onCancel: { showingAddChooser = false }
+                    )
+                }
                 if let record = recordToDelete {
                     StudyCenteredConfirmationOverlay(
                         title: "Delete \(record.title)?",
@@ -253,6 +273,7 @@ struct ActivityView: View {
                     )
                 }
             }
+            .animation(.easeOut(duration: 0.18), value: showingAddChooser)
             .animation(.easeOut(duration: 0.18), value: recordToDelete != nil)
             .animation(.easeOut(duration: 0.18), value: reminderToDelete != nil)
             .onChange(of: store.finishRequestID) { _, request in
@@ -267,6 +288,26 @@ struct ActivityView: View {
             }
         }
         .background(Color(theme.palette.paper).ignoresSafeArea())
+    }
+
+    private var commandBar: some View {
+        HStack(spacing: 4) {
+            LibraryHeaderTitle(title: "Activity")
+                .accessibilityIdentifier("activity.title")
+            Spacer(minLength: 12)
+            Button {
+                showingAddChooser = true
+            } label: {
+                LibraryHeaderIcon(systemImage: "plus")
+            }
+            .buttonStyle(.plain)
+            .disabled(!store.isReady)
+            .accessibilityLabel("Add activity")
+            .accessibilityIdentifier("activity.add")
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     private var auxiliaryCard: some View {
@@ -393,6 +434,13 @@ struct ActivityView: View {
     private func openReminder(_ reminder: ActivityReminder?) {
         reminderToEdit = reminder
         showingReminders = true
+    }
+
+    private func prepareStart() {
+        modeID = ActivityModeID.reading.id
+        title = ""
+        meditateOnPassage = false
+        showingStart = true
     }
 
     private func prepareManual() {

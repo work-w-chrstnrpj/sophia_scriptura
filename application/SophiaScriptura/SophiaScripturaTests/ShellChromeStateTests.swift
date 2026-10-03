@@ -28,6 +28,23 @@ final class ShellChromeStateTests: XCTestCase {
         XCTAssertFalse(chrome.isVisible)
     }
 
+    func testShellTabActionPreferencePersists() {
+        let key = "shell.showTabActionButtons"
+        let defaults = UserDefaults.standard
+        let prior = defaults.object(forKey: key) as? Bool
+        defer {
+            if let prior { defaults.set(prior, forKey: key) }
+            else { defaults.removeObject(forKey: key) }
+        }
+        ShellPreferencesStore.save(ShellPreferences(showTabActionButtons: false))
+        XCTAssertFalse(ShellPreferencesStore.load().showTabActionButtons)
+        let session = ShellPreferencesSession()
+        session.load()
+        XCTAssertFalse(session.preferences.showTabActionButtons)
+        session.setShowTabActionButtons(true)
+        XCTAssertTrue(ShellPreferencesStore.load().showTabActionButtons)
+    }
+
     func testStoppingBackgroundTimerPreventsStaleHideAfterResume() async throws {
         let chrome = ShellChromeState(delay: .milliseconds(100))
         chrome.reveal(); chrome.stop()

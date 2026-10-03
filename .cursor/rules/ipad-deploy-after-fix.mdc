@@ -1,0 +1,30 @@
+---
+description: Deploy signed Debug builds to the owner's paired iPad after delivering code fixes
+alwaysApply: true
+---
+
+# iPad deploy after fix
+
+When this conversation delivers an **app code fix** (Swift changes under `application/SophiaScriptura/`) and a **signed device build succeeds**, **install in place on the paired physical iPad** without waiting for the owner to ask.
+
+## When to deploy
+
+- After bug fixes, feature slices, or regressions resolved in the app target.
+- Skip deploy for **documentation-only**, **ticket-only**, or **AI adapter-only** changes with no app binary change.
+- Skip if the owner explicitly says not to deploy in that turn.
+
+## How to deploy
+
+1. Set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` per command.
+2. Build: `SophiaScriptura` scheme, destination `id=00008120-0014354C112B601E` (`iPad ni Paj`), `-allowProvisioningUpdates`.
+3. Verify: `codesign --verify --deep --strict` on the built `.app`.
+4. Install and launch: `xcrun devicectl device install app` then `devicectl device process launch` for `com.personal.SophiaScriptura`.
+5. **Do not uninstall** the app; preserve local data.
+6. Prefer running relevant **unit or UI tests** before deploy when the environment allows (simulator or device); report gaps if CoreSimulator is unavailable.
+
+## Evidence
+
+- Summarize build/install/launch outcome in the reply.
+- Optional logs under `build/<topic>-device/` when useful.
+
+Follow `docs/deployment/deployment.md` for signing and trust-profile notes if launch is blocked on device.

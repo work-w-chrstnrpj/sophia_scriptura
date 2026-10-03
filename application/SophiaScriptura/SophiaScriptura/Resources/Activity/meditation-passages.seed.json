@@ -1,0 +1,22 @@
+[
+  { "book": "PSA", "chapter": 23, "startVerse": 1, "endVerse": 1 },
+  { "book": "PSA", "chapter": 46, "startVerse": 10, "endVerse": 10 },
+  { "book": "PSA", "chapter": 119, "startVerse": 105, "endVerse": 105 },
+  { "book": "JHN", "chapter": 3, "startVerse": 16, "endVerse": 17 },
+  { "book": "JHN", "chapter": 14, "startVerse": 27, "endVerse": 27 },
+  { "book": "PHP", "chapter": 4, "startVerse": 6, "endVerse": 7 },
+  { "book": "ISA", "chapter": 41, "startVerse": 10, "endVerse": 10 },
+  { "book": "MAT", "chapter": 11, "startVerse": 28, "endVerse": 28 },
+  { "book": "MAT", "chapter": 6, "startVerse": 33, "endVerse": 34 },
+  { "book": "ROM", "chapter": 8, "startVerse": 38, "endVerse": 39 },
+  { "book": "JOS", "chapter": 1, "startVerse": 9, "endVerse": 9 },
+  { "book": "1PE", "chapter": 5, "startVerse": 7, "endVerse": 7 },
+  { "book": "COL", "chapter": 3, "startVerse": 15, "endVerse": 16 },
+  { "book": "GAL", "chapter": 5, "startVerse": 22, "endVerse": 23 },
+  { "book": "2TI", "chapter": 1, "startVerse": 7, "endVerse": 7 },
+  { "book": "HEB", "chapter": 13, "startVerse": 5, "endVerse": 6 },
+  { "book": "PRO", "chapter": 3, "startVerse": 5, "endVerse": 6 },
+  { "book": "LAM", "chapter": 3, "startVerse": 22, "endVerse": 23 },
+  { "book": "MRK", "chapter": 4, "startVerse": 39, "endVerse": 39 },
+  { "book": "1JN", "chapter": 4, "startVerse": 16, "endVerse": 16 }
+]

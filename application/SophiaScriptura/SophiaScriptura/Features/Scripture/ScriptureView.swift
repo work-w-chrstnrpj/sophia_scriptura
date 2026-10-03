@@ -5,7 +5,9 @@ struct ScriptureView: View {
     @Bindable var annotations: AnnotationSession
     var notes: NotesSession
     @ObservedObject var collections: CollectionsStore
+    @ObservedObject var companion: CompanionSession
     var openNote: (UUID) -> Void
+    var openCompanion: () -> Void = {}
     var active: Bool = true
     @State private var contentWidth = 760.0
     @State private var picker: ReaderPicker?
@@ -19,6 +21,7 @@ struct ScriptureView: View {
     @State private var hubMessage: String?
     @State private var hubShare: HubShare?
     @State private var wideLayout = false
+    @State private var confirmDeleteLayer = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -61,7 +64,9 @@ struct ScriptureView: View {
                 .shadow(color:Color.black.opacity(0.04),radius:8,y:3)
                 if !wideLayout { Spacer(minLength:0) }
             }.font(ScriptureFonts.interface(appearance))
-                .buttonStyle(.plain).padding(.horizontal,24).padding(.vertical,10)
+                .buttonStyle(.plain)
+                .shellTabDockLeadingAlignment()
+                .padding(.vertical, 10)
             if let notice = session.notice {
                 Text(notice).font(.caption).foregroundStyle(.secondary).padding(10).accessibilityIdentifier("reader.notice")
             }
@@ -78,7 +83,7 @@ struct ScriptureView: View {
                     Text(session.edition?.name ?? session.abbreviation)
                         .font(ScriptureFonts.interface(appearance,size:13)).foregroundStyle(Color(palette.secondary))
                 }.padding(.top,10).padding(.horizontal,24)
-                AnnotationControls(annotations: annotations, reader: session, width: contentWidth)
+                AnnotationControls(annotations: annotations, reader: session, width: contentWidth, confirmDeleteLayer: $confirmDeleteLayer)
                 if let group = annotations.group {
                     if annotations.layoutAvailable && group.source == AnnotationSource(document) {
                         annotatedReader(document, group: group)
@@ -88,7 +93,7 @@ struct ScriptureView: View {
                         ContentUnavailableView("Annotated layout unavailable", systemImage: "square.3.layers.3d",
                             description: Text("Handwriting is retained. Select a layer with an available layout or return to its original Scripture edition."))
                     }
-                } else { ordinaryReader(document) }
+                } else { readerWithOptionalCompanionPanel(document) }
                 HStack {
                     Button { Task { await session.stepChapter(-1) } } label: {
                         Image(systemName:"chevron.left")
@@ -122,7 +127,24 @@ struct ScriptureView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
+
+            if confirmDeleteLayer {
+                StudyCenteredConfirmationOverlay(
+                    title: "Delete this layer?",
+                    message: "Its handwriting remains recoverable in Recently Deleted.",
+                    confirmLabel: "Delete Layer",
+                    onConfirm: {
+                        confirmDeleteLayer = false
+                        Task {
+                            await annotations.deleteSelected()
+                            annotations.restoreSelectedAppearance(reader: session)
+                        }
+                    },
+                    onCancel: { confirmDeleteLayer = false }
+                )
+            }
         }
+        .animation(.easeOut(duration: 0.18), value: confirmDeleteLayer)
         .background(Color(palette.paper).ignoresSafeArea())
         .animation(.easeOut(duration:0.18),value:picker != nil)
         .task {
@@ -144,6 +166,9 @@ struct ScriptureView: View {
         .task(id: session.document.map { AnnotationSource($0) }) {
             await annotations.open(session.document)
             annotations.restoreSelectedAppearance(reader: session)
+            annotations.mode = .hidden
+            annotations.marginExpanded = false
+            annotations.toolsVisible = false
         }
         .onChange(of: session.preferences) { old, new in
             if annotations.selected != nil && annotations.mode != .hidden &&
@@ -164,7 +189,7 @@ struct ScriptureView: View {
         .sheet(item:hubBinding(wide:false)) { hub($0) }
         .popover(item:hubBinding(wide:true),arrowEdge:.top) { hub($0).frame(width:440,height:600) }
         .sheet(item: $pendingQuote) { pending in
-            ScriptureNoteDestinationPicker(quote: pending.quote, notes: notes, openNote: openNote)
+            StudyNoteDestinationPicker(content: .scriptureQuote(pending.quote), notes: notes, openNote: openNote)
         }
         .sheet(item: passageCardBinding) { card in
             PassageCardSheet(store: collections, passageID: card.id) { passage in
@@ -178,6 +203,49 @@ struct ScriptureView: View {
             if let link = collections.link(id: card.id) { StudyLinkSheet(link: link) }
         }
         .sheet(item: $hubShare) { share in ScriptureActivitySheet(text: share.text) }
+        .sheet(isPresented: Binding(
+            get: { !wideLayout && companion.scripturePanelConversationID != nil },
+            set: { _ in }
+        )) {
+            if let id = companion.scripturePanelConversationID,
+               let conversation = companion.conversations.first(where: { $0.id == id }) {
+                NavigationStack {
+                    CompanionConversationView(session: companion, conversation: conversation, compact: true, pendingNoteSave: .constant(nil), openNote: openNote)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button {
+                                    companion.scripturePanelConversationID = nil
+                                } label: {
+                                    Image(systemName: "xmark")
+                                }
+                                .accessibilityLabel("Close")
+                            }
+                            ToolbarItem(placement: .primaryAction) {
+                                Button("Expand") {
+                                    companion.selectedConversationID = id
+                                    companion.panelExpandedToTab = true
+                                    companion.scripturePanelConversationID = nil
+                                    openCompanion()
+                                }
+                            }
+                        }
+                }
+                .interactiveDismissDisabled(true)
+                .appSurface()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func readerWithOptionalCompanionPanel(_ document: ChapterDocument) -> some View {
+        if wideLayout, companion.scripturePanelConversationID != nil {
+            HStack(alignment: .top, spacing: 0) {
+                ordinaryReader(document)
+                CompanionScripturePanel(session: companion, expandToTab: openCompanion)
+            }
+        } else {
+            ordinaryReader(document)
+        }
     }
 
     private func annotatedReader(_ document: ChapterDocument, group: AnnotationGroup) -> some View {
@@ -247,6 +315,8 @@ struct ScriptureView: View {
                                   navigationID:session.navigationID,restorationLocation:session.restorationLocation,onVerse:{ session.hubVerse = document.verse($0) },
                                   onVisibleLocation: { v, b, o in if active { session.visibleLocation(v, blockID: b, utf16Offset: o) } },onChapterSwipe:{ step in Task { await session.stepChapter(step) } },authorizeQuote:session.authorizeQuote, saveToNote: saveToNote,
                                   saveBookmark: { saveExcerpt($0, kind: .bookmark) }, saveGleaning: { saveExcerpt($0, kind: .gleaning) },
+                                  askCompanion: askCompanion(from:),
+                                  analyzeOriginalLanguage: analyzeOriginalLanguage(from:),
                                   emphasisVerses: session.emphasisVerses, emphasisSpans: session.emphasisSpans)
                     .frame(maxWidth:760).frame(maxWidth:.infinity)
     }
@@ -329,7 +399,17 @@ struct ScriptureView: View {
                                     HStack(spacing: 12) {
                                         CollectionItemGlyph(kind: item.kind == .gleaning ? .gleaning : .bookmark, accent: collections.accent(for: item.id), size: 30)
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.referenceLabel).foregroundStyle(.primary)
+                                            if item.kind == .gleaning, !item.insight.isEmpty {
+                                                Text(StudyPreviewText.truncatedInsight(item.insight))
+                                                    .foregroundStyle(.primary)
+                                                    .lineLimit(2)
+                                                Text(item.referenceLabel)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            } else {
+                                                Text(item.referenceLabel).foregroundStyle(.primary)
+                                            }
                                             let folders = collectionNames(for: item.id)
                                             if !folders.isEmpty {
                                                 Text(folders.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -362,7 +442,27 @@ struct ScriptureView: View {
                             Text("No links attached to this verse.").foregroundStyle(.secondary)
                         }
                     }
-                    Section("Conversations") { Text("No conversations attached to this verse.").foregroundStyle(.secondary) }
+                    Section("Conversations") {
+                        Button {
+                            session.hubVerse = nil
+                            startHubConversation(for: verse)
+                        } label: {
+                            Label("Start a new conversation for this verse", systemImage: "bubble.left.and.bubble.right")
+                        }
+                        let attached = companion.anchoredConversations(for: verse, editionID: session.edition?.id ?? "")
+                        if attached.isEmpty {
+                            Text("No conversations attached to this verse yet.").foregroundStyle(.secondary)
+                        } else {
+                            ForEach(attached) { conversation in
+                                Button(conversation.title) {
+                                    session.hubVerse = nil
+                                    companion.selectConversation(conversation.id)
+                                    companion.scripturePanelConversationID = conversation.id
+                                    openCompanion()
+                                }
+                            }
+                        }
+                    }
                 }
                 .navigationTitle("Verse hub")
                 .toolbar { Button("Done") { session.hubVerse = nil } }
@@ -443,6 +543,56 @@ struct ScriptureView: View {
             passageDraft = passage
         }
     }
+    private func askCompanion(from selection: ChapterTextMap.Selection) {
+        openCompanion(from: selection, action: .ask)
+    }
+
+    private func analyzeOriginalLanguage(from selection: ChapterTextMap.Selection) {
+        openCompanion(from: selection, action: .originalLanguageAnalysis)
+    }
+
+    private func openCompanion(
+        from selection: ChapterTextMap.Selection,
+        action: CompanionSession.ScriptureCompanionAction
+    ) {
+        guard let document = session.document else { return }
+        let verseNumbers = selection.passages.flatMap { passage in
+            Array(passage.start.verse...passage.end.verse)
+        }
+        let start = verseNumbers.min() ?? 1
+        let end = verseNumbers.max() ?? start
+        let bookTitle = session.currentBook?.title ?? "Scripture"
+        let reference = CompanionPassageReference.label(
+            bookTitle: bookTitle,
+            chapter: document.chapter,
+            startVerse: start,
+            endVerse: end
+        )
+        Task {
+            let text = await session.authorizeQuote(selection)
+            _ = companion.askFromScripture(
+                selection: selection,
+                referenceLabel: reference,
+                transmittedText: text,
+                bookID: document.book,
+                chapter: document.chapter,
+                startVerse: start,
+                endVerse: end,
+                action: action
+            )
+        }
+    }
+
+    private func startHubConversation(for verse: VerseID) {
+        guard let document = session.document else { return }
+        let map = ChapterTextMap(document: document)
+        let ranges = map.focusRanges(for: verse.verse)
+        guard !ranges.isEmpty else { return }
+        let union = ranges.dropFirst().reduce(ranges[0]) { NSUnionRange($0, $1) }
+        let selection = map.selection(in: union)
+        askCompanion(from: selection)
+    }
+
     private func saveToNote(_ selection: ChapterTextMap.Selection) {
         Task {
             guard let quote = await notes.quote(for: selection, reader: session) else { return }
@@ -489,71 +639,4 @@ private struct ScriptureActivitySheet: UIViewControllerRepresentable {
 private struct PendingQuote: Identifiable {
     let id = UUID()
     let quote: NoteQuote
-}
-
-private struct ScriptureNoteDestinationPicker: View {
-    let quote: NoteQuote
-    let notes: NotesSession
-    let openNote: (UUID) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    private var availableNotes: [NoteDocument] {
-        notes.snapshot.notes.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("New note") {
-                    Button {
-                        create(.page)
-                    } label: {
-                        Label("New Page", systemImage: "doc.text")
-                    }
-                    .accessibilityIdentifier("scripture.saveNote.newPage")
-                    Button {
-                        create(.canvas)
-                    } label: {
-                        Label("New Canvas", systemImage: "rectangle.dashed")
-                    }
-                    .accessibilityIdentifier("scripture.saveNote.newCanvas")
-                }
-                Section("Existing note") {
-                    if availableNotes.isEmpty {
-                        Text("Create a note first, then you can add passages to it.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(availableNotes) { note in
-                            Button {
-                                add(to: note)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(note.title)
-                                    Text(note.kind == .page ? "Page" : "Canvas")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .accessibilityIdentifier("scripture.saveNote.existing.\(note.id.uuidString)")
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Save to note")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Cancel") { dismiss() } } }
-        }
-    }
-
-    private func create(_ kind: NoteKind) {
-        guard let id = notes.create(kind: kind, quote: quote) else { return }
-        dismiss()
-        openNote(id)
-    }
-
-    private func add(to note: NoteDocument) {
-        notes.open(note.id)
-        notes.appendQuote(quote)
-        dismiss()
-        openNote(note.id)
-    }
 }

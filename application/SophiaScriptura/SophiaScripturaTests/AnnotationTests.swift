@@ -20,6 +20,68 @@ import PencilKit
         group.layers = [layer]; group.selectedLayerID = layer.id
         return AnnotationSnapshot(groups: [group])
     }
+    func testLayersSortDescendingByDefaultNumber() async throws {
+        let session = AnnotationSession(repository: AnnotationFileRepository(directory: directory()))
+        let doc = try await document()
+        await session.open(doc)
+        await session.create(document: doc, preferences: ReaderPreferences(), width: 820)
+        await session.create(document: doc, preferences: ReaderPreferences(), width: 820)
+        await session.create(document: doc, preferences: ReaderPreferences(), width: 820)
+        let names = session.layers(for: doc).map(\.layer.name)
+        XCTAssertEqual(names, ["Annotation 3", "Annotation 2", "Annotation 1"])
+    }
+
+    func testNextDefaultLayerNameFillsLowestGap() {
+        let layers = [
+            AnnotationLayer(name: "Morning study", drawing: PKDrawing().dataRepresentation()),
+            AnnotationLayer(name: "Annotation 1", drawing: PKDrawing().dataRepresentation()),
+            AnnotationLayer(name: "Annotation 3", drawing: PKDrawing().dataRepresentation())
+        ]
+        XCTAssertEqual(AnnotationSession.nextDefaultLayerName(in: layers), "Annotation 2")
+        var withDeleted = layers
+        withDeleted[1].deletedAt = Date()
+        XCTAssertEqual(AnnotationSession.nextDefaultLayerName(in: withDeleted), "Annotation 1")
+        XCTAssertEqual(AnnotationSession.nextDefaultLayerName(in: []), "Annotation 1")
+    }
+
+    func testMeasuredSurroundingLayoutPassesRepositoryValidation() async throws {
+        let doc = try await document()
+        let layout = AnnotationRenderer.measure(doc, preferences: ReaderPreferences(), width: 820)
+        XCTAssertEqual(layout.inset, AnnotationRenderer.surroundingInset)
+        XCTAssertLessThan(abs(layout.width - layout.textWidth - layout.inset * 2), 0.01)
+        var group = AnnotationGroup(source: AnnotationSource(doc), layout: layout)
+        group.layers = [AnnotationLayer(name: "Annotation 1", drawing: PKDrawing().dataRepresentation(), layout: layout)]
+        group.selectedLayerID = group.layers[0].id
+        let dir = directory(); defer { try? FileManager.default.removeItem(at: dir) }
+        _ = try await AnnotationFileRepository(directory: dir).save(AnnotationSnapshot(groups: [group]), expectedRevision: 0)
+    }
+
+    func testRepairedBrokenSurroundingWidthCanSave() async throws {
+        let doc = try await document()
+        let layout = AnnotationRenderer.measure(doc, preferences: ReaderPreferences(), width: 820)
+        let broken = AnnotationLayout(
+            algorithm: layout.algorithm,
+            fontName: layout.fontName,
+            fontResourceHash: layout.fontResourceHash,
+            fontSize: layout.fontSize,
+            width: layout.textWidth + 400,
+            textWidth: layout.textWidth,
+            height: layout.height,
+            inset: AnnotationRenderer.surroundingInset,
+            marginStart: layout.textWidth + 400 - AnnotationRenderer.surroundingInset,
+            lineSpacing: layout.lineSpacing,
+            paragraphSpacing: layout.paragraphSpacing,
+            signature: layout.signature
+        )
+        let repaired = AnnotationRenderer.repairedSurroundingLayout(broken)
+        XCTAssertLessThan(abs(repaired.width - repaired.textWidth - repaired.inset * 2), 0.01)
+        var group = AnnotationGroup(source: AnnotationSource(doc), layout: repaired)
+        group.layers = [AnnotationLayer(name: "Annotation 1", drawing: PKDrawing().dataRepresentation(), layout: repaired)]
+        group.selectedLayerID = group.layers[0].id
+        let dir = directory(); defer { try? FileManager.default.removeItem(at: dir) }
+        _ = try await AnnotationFileRepository(directory: dir).save(AnnotationSnapshot(groups: [group]), expectedRevision: 0)
+    }
+
     func testCommitReopenAndIsolation() async throws {
         let dir = directory(); defer { try? FileManager.default.removeItem(at: dir) }
         let repo = AnnotationFileRepository(directory: dir)
@@ -174,6 +236,7 @@ import PencilKit
         await session.open(doc)
         let reader = ReaderSession(content: BundledScriptureRepository(bundle: Bundle(for: ReaderSession.self)), state: nil)
         await reader.start(); await reader.navigate(book: "JHN", chapter: 3)
+        session.mode = .draw
         let controller = AnnotationController(document: doc, preferences: reader.preferences, reader: reader, session: session)
         controller.loadViewIfNeeded()
         session.clear?(); XCTAssertEqual(try PKDrawing(data: XCTUnwrap(session.selected?.drawing)).strokes.count, 0)
@@ -213,6 +276,7 @@ import PencilKit
         let archive = try await session.export(), original = session.selected?.drawing
         let reader = ReaderSession(content: BundledScriptureRepository(bundle: Bundle(for: ReaderSession.self)), state: nil)
         await reader.start()
+        session.mode = .draw
         let controller = AnnotationController(document: doc, preferences: reader.preferences, reader: reader, session: session)
         controller.loadViewIfNeeded(); session.clear?(); await session.save()
         XCTAssertNotEqual(session.selected?.drawing, original)
@@ -239,7 +303,7 @@ import PencilKit
         let viewport = try XCTUnwrap(controller.view.subviews.first as? UIScrollView)
         let stage = try XCTUnwrap(viewport.subviews.first), paper = try XCTUnwrap(stage.subviews.first)
         let text = try XCTUnwrap(paper.subviews.first as? UITextView)
-        XCTAssertEqual(stage.bounds.width, layout.textWidth + 56)
+        XCTAssertEqual(stage.bounds.width, layout.textWidth + 72)
         XCTAssertEqual(stage.frame.midX, viewport.bounds.midX, accuracy: 0.01)
         let frame = text.frame
         session.marginExpanded = true; controller.apply()
@@ -326,6 +390,7 @@ import PencilKit
         let reader = ReaderSession(content: BundledScriptureRepository(bundle: Bundle(for: ReaderSession.self)), state: nil)
         await reader.start()
         var preferences = reader.preferences; preferences.theme = "dark"
+        session.mode = .visible
         let controller = AnnotationController(document: doc, preferences: preferences, reader: reader, session: session)
         controller.loadViewIfNeeded()
         let viewport = try XCTUnwrap(controller.view.subviews.first as? UIScrollView)

@@ -79,14 +79,16 @@ struct StudyConversationSheet: View {
                     .font(.body)
                     .foregroundStyle(Color(theme.palette.ink))
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Nothing here is a real chat yet. Companion will replace this placeholder.")
-                    .font(.subheadline)
-                    .foregroundStyle(Color(theme.palette.secondary))
+                if conversation.isPlaceholder {
+                    Text("Nothing here is a real chat yet. Start a conversation in Companion.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                }
                 Button {
                     seeCompanion()
                     dismiss()
                 } label: {
-                    Label("See Companion", systemImage: "bubble.left.and.bubble.right")
+                    Label("Open in Companion", systemImage: "bubble.left.and.bubble.right")
                 }
                 .buttonStyle(CollectionProminentButtonStyle(fullWidth: true))
                 .accessibilityIdentifier("collections.seeCompanion")

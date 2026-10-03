@@ -1,0 +1,94 @@
+{
+  "completeVerse": [
+    { "id": "john-3-16", "referenceLabel": "John 3:16", "prefix": "For God so loved the world, that he gave his only", "answer": "Son, that whoever believes in him should not perish but have eternal life." },
+    { "id": "gen-1-1", "referenceLabel": "Genesis 1:1", "prefix": "In the beginning, God created", "answer": "the heavens and the earth." },
+    { "id": "ps-23-1", "referenceLabel": "Psalm 23:1", "prefix": "The LORD is my shepherd;", "answer": "I shall not want." },
+    { "id": "rom-8-28", "referenceLabel": "Romans 8:28", "prefix": "We know that all things work together for good for those who love God,", "answer": "who are called according to his purpose." },
+    { "id": "phil-4-13", "referenceLabel": "Philippians 4:13", "prefix": "I can do all things through Christ", "answer": "who strengthens me." },
+    { "id": "prov-3-5", "referenceLabel": "Proverbs 3:5", "prefix": "Trust in the LORD with all your heart,", "answer": "and don't lean on your own understanding." },
+    { "id": "isa-53-6", "referenceLabel": "Isaiah 53:6", "prefix": "All we like sheep have gone astray.", "answer": "We have turned everyone to his own way; and the LORD has laid on him the iniquity of us all." },
+    { "id": "matt-28-19", "referenceLabel": "Matthew 28:19", "prefix": "Go and make disciples of all nations, baptizing them in the name of the Father and of the Son", "answer": "and of the Holy Spirit." },
+    { "id": "eph-2-8", "referenceLabel": "Ephesians 2:8", "prefix": "For by grace you have been saved through faith,", "answer": "and that not of yourselves; it is the gift of God." },
+    { "id": "rev-1-1", "referenceLabel": "Revelation 1:1", "prefix": "This is the Revelation of Jesus Christ,", "answer": "which God gave him to show to his servants the things which must happen soon." },
+    { "id": "1cor-13-4", "referenceLabel": "1 Corinthians 13:4", "prefix": "Love is patient and is kind.", "answer": "Love doesn't envy. Love doesn't brag, is not proud." },
+    { "id": "heb-11-1", "referenceLabel": "Hebrews 11:1", "prefix": "Now faith is assurance of things hoped for,", "answer": "proof of things not seen." }
+  ],
+  "identifyVerse": [
+    { "id": "romans-8-1", "quote": "There is therefore now no condemnation for those who are in Christ Jesus.", "choices": ["Romans 8:1", "Romans 7:25", "Galatians 5:1", "John 3:18"], "correctIndex": 0, "referenceLabel": "Romans 8:1" },
+    { "id": "john-1-1", "quote": "In the beginning was the Word, and the Word was with God, and the Word was God.", "choices": ["John 1:1", "Genesis 1:1", "Colossians 1:15", "Hebrews 1:1"], "correctIndex": 0, "referenceLabel": "John 1:1" },
+    { "id": "matt-5-3", "quote": "Blessed are the poor in spirit, for theirs is the Kingdom of Heaven.", "choices": ["Matthew 5:3", "Luke 6:20", "James 2:5", "Matthew 5:10"], "correctIndex": 0, "referenceLabel": "Matthew 5:3" },
+    { "id": "acts-2-38", "quote": "Repent and be baptized, every one of you, in the name of Jesus Christ for the forgiveness of sins.", "choices": ["Acts 2:38", "Acts 16:31", "Mark 16:16", "Acts 22:16"], "correctIndex": 0, "referenceLabel": "Acts 2:38" },
+    { "id": "gal-2-20", "quote": "I have been crucified with Christ, and it is no longer I that live, but Christ lives in me.", "choices": ["Galatians 2:20", "Romans 6:6", "Colossians 3:3", "Philippians 1:21"], "correctIndex": 0, "referenceLabel": "Galatians 2:20" },
+    { "id": "1john-4-8", "quote": "He who doesn't love doesn't know God, for God is love.", "choices": ["1 John 4:8", "John 3:16", "1 Corinthians 13:13", "Romans 5:8"], "correctIndex": 0, "referenceLabel": "1 John 4:8" },
+    { "id": "josh-1-9", "quote": "Be strong and courageous. Don't be afraid or dismayed, for the LORD your God is with you wherever you go.", "choices": ["Joshua 1:9", "Deuteronomy 31:6", "Isaiah 41:10", "Psalm 27:1"], "correctIndex": 0, "referenceLabel": "Joshua 1:9" },
+    { "id": "mic-6-8", "quote": "What does the LORD require of you, but to act justly, to love mercy, and to walk humbly with your God?", "choices": ["Micah 6:8", "Amos 5:24", "Hosea 6:6", "Isaiah 1:17"], "correctIndex": 0, "referenceLabel": "Micah 6:8" },
+    { "id": "rev-21-4", "quote": "He will wipe away every tear from their eyes. Death will be no more.", "choices": ["Revelation 21:4", "Isaiah 25:8", "Revelation 7:17", "1 Corinthians 15:26"], "correctIndex": 0, "referenceLabel": "Revelation 21:4" },
+    { "id": "2tim-3-16", "quote": "Every Scripture is God-breathed and profitable for teaching, for reproof, for correction, and for instruction in righteousness.", "choices": ["2 Timothy 3:16", "2 Peter 1:21", "Psalm 119:105", "Hebrews 4:12"], "correctIndex": 0, "referenceLabel": "2 Timothy 3:16" },
+    { "id": "matt-6-9", "quote": "Our Father in heaven, may your name be kept holy.", "choices": ["Matthew 6:9", "Luke 11:2", "Matthew 6:10", "John 17:11"], "correctIndex": 0, "referenceLabel": "Matthew 6:9" },
+    { "id": "col-3-23", "quote": "Whatever you do, work heartily, as for the Lord and not for men.", "choices": ["Colossians 3:23", "Ephesians 6:7", "1 Corinthians 10:31", "Ecclesiastes 9:10"], "correctIndex": 0, "referenceLabel": "Colossians 3:23" }
+  ],
+  "whoSaidIt": [
+    { "id": "peter-confession", "quote": "You are the Christ, the Son of the living God.", "choices": ["Peter", "Paul", "John", "James"], "correctIndex": 0, "referenceLabel": "Matthew 16:16" },
+    { "id": "martha", "quote": "Yes, Lord. I have come to believe that you are the Christ, God's Son, he who comes into the world.", "choices": ["Martha", "Mary", "Peter", "Nicodemus"], "correctIndex": 0, "referenceLabel": "John 11:27" },
+    { "id": "nathaniel", "quote": "Rabbi, you are the Son of God! You are King of Israel!", "choices": ["Nathaniel", "Andrew", "Philip", "Thomas"], "correctIndex": 0, "referenceLabel": "John 1:49" },
+    { "id": "thomas", "quote": "My Lord and my God!", "choices": ["Thomas", "Peter", "John", "Philip"], "correctIndex": 0, "referenceLabel": "John 20:28" },
+    { "id": "centurion", "quote": "Truly this was the Son of God.", "choices": ["Centurion", "Pilate", "Joseph of Arimathea", "Caiaphas"], "correctIndex": 0, "referenceLabel": "Matthew 27:54" },
+    { "id": "paul-mars-hill", "quote": "For in him we live, move, and have our being.", "choices": ["Paul", "Peter", "Stephen", "Apollos"], "correctIndex": 0, "referenceLabel": "Acts 17:28" },
+    { "id": "peter-pentecost", "quote": "Repent and be baptized, every one of you, in the name of Jesus Christ for the forgiveness of sins.", "choices": ["Peter", "Paul", "Philip", "Stephen"], "correctIndex": 0, "referenceLabel": "Acts 2:38" },
+    { "id": "mary-magnificat", "quote": "My soul magnifies the Lord.", "choices": ["Mary", "Elizabeth", "Anna", "Ruth"], "correctIndex": 0, "referenceLabel": "Luke 1:46" },
+    { "id": "simeon", "quote": "Now you are releasing your servant, Master, according to your word, in peace.", "choices": ["Simeon", "Zechariah", "Anna", "Joseph"], "correctIndex": 0, "referenceLabel": "Luke 2:29" },
+    { "id": "job", "quote": "I know that my Redeemer lives.", "choices": ["Job", "Abraham", "David", "Isaiah"], "correctIndex": 0, "referenceLabel": "Job 19:25" },
+    { "id": "david-goliath", "quote": "You come to me with a sword, a spear, and a javelin; but I come to you in the name of the LORD of Hosts.", "choices": ["David", "Jonathan", "Saul", "Samuel"], "correctIndex": 0, "referenceLabel": "1 Samuel 17:45" },
+    { "id": "elijah-carmel", "quote": "How long will you waver between the two sides?", "choices": ["Elijah", "Elisha", "Samuel", "Moses"], "correctIndex": 0, "referenceLabel": "1 Kings 18:21" }
+  ],
+  "bibleQuiz": [
+    { "id": "first-book", "prompt": "Which book opens the Bible?", "choices": ["Genesis", "Exodus", "Matthew", "Psalms"], "correctIndex": 0, "explanation": "Genesis opens the biblical canon and begins with creation.", "referenceLabel": "Genesis 1:1" },
+    { "id": "ark-builder", "prompt": "Who built the ark before the flood?", "choices": ["Noah", "Abraham", "Moses", "David"], "correctIndex": 0, "explanation": "God instructed Noah to build the ark.", "referenceLabel": "Genesis 6:13–22" },
+    { "id": "exodus-leader", "prompt": "Who led Israel out of Egypt?", "choices": ["Moses", "Joshua", "Aaron", "Joseph"], "correctIndex": 0, "explanation": "God called Moses to lead Israel out of slavery in Egypt.", "referenceLabel": "Exodus 3–14" },
+    { "id": "goliath", "prompt": "Who defeated Goliath?", "choices": ["David", "Saul", "Jonathan", "Samuel"], "correctIndex": 0, "explanation": "David defeated Goliath with a sling and a stone while trusting in the LORD.", "referenceLabel": "1 Samuel 17" },
+    { "id": "wisdom-king", "prompt": "Which king asked God for wisdom?", "choices": ["Solomon", "Rehoboam", "Hezekiah", "Ahab"], "correctIndex": 0, "explanation": "Solomon asked for an understanding heart to judge Israel.", "referenceLabel": "1 Kings 3:5–12" },
+    { "id": "prophet-lions", "prompt": "Who was placed in a den of lions?", "choices": ["Daniel", "Elijah", "Jeremiah", "Ezekiel"], "correctIndex": 0, "explanation": "Daniel was placed in the lions' den after continuing to pray to God.", "referenceLabel": "Daniel 6" },
+    { "id": "jesus-birth", "prompt": "In which town was Jesus born?", "choices": ["Bethlehem", "Nazareth", "Jerusalem", "Capernaum"], "correctIndex": 0, "explanation": "Jesus was born in Bethlehem during the reign of Herod.", "referenceLabel": "Matthew 2:1; Luke 2:4–7" },
+    { "id": "twelve", "prompt": "How many apostles did Jesus appoint as the Twelve?", "choices": ["12", "7", "10", "40"], "correctIndex": 0, "explanation": "Jesus appointed twelve, whom he also named apostles.", "referenceLabel": "Mark 3:13–19; Luke 6:13" },
+    { "id": "pentecost", "prompt": "Which New Testament book records the coming of the Holy Spirit at Pentecost?", "choices": ["Acts", "Romans", "John", "Hebrews"], "correctIndex": 0, "explanation": "Acts records the Spirit's coming and Peter's Pentecost sermon.", "referenceLabel": "Acts 2" },
+    { "id": "road-damascus", "prompt": "Who encountered the risen Jesus on the road to Damascus?", "choices": ["Saul", "Peter", "Stephen", "Barnabas"], "correctIndex": 0, "explanation": "Saul, later known as Paul, encountered Jesus while traveling to Damascus.", "referenceLabel": "Acts 9:1–19" }
+  ],
+  "bibleOrFalse": [
+    { "id": "noah-rain", "statement": "Noah's flood account says rain fell for forty days and forty nights.", "isTrue": true, "explanation": "Genesis states that rain was on the earth for forty days and forty nights.", "referenceLabel": "Genesis 7:12" },
+    { "id": "moses-canaan", "statement": "Moses personally led Israel across the Jordan River into the promised land.", "isTrue": false, "explanation": "Joshua led Israel across the Jordan after Moses died.", "referenceLabel": "Deuteronomy 34; Joshua 3" },
+    { "id": "david-first-king", "statement": "David was the first king of Israel.", "isTrue": false, "explanation": "Saul was Israel's first king; David succeeded him.", "referenceLabel": "1 Samuel 10; 2 Samuel 5" },
+    { "id": "jonah-nineveh", "statement": "Jonah was sent to preach to Nineveh.", "isTrue": true, "explanation": "God commanded Jonah to go to Nineveh and proclaim his message.", "referenceLabel": "Jonah 1:1–2; 3:1–4" },
+    { "id": "daniel-fire", "statement": "Daniel was the man preserved in the fiery furnace.", "isTrue": false, "explanation": "Shadrach, Meshach, and Abednego were preserved in the furnace; Daniel was later preserved in the lions' den.", "referenceLabel": "Daniel 3; 6" },
+    { "id": "jesus-baptized", "statement": "John the Baptist baptized Jesus in the Jordan.", "isTrue": true, "explanation": "The Gospels record John baptizing Jesus in the Jordan.", "referenceLabel": "Matthew 3:13–17; Mark 1:9–11" },
+    { "id": "five-thousand", "statement": "Jesus fed about five thousand people with five loaves and two fish.", "isTrue": true, "explanation": "All four Gospels record the feeding with five loaves and two fish.", "referenceLabel": "Matthew 14:13–21; John 6:1–14" },
+    { "id": "peter-tax", "statement": "Peter worked as a tax collector before following Jesus.", "isTrue": false, "explanation": "Peter was a fisherman; Matthew is identified as a tax collector.", "referenceLabel": "Matthew 4:18; 9:9" },
+    { "id": "paul-twelve", "statement": "Paul was one of the Twelve apostles selected before Jesus' crucifixion.", "isTrue": false, "explanation": "Paul was called after Jesus' resurrection and was not one of the original Twelve.", "referenceLabel": "Acts 9; 1 Corinthians 15:8–9" },
+    { "id": "revelation-patmos", "statement": "Revelation identifies Patmos as the island where John received his vision.", "isTrue": true, "explanation": "John says he was on Patmos because of God's word and the testimony of Jesus.", "referenceLabel": "Revelation 1:9" }
+  ],
+  "scriptureOrCap": {
+    "scripturePrompts": [
+      "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.",
+      "The LORD is my shepherd; I shall not want.",
+      "Trust in the LORD with all your heart, and don't lean on your own understanding.",
+      "In the beginning was the Word, and the Word was with God, and the Word was God.",
+      "We know that all things work together for good for those who love God.",
+      "Blessed are the pure in heart, for they shall see God.",
+      "Jesus said to him, \"I am the way, the truth, and the life. No one comes to the Father except through me.\"",
+      "Create in me a clean heart, O God. Renew a right spirit within me.",
+      "The fear of the LORD is the beginning of wisdom.",
+      "Be still, and know that I am God."
+    ],
+    "capPrompts": [
+      "For God so loved the world that he guarantees every believer perfect health and unlimited wealth in this life.",
+      "The LORD is my shepherd; therefore I will never suffer or lack anything ever again.",
+      "Trust in the LORD and you will never need to think critically about any decision.",
+      "In the beginning was the Word, and the Word was a cosmic force unrelated to Jesus of Nazareth.",
+      "All things work together for good, which means every tragedy is secretly what you wanted.",
+      "Blessed are the proud in heart, for they shall inherit the earth.",
+      "Jesus said many paths lead to the Father and no single way is necessary.",
+      "Create in me a heart that needs no repentance or renewal.",
+      "The fear of the LORD is optional for those who are spiritually advanced.",
+      "Be still and realize that you are yourself divine."
+    ]
+  }
+}

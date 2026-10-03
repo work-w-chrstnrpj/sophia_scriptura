@@ -39,7 +39,6 @@ enum ScriptureAppearance: String, CaseIterable, Identifiable {
     }
     var headingFamily: String { self == .sepiaNotes ? "Caveat" : readingFamily }
     func palette(dark: Bool) -> ReaderPalette {
-        if self == .midnightLibrary { return ReaderPalette(0x202633, 0xeff1f4, 0xbac6d4) }
         if dark {
             switch self {
             case .oldPaper: return ReaderPalette(0x181818, 0xf2f2f2, 0xbfbfbf)
@@ -47,12 +46,13 @@ enum ScriptureAppearance: String, CaseIterable, Identifiable {
             case .treeOfKnowledge: return ReaderPalette(0x29241f, 0xede1ce, 0xe0b198)
             case .inkAndLinen: return ReaderPalette(0x25212b, 0xeee8f4, 0xc8b4de)
             case .quietSage: return ReaderPalette(0x1e2828, 0xe4efed, 0xa0cfca)
+            case .midnightLibrary: return ReaderPalette(0x202633, 0xeff1f4, 0xbac6d4)
             default: return ReaderPalette(0x202522, 0xe8eee9, 0xafd3ba)
             }
         }
         switch self {
         case .oldPaper: return ReaderPalette(0xffffff, 0x000000, 0x494949)
-        case .midnightLibrary: return ReaderPalette(0x202633, 0xeff1f4, 0xbac6d4)
+        case .midnightLibrary: return ReaderPalette(0xf4f6fa, 0x202633, 0x4a6280)
         case .quietSage: return ReaderPalette(0xe9f0ee, 0x253535, 0x426966)
         case .sepiaNotes: return ReaderPalette(0xf5e5c6, 0x382b1d, 0x806039)
         case .inkAndLinen: return ReaderPalette(0xf7f4fa, 0x2e2538, 0x69527f)
@@ -97,10 +97,35 @@ enum ScriptureFonts {
     }
 }
 
+enum ScriptureVerseNumberStyle {
+    private static let relativeSize: CGFloat = 0.62
+    private static let baselineFactor: CGFloat = 0.38
+
+    static func uiKitAttributes(readingFont: UIFont, verse: Int) -> [NSAttributedString.Key: Any] {
+        let superscriptSize = max(11, readingFont.pointSize * relativeSize)
+        let font = UIFontMetrics(forTextStyle: .caption2).scaledFont(
+            for: .systemFont(ofSize: superscriptSize, weight: .semibold)
+        )
+        return [
+            .link: URL(string: "sophia-verse:\(verse)")!,
+            .font: font,
+            .baselineOffset: readingFont.pointSize * baselineFactor,
+        ]
+    }
+
+    static func swiftUISuperscript(_ number: Int, bodySize: CGFloat) -> (font: Font, baselineOffset: CGFloat) {
+        let superscriptSize = max(11, bodySize * relativeSize)
+        return (
+            .system(size: superscriptSize, design: .serif).weight(.semibold),
+            bodySize * baselineFactor
+        )
+    }
+}
+
 extension ReaderPreferences {
     var appearance: ScriptureAppearance { ScriptureAppearance(rawValue:appearancePreset ?? "") ?? .oldPaper }
     func palette(for appearance: ScriptureAppearance, colorScheme: ColorScheme) -> ReaderPalette {
-        let dark = appearance == .midnightLibrary || theme == "dark" || (theme == "system" && colorScheme == .dark)
+        let dark = theme == "dark" || (theme == "system" && colorScheme == .dark)
         return appearance.palette(dark:dark)
     }
 }

@@ -40,12 +40,13 @@ struct AnnotationArchiveDocument: FileDocument {
 }
 
 struct AnnotationControls: View {
+    @Environment(\.appTheme) private var theme
     @Bindable var annotations: AnnotationSession
     let reader: ReaderSession
     let width: Double
+    @Binding var confirmDeleteLayer: Bool
     @State private var rename = false
     @State private var name = ""
-    @State private var delete = false
     @State private var showLayers = false
     @State private var showModes = false
     @State private var showDeleted = false
@@ -75,13 +76,6 @@ struct AnnotationControls: View {
             TextField("Name", text: $name)
             Button("Save") { Task { await annotations.rename(name) } }; Button("Cancel", role: .cancel) { }
         }
-        .alert("Delete this layer?", isPresented: $delete) {
-            Button("Delete", role: .destructive) { Task {
-                await annotations.deleteSelected()
-                annotations.restoreSelectedAppearance(reader: reader)
-            } }
-            Button("Cancel", role: .cancel) { }
-        } message: { Text("Its handwriting remains recoverable in Recently Deleted.") }
         .fileExporter(isPresented: $exporting, document: exported, contentType: .json, defaultFilename: "Sophia-annotations") { result in
             if case .failure(let error) = result { annotations.report(error) }
         }
@@ -141,13 +135,7 @@ struct AnnotationControls: View {
             ForEach(AnnotationSession.Mode.allCases, id: \.self) { mode in
                 Button {
                     showModes = false
-                    Task {
-                        await annotations.transition {
-                            annotations.mode = mode
-                            if mode == .draw { annotations.toolsVisible = false; annotations.paletteCollapsed = false }
-                        }
-                        if mode != .hidden { annotations.restoreSelectedAppearance(reader: reader) }
-                    }
+                    Task { await annotations.applyMode(mode, reader: reader) }
                 } label: {
                     HStack(spacing: 10) {
                         modeSymbol(mode)
@@ -198,7 +186,8 @@ struct AnnotationControls: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Manage layers").font(.caption).foregroundStyle(.secondary)
                         Button { showLayers = false; create() } label: {
-                            layerActionLabel("New layer", icon: "plus.circle.fill").foregroundStyle(.white)
+                            layerActionLabel("New layer", icon: "plus.circle.fill")
+                                .foregroundStyle(Color(theme.palette.paper))
                         }
                         .buttonStyle(.borderedProminent)
                         if annotations.selected != nil {
@@ -206,7 +195,7 @@ struct AnnotationControls: View {
                                 layerActionLabel("Rename layer", icon: "pencil")
                             }
                             .buttonStyle(.bordered)
-                            Button(role: .destructive) { showLayers = false; delete = true } label: {
+                            Button(role: .destructive) { showLayers = false; confirmDeleteLayer = true } label: {
                                 layerActionLabel("Delete layer", icon: "trash").foregroundStyle(.red)
                             }
                             .buttonStyle(.bordered)
@@ -251,7 +240,7 @@ struct AnnotationControls: View {
                         .accessibilityLabel(annotations.mode.rawValue)
                         if annotations.mode != .hidden {
                         Button {
-                            Task { await annotations.transition { annotations.marginExpanded.toggle() } }
+                            annotations.marginExpanded.toggle()
                         } label: { controlLabel("Margin", icon: annotations.marginExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", compact: compact) }
                         .accessibilityIdentifier("annotation.margin")
                         .accessibilityValue(annotations.marginExpanded ? "On" : "Off")

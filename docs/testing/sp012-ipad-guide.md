@@ -1,7 +1,10 @@
 # SP-012 — Actual Scripture annotation acceptance
 
 Use the Scripture tab, not Settings → SP-008 experiment. Owner selected SP-012 on
-2026-09-29. Physical acceptance below is pending; prior SP-008 results do not pass it.
+2026-09-29. On 2026-10-03 the owner reported that actual-reader Pencil writing,
+text-size alignment, palm rejection, background/relaunch, long-chapter responsiveness,
+and annotation restore/recovery passed. The cases below remain a reusable walkthrough;
+no per-case timing or screenshot log was supplied. Prior SP-008 results do not pass it.
 VoiceOver is waived, not passed. Use test handwriting until this recovery drill succeeds.
 
 1. Open WEB John 3. Layers → New layer. Draw with Pencil over the text; enable Margin for blank space around all four sides;

@@ -72,9 +72,12 @@ through a provider-agnostic bring-your-own-key adapter without leaking secrets.
 Update this map whenever the project structure changes.
 
 - `application/`: the SwiftUI iPad app. `application/SophiaScriptura/` holds the Xcode
-  project: the six tabs (Scripture, Collections, Notes, Companion, Activity, Settings)
-  with the SP-013 Notes library/editor, isolated SP-006 experiment, and SP-007 in-memory
-  Collections prototype. Collections
+ project: the six tabs (Scripture, Collections, Notes, Companion, Activity, Settings)
+ with the SP-013 Notes library/editor, isolated SP-006 experiment, and SP-007 in-memory
+ Collections prototype. M6 adds `Core/Companion/`, `Infrastructure/Companion/` (local
+ generations, Keychain provider keys, streaming adapters, bundled prompt presets,
+ SP-019 quiz refill coordinator) and `Features/Companion/` (conversation UI, session,
+ quiz cache orchestration). Collections
   separates library/detail, picker/editor, components, styling and temporary data; Core
   contains Scripture domain contracts, selection mapping, annotation and Notes contracts,
   plus remaining placeholder protocols. Infrastructure contains Notes recovery,
@@ -234,3 +237,23 @@ contextual selection actions; Root overlays the dock while editing to reclaim wr
 is virtual (`StudyCollection.unfiledID`). `CollectionDestinationPicker.swift` holds the shared
 folder chooser; `PassageSaveSheet.swift` and `PassageCardSheet.swift` own bookmark/gleaning
 save and centered cards. Scripture builds ellipsis excerpts via `ChapterTextMap.excerpt(in:)`.
+
+## SP-020 structure update
+
+`Core/Activity/` owns modes, records, active intervals and local metrics;
+`Infrastructure/Activity/` owns the Activity-only checked file and archive.
+`Features/Activity/` owns the screen, timer commands and Files UI. Root hosts the
+cross-tab Activity control and passes the reader's verse catalog into Reading selection.
+`Core/Activity/` also defines reminder values; `Infrastructure/Activity/ActivityReminderNotifications.swift`
+owns local notification scheduling and `Features/Activity/ActivityRemindersView.swift`
+owns their editor. Settings exposes one-time reminder cleanup. Analytics can export PNG.
+M7 narration is postponed. SP-021 adds `Core/Music/`, `Infrastructure/Music/`, `Features/Music/`, and AppShell Now Active plus `StudyAudioCoordinator` for background music; owner-approved track files remain a gate before SP-021 closes.
+
+## SP-022 structure update
+
+`Core/Activity/MeditationJourney.swift` owns launch values, passage rules, bundled seed
+catalog and passage text resolution. `Features/Activity/MeditationJourneyCoordinator.swift`
+and `MeditationJourneyView.swift` own the fullscreen swipe journey. Root overlays the journey
+above tab content while keeping music and Activity recorder FABs visible; the tab dock hides
+during the journey. `ActivityView` starts the journey when Meditating is started from Start
+Activity. `Resources/Activity/meditation-passages.seed.json` supplies default seven-passage sets.

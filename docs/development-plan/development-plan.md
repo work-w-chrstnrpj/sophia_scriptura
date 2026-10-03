@@ -15,8 +15,8 @@ and cached-access recovery; Release/Archive retains the standard lease. VoiceOve
 waived for this M2 closure and SP-008 transition, not recorded as passed. Historical
 unrun accessibility/device cases remain evidence gaps, not blockers to this decision.
 SP-001 and later-feature SP-005 contracts remain in progress. The Activity/Music behavior
-baseline was refined with the owner on 2026-10-01; M8 still awaits M7 and a bounded
-implementation ticket. The Canvas/Page redesign and first workspace refinement are installed. The owner then
+baseline was refined with the owner on 2026-10-01; the owner postponed M7 on 2026-10-03 and selected SP-020 as the first M8 Activity ticket. M8 music has draft
+[SP-021](../../tickets/SP-021-background-music.md), which is not selected and has no approved track catalog. The Canvas/Page redesign and first workspace refinement are installed. The owner then
 selected dark/light/dark ink correction, removal of reserved footer space across tabs,
 and consistent theme surfaces; this follow-up is implemented and installed under SP-013, with 35 selected checks passing.
 The owner then selected [SP-014](../../tickets/SP-014-pencil-shapes-and-app-icon.md) as a
@@ -48,8 +48,8 @@ palette. This is not acceptance of all device cases or a completed Notes editor.
 **Most recently closed owner work:** [SP-013](../../tickets/SP-013-freeform-notes.md), M4 Study Notes. The Canvas/Page split, workspace refinement, ink-memory correction and Page recursion correction are accepted. Scripture now routes selected passages into an open note or offers new Page, new Canvas and existing-note destinations. The reader is quieter and the floating dock uses a three-second idle delay. Verification and installation evidence are tracked in SP-013. Earlier selected work: [SP-012](../../tickets/SP-012-persistent-scripture-annotations.md),
 persistent annotations in the actual Scripture reader. SP-005 annotation planning is
 complete; domain identity, generation storage/recovery, reader layers and ink-only Files
-backup/restore are implemented and undergoing verification. M3 remains in progress until
-actual-reader Pencil acceptance and the recovery drill. See the
+backup/restore are implemented. The owner accepted actual-reader Pencil behavior and
+annotation restore on 2026-10-03, closing M3. See the
 [device walkthrough](../testing/sp012-ipad-guide.md). SP-008's physical acceptance remains
 bounded experiment evidence; VoiceOver is waived. SP-011 footer reachability is fixed;
 subjective shell-motion review remains separate.
@@ -102,21 +102,32 @@ by a final integrated acceptance pass. No date or effort estimate is implied.
 | M0 | Product, UX and architecture planning | in_progress | Reviewed full-app screens, responsibilities, open decisions and a ready next-ticket scope | Owner review and SP-001; supporting research/contracts as relevant |
 | M1 | Native feasibility and contracts | in_progress | Canvas and Scripture-layout evidence; reviewed identity/storage/recovery contracts; honest limits recorded | SP-002–006 inputs; targeted owner-selected experiments |
 | M2 | Scripture reader | done; owner-revised acceptance | Offline WEB reader plus authorized encrypted NIV11/NLT/NKJV download, 30-day lock/renewal, Version control, selection, Copy/Share and initial verse hub | Owner closure 2026-09-29; VoiceOver waived; visual/renewal accepted as addressed |
-| M3 | Scripture annotations | in_progress; SP-012 implemented; verification/device acceptance pending | Multiple layers, three states, native tools, blank surrounding space and aligned persistent ink on continuous chapters | M2; demonstrated layout/gesture strategy; ink storage and recovery contract |
+| M3 | Scripture annotations | done; owner accepted physical iPad behavior and annotation restore 2026-10-03 | Multiple layers, three states, native tools, blank surrounding space and aligned persistent ink on continuous chapters | M2; demonstrated layout/gesture strategy; ink storage and recovery contract |
 | M4 | Study Notes | done; owner accepted 2026-10-01 | Canvas and Page editors sharing a library, citations, v3 recovery, a persisted Scripture-pane toggle and Scripture-to-note routing | M2 passage identity; M1 canvas evidence; tagged content/recovery plan; follows M3 in visible delivery |
 | M5 | Collections and full Save flow | done; owner accepted SP-015 on iPad 2026-10-02 | Nested topic folders, shared membership, bookmarks/gleanings/note quotes, attached links, organized verse hub and remove-versus-delete recovery rules | M4 note links and relevant SP-005 membership/deletion contracts |
-| M6 | Stateful Companion | ready for a bounded implementation ticket; SP-016 planning approved | Multi-provider BYOK chat with four approved contexts, follow-ups, passage Ask, panel/tab continuity, attributed sources, provider configuration, structured Quiz Me and local question/score history | M5 integrated study artifacts; approved Companion design/data/privacy contracts; current provider API feasibility must be rechecked per adapter |
-| M7 | Scripture audio | blocked | Permitted human narration with playback controls and tested interruptions; explicit edition/availability handling | M2 reader and permitted audio source; follows M6 in visible delivery |
-| M8 | Activity and background music | blocked by M7; behavior baseline recorded | Built-in and custom modes including Reviewing; cross-book Reading timer and verse range; manual records; goal/streak/period/mode analytics; human-composed instrumental ambient lo-fi; shared Now Active cluster; opt-out linked Reviewing records for Quiz Me | M7 narration arbitration; Activity design contract; remaining overlap/concurrency/midnight/per-book allocation decisions |
+| M6 | Stateful Companion | in_progress; SP-018 refinements and SP-019 quiz cache implemented, owner/provider acceptance pending | Multi-provider BYOK chat with formatted Markdown, passage Ask and Original Language Analysis, panel/tab continuity, attributed sources, provider configuration, structured Quiz Me with prepared questions and local question/score history | M5 integrated study artifacts; approved Companion contracts; physical/provider evaluation and remaining M6 acceptance |
+| M7 | Scripture audio | postponed by owner 2026-10-03 | Permitted human narration with playback controls and tested interruptions; explicit edition/availability handling | M2 reader and permitted audio source; resume only when selected |
+| M8 | Activity and background music | in progress; SP-020 Activity selected; SP-022 meditation journey implemented; SP-021 music draft, not selected | Built-in and custom modes including Reviewing; cross-book Reading timer and verse range; Meditating fullscreen swipe journey with optional passage or seven seed passages; manual records; goal/streak/period/mode analytics; local reminders; 3–5 rights-verified human-composed instrumental ambient lo-fi tracks; shared Now Active cluster; automatic linked Reviewing records for completed Quiz Me | Activity can proceed before M7; music needs an approved track catalog and later narration arbitration |
 | M9 | Integrated acceptance and refinement | pending | Owner-approved complete study journey, recovery drill, accessibility/performance evidence and resolved material defects | M2–M8 acceptance |
 
 M2–M8 are feature phases, not ticket numbers. SP-009 is the first M2 implementation
-ticket; SP-008 has completed M3 validation, SP-012 awaits physical acceptance, and
+ticket; SP-008 has completed M3 validation, SP-012 is owner-accepted, and
 SP-013 implements the owner-selected Canvas/Page split, including inline Page attachments
 and remembered Scripture visibility. M4 is closed under the owner's iPad acceptance;
-M3 retains its separate actual-reader Pencil/recovery gate. Draft only
+M3's actual-reader Pencil/recovery gate is owner-accepted. Draft only
 the next useful batch when designs and inputs are stable. Engineering dependencies may introduce shared infrastructure early, but this
 must not silently change the visible feature priorities.
+
+### Optional cross-cutting maintainability gate
+
+[SP-017](../../tickets/SP-017-maintainability-hardening.md) records the 2026-10-02
+maintainability findings and a bounded, behavior-preserving hardening sequence. It is
+**ready but not selected** and does not change the visible M2–M8 feature order. The ticket
+extracts responsibilities from current hotspots, separates dependency construction from
+navigation, removes project-owned warnings, makes lint/concurrency checks reproducible and
+repairs stale architecture maps. It explicitly excludes a rewrite, redesign, persistence
+migration and completion of an actively changing feature. The owner may select it as one
+bounded package or approve named work packages between feature milestones.
 
 ## Phase acceptance and owner review
 
@@ -217,17 +228,25 @@ does not itself establish that the answer key is correct.
 
 SP-016 resolves the initial question controls, deterministic answer-validation boundary,
 per-question timers (Easy 60 seconds, Average 45, Difficult 30), points/percentage display,
-stored history and deletion behavior. **Record this as Reviewing** defaults on and may be
-disabled before a session. Completed or intentionally ended recorded sessions create a
-linked Reviewing record whose active duration counts toward the normal goal/streak; abandoned
-sessions require manual saving. Activity owns duration/goal records, not the quiz answer key,
-answers, score or explanation. Preserve quiz score/history in the Quiz session even if no
-Activity record is created.
+stored history and deletion behavior. The owner revised the M8 link policy: completing all
+quiz questions through the final summary automatically creates a Reviewing record, whether
+timed or untimed and without an Activity timer. Active question duration counts toward the
+normal goal/streak; abandoned sessions are not automatically recorded. Quiz-history deletion
+leaves its Activity time intact. Activity owns duration/goal records, not the quiz answer key,
+answers, score or explanation.
 
 Owner review: one multi-turn study conversation in each mode, including a clarification,
 a reopened conversation and a source inspection; plus representative timed/untimed Quiz Me
 runs with checked Scripture answer keys, sourced Christian History explanations, saved history,
 and the selected Reviewing-record flow. No provider purchase is implicitly authorized.
+
+**Quiz Me refinements selected 2026-10-02:** SP-018 uses the selected provider for
+strict-JSON questions with distinct difficulty rubrics. SP-019 now targets 20 Easy, 10 Average
+and 6 Difficult questions per selectable type; a warm quiz starts from the local cache and
+replenishment is requested on start, completion and quit while the app remains active. Full recent-question lists are no longer
+sent to the provider. Sophia rejects invalid structure and local exact/strong-overlap
+repeats and labels questions/keys as AI-generated. Real-provider factual accuracy, more
+subtle semantic repeats and perceived difficulty remain acceptance gaps.
 
 ### M7: narrated Scripture
 
@@ -245,7 +264,8 @@ The owner-approved behavior is recorded in the [Activity design specification](.
 Implement six built-in modes plus user-created modes, including Reviewing; one timestamp-based
 timer that survives backgrounding/relaunch and excludes paused intervals; Reading start/end reference capture
 with a fading start highlight and Scripture routing; manual entry with required title, mode,
-date and duration; and correction/history flows. Reading stores one continuous range across
+start date/time and either end time or duration (deriving the other); and correction/history
+flows that replace the original record. Reading stores one continuous range across
 chapters/books. Add the default ten-active-minute daily goal and streak threshold, configurable
 goals, and local daily/weekly/monthly totals and mode summaries.
 
@@ -257,10 +277,12 @@ continues when the app backgrounds or the screen locks. Starting Scripture narra
 music; choosing Play for music pauses narration. The two player states remain independent of
 Activity time. If neither a timer/session nor music service is in use, hide the cluster.
 
-Before the implementation ticket is ready, settle whether one concurrent timer is supported,
-manual overlap correction, midnight metric attribution, custom-mode archival/deletion, and
-how per-book reading minutes are derived from a cross-book range. Extend Files backup/restore
-to Activity data and settings. Do not count app open as study or fabricate per-book allocation.
+SP-020 uses one concurrent timer, rejects overlapping manual clock intervals, splits timed
+intervals at local midnight, archives custom modes while retaining historical labels,
+and shows cross-book range coverage without inferring per-book minutes. It adds Activity-only
+Files export/restore, selected-analytics PNG export and local recurring reminders; physical
+acceptance remains. Do not count app open as study or
+fabricate per-book allocation.
 
 Owner review: start Reading from a selected verse, pause/resume across tabs and relaunch,
 finish at a later verse, verify manual entry and corrections, review local metrics/streaks,
@@ -310,7 +332,7 @@ new data type and offer optional reminders. Do not postpone data safety until M9
 | [SP-011](../../tickets/SP-011-tab-shell-motion.md) | in_progress; physical motion review pending | Shared shell implemented; footer reachability fixed and checked on iPad; physical motion review pending |
 
 | [SP-013](../../tickets/SP-013-freeform-notes.md) | done; owner accepted 2026-10-01 | M4: production Canvas/Page Notes, Scripture quote routing and Notes-only recovery |
-| [SP-012](../../tickets/SP-012-persistent-scripture-annotations.md) | in_progress; device acceptance pending | M3: persistent reader layers and annotation-only backup/recovery; automated verification and actual-reader Pencil acceptance |
+| [SP-012](../../tickets/SP-012-persistent-scripture-annotations.md) | done; owner accepted 2026-10-03 | M3: persistent reader layers, actual-reader Pencil behavior and annotation-only backup/recovery |
 
 No existing ticket becomes done or authorizes a new feature because this roadmap changed.
 Next implementation tickets must link REQ IDs, selected designs, dependencies, source

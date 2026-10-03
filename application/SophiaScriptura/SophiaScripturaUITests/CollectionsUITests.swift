@@ -55,7 +55,10 @@ final class CollectionsUITests: XCTestCase {
         XCTAssertTrue(childName.waitForExistence(timeout: 5))
         childName.tap()
         childName.typeText("Study Child")
-        app.buttons["collections.color.plum"].tap()
+        let plum = app.buttons["collections.color.plum"]
+        for _ in 0..<6 where !plum.isHittable { app.swipeUp() }
+        XCTAssertTrue(plum.waitForExistence(timeout: 5))
+        plum.tap()
         app.buttons["Create"].tap()
         XCTAssertTrue(app.buttons["collections.folder.Study Child"].waitForExistence(timeout: 5))
         let detail = XCTAttachment(screenshot: app.screenshot())
@@ -63,7 +66,9 @@ final class CollectionsUITests: XCTestCase {
 
         app.buttons["Collection actions"].tap()
         app.buttons["Delete Collection"].tap()
-        app.alerts.buttons["Delete Collection"].tap()
+        let confirmDelete = app.buttons["Delete Collection"]
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5))
+        confirmDelete.tap()
         XCTAssertTrue(app.buttons["collections.folder.Study Child"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["collections.folder.No Folder"].exists)
         XCTAssertFalse(app.buttons["collections.folder.Study Review"].exists)
@@ -79,8 +84,8 @@ final class CollectionsUITests: XCTestCase {
     func testUnfiledNoteCanBeFiledAndReturnsWhenItsFolderIsDeleted() {
         let app = launch()
         showTab("tab.notes", in: app)
-        XCTAssertTrue(app.buttons["notes.new"].waitForExistence(timeout: 10))
-        app.buttons["notes.new"].tap()
+        XCTAssertTrue(app.buttons["notes.newNotes"].waitForExistence(timeout: 10))
+        app.buttons["notes.newNotes"].tap()
         app.buttons["notes.new.page"].tap()
         let close = app.navigationBars.buttons.element(boundBy: 0)
         XCTAssertTrue(close.waitForExistence(timeout: 5))
@@ -135,9 +140,8 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["collections.folder.Creation"].tap()
         let bookmark = item("Genesis 1:1", in: app)
         XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
-        let actions = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.itemActions.Genesis 1:1")).firstMatch
-        actions.tap()
-        app.buttons["Move to…"].tap()
+        bookmark.swipeLeft()
+        app.buttons["Move"].tap()
         XCTAssertTrue(app.navigationBars["Move"].waitForExistence(timeout: 5))
         app.buttons["collections.chooser.new"].tap()
         let moveName = app.textFields["collections.chooser.newName"]

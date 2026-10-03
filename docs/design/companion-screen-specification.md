@@ -33,6 +33,23 @@ branched conversation after showing which permitted context will be copied.
 The composer visibly shows the selected preset, provider/model, attached-context chips,
 research availability and that Send transmits the displayed context online. It never
 implies that the whole local library or unrelated conversations are available to the model.
+Provider requests include a response-format instruction: return readable Markdown with
+short paragraphs, descriptive headings for distinct sections, and lists where useful rather
+than one unbroken paragraph. The UI renders that Markdown and falls back safely to plain text.
+
+Assistant messages use Foundation's full Markdown parser to render headings, paragraphs,
+bulleted and numbered lists, block quotes and fenced code, preserving inline emphasis and
+links. Streaming chunks are concatenated verbatim and saved without rewriting Markdown:
+transport chunk boundaries do not define paragraphs or emphasis. No regular-expression
+recovery inserts inferred breaks or changes URLs, code or escaped content. Provider instructions
+request valid Markdown with actual newlines. User-message bubbles hug short prompts and wrap longer
+prompts within the available panel width, capped at 560 points; they remain trailing aligned.
+
+Scripture selection includes both **Ask** and **Original Language Analysis**. The latter
+opens a passage-linked Companion draft that identifies Hebrew, Aramaic or Koine Greek as
+appropriate and requests original wording, transliteration, key words/grammar, literary and
+historical context, meaning in context and translation observations. It explicitly rejects
+root-only word studies and decontextualized dictionary-gloss lists.
 
 ## Provider settings
 
@@ -81,20 +98,24 @@ Quiz Me is a structured Companion mode, not an ordinary chat and not a new tab. 
 quiz types, difficulty, permitted Scripture edition, timed/untimed mode, and **Record this as
 Reviewing**, which defaults on and can be disabled before the session.
 
-| Type | Answer control | Authoritative validation |
+| Type | Answer control | Current validation |
 | --- | --- | --- |
-| Identify the Verse | Four choices | Canonical local Scripture key |
+| Identify the Verse | Four choices | Provider key plus cited Scripture reference; AI provenance disclosed |
 | Complete the Verse | Text field with optional word bank | Normalized selected-edition text |
-| Scripture or Cap | Scripture / Cap buttons | Exact local quotation or deterministic altered decoy |
-| Who Said It? | Four speaker choices | Curated ambiguity-reviewed Scripture fixture |
-| Christian History | Four choices | Curated key with inspectable source record |
-| Identify the Reference | Book, chapter and verse picker | Canonical reference comparison |
+| Scripture or Cap | Scripture / Cap buttons | Provider key plus cited reference; AI provenance disclosed |
+| Who Said It? | Four speaker choices | Provider key plus cited Scripture reference; AI provenance disclosed |
+| Christian History | Four choices | Provider key plus requested primary-source label; AI provenance disclosed |
+| Bible Quiz | Four choices | Provider key plus cited Scripture reference; AI provenance disclosed |
+| Bible or False | True / False | Provider key plus cited Scripture reference; AI provenance disclosed |
 
 Complete the Verse ignores case, surrounding punctuation and repeated whitespace. A
 paraphrase is not silently accepted as exact: it may be marked **Nearly correct**, separately
-from Correct, and the selected edition wording is then shown. Scripture or Cap decoys change
-a meaningful phrase in a real permitted verse through deterministic fixture logic; the model
-does not invent a decoy and then judge its own work.
+from Correct, and the selected edition wording is then shown. Provider-generated questions
+are parsed as strict JSON and rejected when their count, type order, choices, keyed index,
+required reference, explanation or exact uniqueness is invalid. This is structural rather
+than independent factual validation. Sophia locally repositions the keyed answer for ordinary
+multiple-choice questions so provider ordering bias does not make the first choice predictably
+correct. True/False and Scripture/Cap retain their conventional control order.
 
 Untimed is the default. Timed mode is per question: Easy 60 seconds, Average 45 seconds and
 Difficult 30 seconds. The timer pauses between questions, while feedback is shown, and for
@@ -114,6 +135,16 @@ session does not create a record automatically, but its elapsed time may be save
 Activity stores duration, date, mode, title and quiz-session ID only; quiz answers and score
 remain owned by Companion. Deleting quiz history leaves a linked Activity record with a
 source-deleted state.
+
+Quiz Me prepares up to 20 Easy, 10 Average and 6 Difficult questions per selectable type,
+enough for two consecutive single-type quizzes once fully warm.
+A warm session opens from the local cache; a first or depleted session waits for the selected
+provider to generate the missing set. In-app replenishment is requested after consumption
+and again after completion or quit. The first playable set takes priority over spares. Each
+generation request includes a random nonce and a distinct difficulty rubric, without full
+recent-question prompt padding. Sophia rejects exact and strong word-overlap repeats against
+the response, cache and history. Real-provider review must evaluate subtle paraphrases,
+factual keys and perceived difficulty because those properties are not proven locally.
 
 ## Acceptance scenarios
 

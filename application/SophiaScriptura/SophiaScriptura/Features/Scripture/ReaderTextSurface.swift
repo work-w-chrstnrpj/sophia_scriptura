@@ -16,6 +16,8 @@ struct ReaderTextSurface: UIViewRepresentable {
     var saveToNote: ((ChapterTextMap.Selection) -> Void)? = nil
     var saveBookmark: ((NSRange) -> Void)? = nil
     var saveGleaning: ((NSRange) -> Void)? = nil
+    var askCompanion: ((ChapterTextMap.Selection) -> Void)? = nil
+    var analyzeOriginalLanguage: ((ChapterTextMap.Selection) -> Void)? = nil
     var emphasisVerses: [Int] = []
     var emphasisSpans: [PassageSpan] = []
 
@@ -45,7 +47,7 @@ struct ReaderTextSurface: UIViewRepresentable {
         view.authorizeQuote = authorizeQuote
         view.textDragInteraction?.isEnabled = !document.isLicensed
         let appearance = preferences.appearance
-        let dark = appearance == .midnightLibrary || preferences.theme == "dark" ||
+        let dark = preferences.theme == "dark" ||
             (preferences.theme == "system" && view.traitCollection.userInterfaceStyle == .dark)
         let palette = appearance.palette(dark:dark)
         view.tintColor = palette.accent
@@ -66,7 +68,7 @@ struct ReaderTextSurface: UIViewRepresentable {
                 switch run.block.kind {
                 case "label":
                     if let verse = run.block.verses.first {
-                        result.addAttributes([.link:URL(string:"sophia-verse:\(verse)")!, .font:UIFontMetrics(forTextStyle:.caption1).scaledFont(for:.systemFont(ofSize:15,weight:.semibold))], range:run.range)
+                        result.addAttributes(ScriptureVerseNumberStyle.uiKitAttributes(readingFont: scaled, verse: verse), range: run.range)
                     }
                 case "note":
                     result.addAttributes([.link:URL(string:"sophia-note:\(run.range.location)")!, .font:UIFont.systemFont(ofSize:14)], range:run.range)
@@ -166,6 +168,12 @@ struct ReaderTextSurface: UIViewRepresentable {
             }
             if let gleaning = parent.saveGleaning {
                 actions.append(UIAction(title: "Gleaning", image: UIImage(systemName: "text.quote")) { _ in gleaning(range) })
+            }
+            if let ask = parent.askCompanion {
+                actions.append(UIAction(title: "Ask", image: UIImage(systemName: "bubble.left.and.bubble.right")) { _ in ask(selection) })
+            }
+            if let analyze = parent.analyzeOriginalLanguage {
+                actions.append(UIAction(title: "Original Language Analysis", image: UIImage(systemName: "character.book.closed")) { _ in analyze(selection) })
             }
             return UIMenu(children: actions)
         }

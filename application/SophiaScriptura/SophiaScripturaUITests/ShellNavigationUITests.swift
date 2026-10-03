@@ -16,8 +16,6 @@ final class ShellNavigationUITests: XCTestCase {
     }
     private func reveal(_ app: XCUIApplication) {
         if app.buttons["tab.scripture"].isHittable {
-            app.buttons["tab.scripture"].tap()
-            waitForVisible(app.buttons["tab.scripture"])
             return
         }
         let handle = app.buttons["navigation.showTabs"]
@@ -68,7 +66,7 @@ final class ShellNavigationUITests: XCTestCase {
         let counts = app.descendants(matching:.any)["collections.detail.counts"]
         XCTAssertTrue(counts.waitForExistence(timeout:5))
         reveal(app); app.buttons["tab.notes"].tap()
-        waitForVisible(app.buttons["notes.new"])
+        waitForVisible(app.buttons["notes.newNotes"])
         reveal(app); app.buttons["tab.collections"].tap()
         XCTAssertTrue(counts.waitForExistence(timeout:5))
         capture(app,"Collection detail preserved through tab slide")
@@ -79,24 +77,27 @@ final class ShellNavigationUITests: XCTestCase {
         app.buttons["tab.scripture"].tap()
         waitForVisible(app.textViews["scripture.text"])
     }
-    func testSettingsFinalExperimentRowIsFullyAboveDockInBothOrientations() {
+    func testSettingsProviderKeysRowIsFullyAboveDockInBothOrientations() {
         let app = launch()
-        reveal(app); app.buttons["tab.settings"].tap()
+        let dockHandle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(dockHandle.waitForExistence(timeout: 5))
+        dockHandle.tap()
+        app.buttons["tab.settings"].tap()
         let form = app.descendants(matching:.any).matching(identifier:"settings.content").firstMatch
         XCTAssertTrue(form.waitForExistence(timeout:5))
-        let experiment = app.buttons["settings.pencilValidation"]
+        let providerKeys = app.buttons["settings.companionProviders"]
         for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
             XCUIDevice.shared.orientation = orientation
             for _ in 0..<4 { form.swipeUp() }
-            reveal(app)
-            waitForVisible(experiment)
+            if dockHandle.isHittable { dockHandle.tap() }
+            waitForVisible(providerKeys)
             let footer = app.buttons["tab.settings"]
-            XCTAssertLessThan(experiment.frame.maxY, footer.frame.minY - 12,
+            XCTAssertLessThan(providerKeys.frame.maxY, footer.frame.minY - 12,
                               "The complete last row must clear the footer")
-            capture(app,"Settings last experiment row — \(orientation == .portrait ? "portrait" : "landscape")")
+            capture(app,"Settings provider keys row — \(orientation == .portrait ? "portrait" : "landscape")")
         }
-        experiment.tap()
-        XCTAssertTrue(app.staticTexts["SP-008 · Pencil geometry experiment"].waitForExistence(timeout:5))
+        providerKeys.tap()
+        XCTAssertTrue(app.navigationBars["Provider keys"].waitForExistence(timeout:5))
         XCUIDevice.shared.orientation = .portrait
     }
     func testCollectionsAndNotesContentClearsFooterInLandscape() {
@@ -122,7 +123,7 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertLessThan(lastAction.frame.maxY + 14,app.buttons["tab.collections"].frame.minY - 12)
         capture(app,"Collection final card above dock")
         app.buttons["tab.notes"].tap()
-        let noteNotice = app.buttons["notes.new"]
+        let noteNotice = app.buttons["notes.newNotes"]
         waitForVisible(noteNotice)
         if !app.buttons["tab.notes"].isHittable { reveal(app) }
         XCTAssertLessThan(noteNotice.frame.maxY,app.buttons["tab.notes"].frame.minY - 12)
@@ -168,7 +169,7 @@ final class ShellNavigationUITests: XCTestCase {
         let noteSearch = app.textFields["notes.search"]
         let noteOptions = app.buttons["notes.viewOptions"]
         let backups = app.buttons["notes.backups"]
-        let newNote = app.buttons["notes.new"]
+        let newNote = app.buttons["notes.newNotes"]
         for element in [noteSearch, noteOptions, backups, newNote] { waitForVisible(element) }
         XCTAssertFalse(app.navigationBars["Notes"].exists)
         XCTAssertLessThan(noteTitle.frame.maxX, noteSearch.frame.minX)
@@ -201,5 +202,158 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertLessThanOrEqual(tab.frame.maxX,app.frame.width)
         XCTAssertGreaterThan(tab.frame.minY,app.frame.height * 0.75)
         capture(app,"Landscape dock and reader")
+    }
+    func testActivityDashboardUsesFullWidthThemeInPortraitAndLandscape() {
+        let app = launch()
+        let handle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        XCTAssertTrue(app.staticTexts["Analytics"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Today"].exists)
+        XCTAssertTrue(app.staticTexts["History"].exists)
+        capture(app, "Activity dashboard portrait")
+
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.settings"])
+        app.buttons["tab.settings"].tap()
+        let night = app.buttons["preset.midnightLibrary"]
+        waitForVisible(night); night.tap()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 10), .completed)
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        XCTAssertTrue(app.staticTexts["Analytics"].waitForExistence(timeout: 8))
+        capture(app, "Activity dashboard midnight landscape")
+    }
+    func testCrossTabRecorderFinishOpensReviewOnActivity() {
+        let app = launch()
+        let handle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        let start = app.buttons["activity.start"]
+        waitForVisible(start)
+        start.tap()
+        XCTAssertTrue(app.navigationBars["Start Activity"].waitForExistence(timeout: 5))
+        let confirm = app.buttons["Start"]
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: confirm)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+        confirm.tap()
+        let recorder = app.buttons["activity.recorder.expand"]
+        XCTAssertTrue(recorder.waitForExistence(timeout: 8))
+        recorder.tap()
+        XCTAssertTrue(app.buttons["activity.recorder.pause"].waitForExistence(timeout: 5))
+        let before = recorder.frame
+        let origin = recorder.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        origin.press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: -140, dy: -90)))
+        XCTAssertLessThan(recorder.frame.midX, before.midX - 40)
+        app.buttons["activity.recorder.finish"].tap()
+        XCTAssertTrue(app.navigationBars["Finish Activity"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["tab.activity"].exists)
+    }
+    func testActivityReminderWorkspaceAndSaveDismissal() {
+        let app = launch()
+        let handle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        let reminder = app.buttons["activity.reminder.new"]
+        let content = app.descendants(matching: .any).matching(identifier: "activity.content").firstMatch
+        XCTAssertTrue(content.waitForExistence(timeout: 5))
+        for _ in 0..<6 where !reminder.isHittable { content.swipeUp() }
+        waitForVisible(reminder)
+        reminder.tap()
+        XCTAssertTrue(app.navigationBars["New Reminder"].waitForExistence(timeout: 5))
+        let title = app.textFields["Title"]
+        XCTAssertTrue(title.exists)
+        title.tap(); title.typeText("Morning reading")
+        XCTAssertTrue(app.switches["Delete after it fires"].exists)
+        capture(app, "Activity reminders")
+        app.buttons["activity.reminder.save"].tap()
+        let editor = app.navigationBars["New Reminder"]
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: editor)
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
+        XCTAssertTrue(app.staticTexts["Morning reading"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["activity.auxiliary.reminder"].exists)
+        XCTAssertFalse(app.buttons["activity.auxiliary.printanalytics"].exists)
+        let remindersHeader = app.staticTexts["Reminders"]
+        waitForVisible(remindersHeader)
+        let viewAll = app.buttons.matching(NSPredicate(format: "label == 'View all'")).allElementsBoundByIndex
+        XCTAssertGreaterThanOrEqual(viewAll.count, 2)
+        viewAll.last?.tap()
+        XCTAssertTrue(app.navigationBars["Reminders"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Morning reading"].exists)
+    }
+    func testActivityDistributionAndTodayGoals() {
+        let app = launch()
+        let handle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        let content = app.descendants(matching: .any).matching(identifier: "activity.content").firstMatch
+        let add = app.buttons["activity.auxiliary.addmanual"]
+        for _ in 0..<6 where !add.isHittable { content.swipeUp() }
+        waitForVisible(add)
+        add.tap()
+        let title = app.textFields["Title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Daily reading")
+        app.buttons["Save"].tap()
+        for _ in 0..<6 { content.swipeDown() }
+        let distribution = app.buttons["activity.analytics.distribution"]
+        waitForVisible(distribution)
+        distribution.tap()
+        XCTAssertTrue(app.navigationBars["Activity Distribution"].waitForExistence(timeout: 5))
+        capture(app, "Activity distribution breakdown")
+        app.navigationBars["Activity Distribution"].buttons["Done"].tap()
+        let today = app.buttons["activity.today"]
+        waitForVisible(today)
+        today.tap()
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5))
+        app.buttons["activity.today.expandGoals"].tap()
+        XCTAssertTrue(app.textFields["activity.goal.reading"].waitForExistence(timeout: 5))
+        let studyingGoal = app.textFields["activity.goal.studying"]
+        studyingGoal.tap()
+        studyingGoal.typeText("5")
+        app.buttons["activity.today.expandGoals"].tap()
+        XCTAssertTrue(app.staticTexts["10 of 15 mins"].waitForExistence(timeout: 5))
+        capture(app, "Today goals updated")
+    }
+    func testActivityRecordDetailHasCompactActions() {
+        let app = launch()
+        let handle = app.buttons["navigation.showTabs"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 8))
+        handle.tap()
+        waitForVisible(app.buttons["tab.activity"])
+        app.buttons["tab.activity"].tap()
+        let add = app.buttons["activity.auxiliary.addmanual"]
+        let content = app.descendants(matching: .any).matching(identifier: "activity.content").firstMatch
+        for _ in 0..<8 {
+            if add.isHittable && add.frame.maxY < app.buttons["tab.activity"].frame.minY - 8 { break }
+            content.swipeUp()
+        }
+        waitForVisible(add)
+        add.tap()
+        let title = app.textFields["Title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Evening study")
+        app.buttons["Save"].tap()
+        let record = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'activity.record.'")).firstMatch
+        XCTAssertTrue(record.waitForExistence(timeout: 5))
+        record.tap()
+        XCTAssertTrue(app.navigationBars["Activity Record"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Edit"].exists)
+        XCTAssertTrue(app.buttons["Delete"].exists)
+        capture(app, "Activity record detail")
     }
 }

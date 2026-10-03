@@ -73,6 +73,24 @@ import ImageIO
         }
         snapshot.notes.append(note); changed(); open(note.id); return note.id
     }
+
+    @discardableResult func create(kind: NoteKind, saveContent: StudyNoteSaveContent) -> UUID? {
+        switch saveContent {
+        case .scriptureQuote(let quote):
+            return create(kind: kind, quote: quote)
+        case .companionResponse(let text, let anchor):
+            return createCompanionNote(kind: kind, text: text, anchor: anchor)
+        }
+    }
+
+    func append(saveContent: StudyNoteSaveContent) {
+        switch saveContent {
+        case .scriptureQuote(let quote):
+            appendQuote(quote)
+        case .companionResponse(let text, let anchor):
+            appendCompanionResponse(text: text, anchor: anchor)
+        }
+    }
     func metadata(title: String, tags: String, paper: NoteDocument.Paper) {
         guard !restoring, let i = index else { return }
         snapshot.notes[i].title = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
@@ -268,6 +286,61 @@ import ImageIO
         guard selectedID == selectedNoteID else { return nil }
         appendQuote(quote); return selectedNoteID
     }
+    @discardableResult private func createCompanionNote(kind: NoteKind, text: String, anchor: CompanionPassageAnchor?) -> UUID? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let anchor, let quote = companionQuote(text: trimmed, anchor: anchor) {
+            return create(kind: kind, quote: quote)
+        }
+        guard let id = create(kind: kind) else { return nil }
+        appendCompanionPlainText(trimmed, kind: kind)
+        return id
+    }
+
+    func appendCompanionResponse(text: String, anchor: CompanionPassageAnchor?) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if let anchor, let quote = companionQuote(text: trimmed, anchor: anchor) {
+            appendQuote(quote)
+            return
+        }
+        appendCompanionPlainText(trimmed, kind: note?.kind ?? .page)
+    }
+
+    private func companionQuote(text: String, anchor: CompanionPassageAnchor) -> NoteQuote? {
+        var end = VerseID(book: anchor.bookID, chapter: anchor.chapter, verse: anchor.endVerse)
+        let start = VerseID(book: anchor.bookID, chapter: anchor.chapter, verse: anchor.startVerse)
+        if anchor.endVerse < anchor.startVerse { end = start }
+        let quote = NoteQuote(
+            verse: start,
+            editionID: anchor.editionID,
+            contentRevision: "companion",
+            attribution: "Companion",
+            source: String(text.prefix(20_000)),
+            endVerse: end == start ? nil : end
+        )
+        do { try quote.validate() } catch { return nil }
+        return quote
+    }
+
+    private func appendCompanionPlainText(_ text: String, kind: NoteKind) {
+        flushSurface?()
+        edit { note in
+            if kind == .page {
+                guard var page = note.page else { return }
+                let prefix = page.body.isEmpty ? "" : "\n\n"
+                page.replace(NSRange(location: page.body.utf16.count, length: 0), with: prefix + text + "\n")
+                note.page = page
+            } else {
+                var object = NoteObject(kind: .text)
+                object.text = text
+                object.frame = CGRect(x: 60, y: min(NoteDocument.extent - 600, (note.objects.last?.frame.maxY ?? 60) + 40), width: 480, height: 280)
+                note.objects.append(object)
+            }
+        }
+        focusRequest = UUID()
+    }
+
     func appendQuote(_ quote: NoteQuote) {
         guard selectedNoteID != nil else { _ = create(quote: quote); return }
         flushSurface?()

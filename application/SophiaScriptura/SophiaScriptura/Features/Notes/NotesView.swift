@@ -19,6 +19,7 @@ struct NotesView: View {
     @State private var deleting: UUID?
     @State private var archive = NotesArchiveDocument(data: Data())
     @State private var filingNote: NoteDocument?
+    @State private var showingNewNote = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var notes: [NoteDocument] {
@@ -67,15 +68,31 @@ struct NotesView: View {
                     notes: session
                 )
             }
+            .sheet(isPresented: $showingNewNote) {
+                StudyNoteKindPicker(notes: session) { id in
+                    session.open(id)
+                }
+            }
         }
         .disabled(session.restoring)
         .task { await session.load() }
         .onChange(of: scenePhase) { _, value in if value != .active { session.flushSurface?(); Task { await session.save() } } }
         .alert("Notes", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) { Button("OK") { session.notice = nil } } message: { Text(session.notice ?? "") }
-        .alert("Delete this note?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
-            Button("Delete", role: .destructive) { if let id = deleting { session.delete(id) }; deleting = nil }
-            Button("Cancel", role: .cancel) { deleting = nil }
-        } message: { Text("You can restore it from Recently Deleted. Scripture and annotation layers are unchanged.") }
+        .overlay {
+            if deleting != nil {
+                StudyCenteredConfirmationOverlay(
+                    title: "Delete this note?",
+                    message: "You can restore it from Recently Deleted. Scripture and annotation layers are unchanged.",
+                    confirmLabel: "Delete Note",
+                    onConfirm: {
+                        if let id = deleting { session.delete(id) }
+                        deleting = nil
+                    },
+                    onCancel: { deleting = nil }
+                )
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: deleting != nil)
         .alert("Replace Notes from backup?", isPresented: $confirmRestore) {
             Button("Restore", role: .destructive) { if let data = pendingRestore { Task { await session.restore(data) } }; pendingRestore = nil }
             Button("Cancel", role: .cancel) { pendingRestore = nil }
@@ -145,7 +162,7 @@ struct NotesView: View {
 
             backupsMenu
 
-            newNoteMenu
+            newNoteButton
         }
     }
 
@@ -160,9 +177,6 @@ struct NotesView: View {
             Button("Export Notes backup") { Task { do { archive = NotesArchiveDocument(data: try await session.export()); exporting = true } catch { session.report(error) } } }
             Button("Restore Notes backup…") { importing = true }
             Button("Recover before last restore…") { Task { do { pendingRestore = try await session.preRestore(); confirmRestore = true } catch { session.report(error) } } }
-            #if DEBUG
-            NavigationLink("SP-006 canvas experiment") { CanvasExperimentView() }.accessibilityIdentifier("notes.openCanvasExperiment")
-            #endif
         } label: {
             LibraryHeaderIcon(systemImage: "ellipsis.circle")
         }
@@ -170,18 +184,16 @@ struct NotesView: View {
         .accessibilityIdentifier("notes.backups")
     }
 
-    private var newNoteMenu: some View {
-        Menu {
-            Button("Page", systemImage: "doc.text") { session.create(kind: .page) }
-                .accessibilityIdentifier("notes.new.page")
-            Button("Canvas", systemImage: "square.on.square") { session.create(kind: .canvas) }
-                .accessibilityIdentifier("notes.new.canvas")
+    private var newNoteButton: some View {
+        Button {
+            showingNewNote = true
         } label: {
             LibraryHeaderIcon(systemImage: "plus")
         }
+        .buttonStyle(.plain)
         .disabled(!session.loaded)
-        .accessibilityLabel("New Note")
-        .accessibilityIdentifier("notes.new")
+        .accessibilityLabel("New Notes")
+        .accessibilityIdentifier("notes.newNotes")
     }
 
     @ViewBuilder
@@ -194,17 +206,48 @@ struct NotesView: View {
         } else if notes.isEmpty {
             emptyState
         } else if cards {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16, alignment: .top)], spacing: 16) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 240, maximum: 360), spacing: 16, alignment: .top)],
+                spacing: 16
+            ) {
                 ForEach(notes) { note in
                     noteCard(note)
+                        .contextMenu { noteActions(note) }
                 }
             }
         } else {
-            LazyVStack(spacing: 8) {
+            List {
                 ForEach(notes) { note in
                     noteRow(note)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if !deleted {
+                                Button(role: .destructive) { deleting = note.id } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .tint(.red)
+                            }
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            if deleted {
+                                Button { session.delete(note.id, restore: true) } label: {
+                                    Label("Restore", systemImage: "arrow.uturn.backward")
+                                }
+                                .tint(Color(theme.palette.accent))
+                            } else {
+                                Button { filingNote = note } label: {
+                                    Label("Add to Collection", systemImage: "folder.badge.plus")
+                                }
+                                .tint(Color(theme.palette.accent))
+                            }
+                        }
                 }
             }
+            .listStyle(.plain)
+            .scrollDisabled(true)
+            .frame(height: CGFloat(notes.count) * 88 + 8)
         }
     }
 
@@ -221,6 +264,13 @@ struct NotesView: View {
                 .foregroundStyle(Color(theme.palette.secondary))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
+            if search.isEmpty, tag.isEmpty, !deleted {
+                Button("New Notes") { showingNewNote = true }
+                    .buttonStyle(CollectionProminentButtonStyle())
+                    .padding(.top, 4)
+                    .disabled(!session.loaded)
+                    .accessibilityIdentifier("notes.newNotes.empty")
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
@@ -238,7 +288,7 @@ struct NotesView: View {
     private var emptyDetail: String {
         if !search.isEmpty || !tag.isEmpty { return "Try a different title, tag, or passage." }
         if deleted { return "Deleted notes stay here until you restore them." }
-        return "Choose New Note, then Page or Canvas, for text, handwriting, images, and Scripture."
+        return "Start a Page or Canvas note for text, handwriting, images, and Scripture."
     }
 
     private func noteCard(_ note: NoteDocument) -> some View {
@@ -247,7 +297,6 @@ struct NotesView: View {
             HStack(alignment: .top) {
                 noteGlyph(note, accent: accent, size: 46)
                 Spacer(minLength: 8)
-                noteMenu(note)
             }
             .padding(.bottom, 14)
 
@@ -277,10 +326,8 @@ struct NotesView: View {
             .buttonStyle(.plain)
 
             Spacer(minLength: 12)
-            HStack {
-                Text(note.updatedAt, style: .date)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(accent.color)
+            HStack(alignment: .bottom) {
+                noteDates(note, accent: accent)
                 Spacer()
                 if deleted {
                     Button("Restore note") { session.delete(note.id, restore: true) }
@@ -319,6 +366,7 @@ struct NotesView: View {
                             .font(.caption)
                             .foregroundStyle(Color(theme.palette.secondary))
                             .lineLimit(1)
+                        noteDates(note, accent: accent)
                     }
                     Spacer(minLength: 0)
                 }
@@ -329,26 +377,12 @@ struct NotesView: View {
                 Button("Restore note") { session.delete(note.id, restore: true) }
                     .buttonStyle(CollectionSecondaryButtonStyle())
             }
-            noteMenu(note)
         }
         .padding(.leading, 14)
         .padding(.trailing, 4)
         .padding(.vertical, 10)
         .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .contextMenu { noteActions(note) }
-    }
-
-    private func noteMenu(_ note: NoteDocument) -> some View {
-        Menu {
-            noteActions(note)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color(theme.palette.secondary))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .accessibilityLabel("Actions for \(note.title)")
     }
 
     @ViewBuilder
@@ -383,6 +417,17 @@ struct NotesView: View {
         let kind = note.kind.rawValue.capitalized
         let tags = note.tags.map { "#" + $0 }.joined(separator: " ")
         return tags.isEmpty ? kind : "\(kind) · \(tags)"
+    }
+
+    private func noteDates(_ note: NoteDocument, accent: CollectionAccent) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Created \(note.createdAt.formatted(date: .abbreviated, time: .omitted))")
+                .accessibilityIdentifier("notes.createdDate.\(note.id.uuidString)")
+            Text("Last modified \(note.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                .accessibilityIdentifier("notes.modifiedDate.\(note.id.uuidString)")
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(accent.color)
     }
 
     private func preview(_ note: NoteDocument) -> String {

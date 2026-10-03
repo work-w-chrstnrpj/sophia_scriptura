@@ -1,0 +1,112 @@
+{
+  "questions": [
+    {
+      "id": "nicaea-325",
+      "prompt": "Which council produced the Nicene Creed in 325?",
+      "choices": ["Council of Nicaea", "Council of Chalcedon", "Council of Trent", "Council of Ephesus"],
+      "correctIndex": 0,
+      "sourceTitle": "Nicene Creed",
+      "sourceAuthor": "First Council of Nicaea",
+      "sourceURL": "https://www.newadvent.org/fathers/3801.htm"
+    },
+    {
+      "id": "chalcedon-451",
+      "prompt": "Which council affirmed Christ's full divinity and full humanity in one person?",
+      "choices": ["Council of Chalcedon", "Council of Nicaea", "Council of Constantinople II", "Lateran Council IV"],
+      "correctIndex": 0,
+      "sourceTitle": "Definition of Chalcedon",
+      "sourceAuthor": "Fourth Ecumenical Council",
+      "sourceURL": "https://www.newadvent.org/fathers/3811.htm"
+    },
+    {
+      "id": "augustine",
+      "prompt": "Who wrote \"Confessions\" and shaped Western theology on grace?",
+      "choices": ["Augustine of Hippo", "Jerome", "Ambrose", "Gregory the Great"],
+      "correctIndex": 0,
+      "sourceTitle": "Confessions",
+      "sourceAuthor": "Augustine",
+      "sourceURL": null
+    },
+    {
+      "id": "reformation-1517",
+      "prompt": "Martin Luther's Ninety-five Theses are commonly dated to which year?",
+      "choices": ["1517", "1453", "1534", "1611"],
+      "correctIndex": 0,
+      "sourceTitle": "Ninety-five Theses",
+      "sourceAuthor": "Martin Luther",
+      "sourceURL": null
+    },
+    {
+      "id": "apostles-creed",
+      "prompt": "The Apostles' Creed is best described as:",
+      "choices": ["An early baptismal summary of faith", "A medieval monastic rule", "A Reformation political treaty", "An Enlightenment philosophical essay"],
+      "correctIndex": 0,
+      "sourceTitle": "Apostles' Creed",
+      "sourceAuthor": "Early church tradition",
+      "sourceURL": null
+    },
+    {
+      "id": "cyril-jerusalem",
+      "prompt": "Catechetical lectures delivered in Jerusalem in the fourth century are associated with:",
+      "choices": ["Cyril of Jerusalem", "Athanasius", "Basil of Caesarea", "John Chrysostom"],
+      "correctIndex": 0,
+      "sourceTitle": "Catechetical Lectures",
+      "sourceAuthor": "Cyril of Jerusalem",
+      "sourceURL": null
+    },
+    {
+      "id": "kjv",
+      "prompt": "The King James Version of the Bible was first published in:",
+      "choices": ["1611", "1382", "1456", "1881"],
+      "correctIndex": 0,
+      "sourceTitle": "King James Bible",
+      "sourceAuthor": "Authorized Version translators",
+      "sourceURL": null
+    },
+    {
+      "id": "athanasius",
+      "prompt": "Which bishop defended the homoousios at Nicaea against Arianism?",
+      "choices": ["Athanasius of Alexandria", "Arius", "Eusebius of Nicomedia", "Pelagius"],
+      "correctIndex": 0,
+      "sourceTitle": "On the Incarnation",
+      "sourceAuthor": "Athanasius",
+      "sourceURL": null
+    },
+    {
+      "id": "irenaeus",
+      "prompt": "Against Heresies is a major second-century work by:",
+      "choices": ["Irenaeus of Lyons", "Tertullian", "Origen", "Clement of Rome"],
+      "correctIndex": 0,
+      "sourceTitle": "Against Heresies",
+      "sourceAuthor": "Irenaeus",
+      "sourceURL": null
+    },
+    {
+      "id": "schism-1054",
+      "prompt": "The formal East–West church schism is traditionally dated to:",
+      "choices": ["1054", "787", "1204", "1439"],
+      "correctIndex": 0,
+      "sourceTitle": "East–West Schism",
+      "sourceAuthor": "Church history",
+      "sourceURL": null
+    },
+    {
+      "id": "calvin",
+      "prompt": "Institutes of the Christian Religion is chiefly associated with:",
+      "choices": ["John Calvin", "Ulrich Zwingli", "Thomas Cranmer", "John Knox"],
+      "correctIndex": 0,
+      "sourceTitle": "Institutes of the Christian Religion",
+      "sourceAuthor": "John Calvin",
+      "sourceURL": null
+    },
+    {
+      "id": "cappadocian",
+      "prompt": "Which group of fourth-century bishops helped articulate Trinitarian doctrine?",
+      "choices": ["Cappadocian Fathers", "Desert Abbas only", "Scholastic schoolmen", "Jesuit founders"],
+      "correctIndex": 0,
+      "sourceTitle": "Cappadocian Fathers",
+      "sourceAuthor": "Basil, Gregory, Gregory",
+      "sourceURL": null
+    }
+  ]
+}

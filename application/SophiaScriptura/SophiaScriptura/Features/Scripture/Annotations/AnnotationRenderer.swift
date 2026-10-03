@@ -2,6 +2,8 @@ import UIKit
 import CryptoKit
 
 @MainActor enum AnnotationRenderer {
+    static let surroundingInset = 260.0
+    private static let compactInset = 24.0
     static func fontHash(_ name: String) -> String {
         var data = Data((name + "|" + ProcessInfo.processInfo.operatingSystemVersionString).utf8)
         for url in (Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil) ?? []).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
@@ -37,14 +39,14 @@ import CryptoKit
         let font = UIFontMetrics(forTextStyle: .body).scaledFont(for: ScriptureFonts.font(family, size: CGFloat(19 + preferences.sizeStep * 2)))
         // Match the ordinary reader's centered column, then reserve equal blank space outside it.
         let textWidth = min(760, max(320, available)) - 66
-        return layout(document, font: font, width: textWidth + 400, textWidth: textWidth, surrounding: true)
+        return layout(document, font: font, width: textWidth + surroundingInset * 2, textWidth: textWidth, surrounding: true)
     }
     static func layout(_ document: ChapterDocument, font: UIFont, width: Double, textWidth: Double, surrounding: Bool = false) -> AnnotationLayout {
         let storage = NSTextStorage(attributedString: text(document, font: font, palette: .init(0xffffff, 0x000000, 0x494949)))
         let manager = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: textWidth, height: CGFloat.greatestFiniteMagnitude))
         container.lineFragmentPadding = 0; storage.addLayoutManager(manager); manager.addTextContainer(container)
         manager.ensureLayout(for: container)
-        let inset = surrounding ? 200.0 : 24.0
+        let inset = surrounding ? surroundingInset : compactInset
         let algorithm = surrounding ? "continuous-textkit1-surround-v2" : "continuous-textkit1-v1"
         let height = ceil(manager.usedRect(for: container).height) + inset * 2
         var geometry = "\(algorithm)|\(document.contentRevision)|\(width)|\(textWidth)|\(height)|\(font.fontName)|\(font.pointSize)|\(fontHash(font.fontName))"
@@ -63,5 +65,27 @@ import CryptoKit
         _ = ScriptureFonts.font("Georgia", size: 20)
         guard source == AnnotationSource(document), let font = UIFont(name: layout.fontName, size: layout.fontSize) else { return false }
         return self.layout(document, font: font, width: layout.width, textWidth: layout.textWidth, surrounding: layout.surroundingSpace) == layout
+    }
+
+    /// Repairs surrounding layouts written when width did not match `textWidth + 2 * inset`.
+    static func repairedSurroundingLayout(_ layout: AnnotationLayout) -> AnnotationLayout {
+        guard layout.surroundingSpace else { return layout }
+        let width = layout.textWidth + layout.inset * 2
+        let marginStart = width - layout.inset
+        guard abs(layout.width - width) > 0.01 || abs(layout.marginStart - marginStart) > 0.01 else { return layout }
+        return AnnotationLayout(
+            algorithm: layout.algorithm,
+            fontName: layout.fontName,
+            fontResourceHash: layout.fontResourceHash,
+            fontSize: layout.fontSize,
+            width: width,
+            textWidth: layout.textWidth,
+            height: layout.height,
+            inset: layout.inset,
+            marginStart: marginStart,
+            lineSpacing: layout.lineSpacing,
+            paragraphSpacing: layout.paragraphSpacing,
+            signature: layout.signature
+        )
     }
 }

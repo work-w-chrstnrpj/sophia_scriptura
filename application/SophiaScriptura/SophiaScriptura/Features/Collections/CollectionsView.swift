@@ -86,18 +86,21 @@ struct CollectionsView: View {
             .sheet(item: $editingCollection) { collection in
                 CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collection.id)
             }
-            .alert(
-                deletingCollection.map { "Delete \($0.name)?" } ?? "Delete Collection?",
-                isPresented: Binding(get: { deletingCollection != nil }, set: { if !$0 { deletingCollection = nil } })
-            ) {
-                Button("Delete Collection", role: .destructive) {
-                    if let collection = deletingCollection { store.deleteCollection(id: collection.id) }
-                    deletingCollection = nil
+            .overlay {
+                if let collection = deletingCollection {
+                    StudyCenteredConfirmationOverlay(
+                        title: "Delete \(collection.name)?",
+                        message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                        confirmLabel: "Delete Collection",
+                        onConfirm: {
+                            store.deleteCollection(id: collection.id)
+                            deletingCollection = nil
+                        },
+                        onCancel: { deletingCollection = nil }
+                    )
                 }
-                Button("Cancel", role: .cancel) { deletingCollection = nil }
-            } message: {
-                Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
             }
+            .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
         }
     }
 

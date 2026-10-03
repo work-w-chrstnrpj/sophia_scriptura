@@ -427,6 +427,21 @@ final class CollectionsStore: ObservableObject {
         conversations.first { $0.id == id }
     }
 
+    func upsertCompanionConversation(_ conversation: StudyConversation) {
+        conversations.removeAll { $0.id == StudyConversation.placeholderID && !conversation.isPlaceholder }
+        if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+            conversations[index] = conversation
+        } else {
+            conversations.append(conversation)
+        }
+        enqueueWrite()
+    }
+
+    func removeCompanionConversation(_ id: UUID) {
+        conversations.removeAll { $0.id == id }
+        enqueueWrite()
+    }
+
     /// Stores a web link. A blank title uses the site name. Only http and https addresses are accepted.
     @discardableResult
     func addLink(title: String, url: String, verse: VerseID? = nil, editionID: String? = nil) -> UUID? {
@@ -480,6 +495,23 @@ final class CollectionsStore: ObservableObject {
         var folders = snapshot.collections.filter { !$0.isUnfiled && $0.id != StudyCollection.unfiledID }
         folders.insert(.unfiled(accent: snapshot.unfiledAccent), at: 0)
         collections = folders
+    }
+
+    func exportBackupSnapshot() -> CollectionsSnapshot {
+        exportSnapshot()
+    }
+
+    func restoreBackupSnapshot(_ snapshot: CollectionsSnapshot) async {
+        apply(snapshot)
+        revision = snapshot.revision
+        guard let repository else { return }
+        do {
+            let saved = try await repository.save(exportSnapshot(), expectedRevision: revision)
+            revision = saved.revision
+            notice = "Collections restored from backup."
+        } catch {
+            notice = error.localizedDescription
+        }
     }
 
     private func exportSnapshot() -> CollectionsSnapshot {

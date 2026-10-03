@@ -114,6 +114,21 @@ import Observation
         try await content.chapter(book:book,number:chapter).verseNumbers
     }
 
+    func availableVerses(book: String, chapter: Int, editionID: String?) async throws -> [Int] {
+        guard let editionID, editionID != edition?.id else { return try await availableVerses(book: book, chapter: chapter) }
+        let repository: any ScriptureContentRepository
+        if editionID == "web.engwebp" { repository = bundled }
+        else if let library { repository = try await library.repository(editionID: editionID) }
+        else { throw ScriptureError.editionUnavailable }
+        return try await repository.chapter(book: book, number: chapter).verseNumbers
+    }
+
+    func clearTemporaryEmphasis(ifNavigationID id: UUID) {
+        guard navigationID == id else { return }
+        emphasisVerses = []
+        emphasisSpans = []
+    }
+
     func stepChapter(_ delta: Int) async {
         guard let doc = document, let index = books.firstIndex(where: { $0.id == doc.book }) else { return }
         let candidate = doc.chapter + delta
@@ -234,6 +249,13 @@ import Observation
         snapshot.preferences = preferences
         save()
     }
+    func contentRepository(editionID: String?) async throws -> any ScriptureContentRepository {
+        guard let editionID, edition?.id != editionID else { return content }
+        if editionID == "web.engwebp" { return bundled }
+        guard let library else { throw ScriptureError.editionUnavailable }
+        return try await library.repository(editionID: editionID)
+    }
+
     func save() {
         guard stateWritable else { return }
         snapshot.updatedAt = Date()

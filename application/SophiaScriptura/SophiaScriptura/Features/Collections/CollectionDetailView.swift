@@ -99,42 +99,46 @@ struct CollectionDetailView: View {
                 .sheet(item: $organizing) { item in
                     CollectionDestinationPicker(store: store, artifact: item.artifact, mode: item.mode, notes: notes)
                 }
-                .alert("Delete \(collection.name)?", isPresented: $showingDeleteAlert) {
-                    Button("Delete Collection", role: .destructive) {
-                        store.deleteCollection(id: collectionID)
-                        dismiss()
-                    }
-                    Button("Cancel", role: .cancel) { }
-                } message: {
-                    Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
-                }
-                .alert(
-                    deletingSubfolder.map { "Delete \($0.name)?" } ?? "Delete Collection?",
-                    isPresented: Binding(get: { deletingSubfolder != nil }, set: { if !$0 { deletingSubfolder = nil } })
+                .studyCenteredConfirmation(
+                    isPresented: $showingDeleteAlert,
+                    title: "Delete \(collection.name)?",
+                    message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                    confirmLabel: "Delete Collection"
                 ) {
-                    Button("Delete Collection", role: .destructive) {
-                        if let subfolder = deletingSubfolder { store.deleteCollection(id: subfolder.id) }
-                        deletingSubfolder = nil
-                    }
-                    Button("Cancel", role: .cancel) { deletingSubfolder = nil }
-                } message: {
-                    Text("Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.")
+                    store.deleteCollection(id: collectionID)
+                    dismiss()
                 }
-                .confirmationDialog(
-                    pendingDeletion.map { "Delete \($0.title)?" } ?? "",
-                    isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }),
-                    titleVisibility: .visible
-                ) {
-                    Button("Delete", role: .destructive) {
-                        if let item = pendingDeletion {
-                            if item.kind == .link { store.deleteLink(item.id) }
-                            else { store.deletePassage(item.id) }
-                        }
-                        pendingDeletion = nil
+                .overlay {
+                    if let subfolder = deletingSubfolder {
+                        StudyCenteredConfirmationOverlay(
+                            title: "Delete \(subfolder.name)?",
+                            message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                            confirmLabel: "Delete Collection",
+                            onConfirm: {
+                                store.deleteCollection(id: subfolder.id)
+                                deletingSubfolder = nil
+                            },
+                            onCancel: { deletingSubfolder = nil }
+                        )
                     }
-                } message: {
-                    Text("It is removed from every collection.")
                 }
+                .animation(.easeOut(duration: 0.18), value: deletingSubfolder != nil)
+                .overlay {
+                    if let item = pendingDeletion {
+                        StudyCenteredConfirmationOverlay(
+                            title: "Delete \(item.title)?",
+                            message: "It is removed from every collection.",
+                            confirmLabel: "Delete",
+                            onConfirm: {
+                                if item.kind == .link { store.deleteLink(item.id) }
+                                else { store.deletePassage(item.id) }
+                                pendingDeletion = nil
+                            },
+                            onCancel: { pendingDeletion = nil }
+                        )
+                    }
+                }
+                .animation(.easeOut(duration: 0.18), value: pendingDeletion != nil)
             } else {
                 ContentUnavailableView("Collection unavailable", systemImage: "folder.badge.questionmark")
             }
@@ -322,11 +326,17 @@ struct CollectionDetailView: View {
             if visibleArtifacts.isEmpty {
                 emptyMaterial(collection)
             } else {
-                LazyVStack(spacing: 8) {
+                List {
                     ForEach(visibleArtifacts) { artifact in
                         row(artifact, in: collection)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
                 }
+                .listStyle(.plain)
+                .scrollDisabled(true)
+                .frame(height: CGFloat(visibleArtifacts.count) * 88 + 8)
             }
         }
     }

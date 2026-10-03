@@ -1,6 +1,6 @@
 # SP-012 — Persistent Scripture annotation layers
 
-- Type: implementation. Status: in_progress; owner selected implementation 2026-09-29.
+- Type: implementation. Status: done; owner accepted physical iPad behavior 2026-10-03.
 - Milestone: M3. Owner: Frontend UI/UX Developer; Infrastructure owns repository commits.
 - Requirements: REQ-004/005/006/007/016; recovery obligations from SP-005.
 - Dependencies: M2 owner closure, accepted SP-008 physical validation, specified
@@ -56,6 +56,16 @@ Pencil failures must be fixed or explicitly scoped with the owner, not reported 
 
 Update TDD, data contract, project maps, testing/deployment evidence and roadmap at closure.
 M3 closes only after actual-reader device acceptance and successful annotation restore.
+
+## Owner acceptance — 2026-10-03
+
+The owner reports that annotation export/restore and recovery work on the iPad. The owner
+also reports successful actual-reader Apple Pencil writing, alignment after text-size
+changes, palm rejection, background/relaunch persistence, and long-chapter responsiveness.
+Together with the automated and installation evidence below, this closes SP-012 and M3
+under owner-reported physical acceptance. The report does not provide measured timings,
+stroke counts, device screenshots, or a per-case ANN-01–09 log; those remain evidence
+limits rather than newly claimed automated results. VoiceOver remains waived for M3.
 
 ## Planning evidence — 2026-09-29
 

@@ -1,0 +1,45 @@
+# SP-020 — Activity tracking
+
+Milestone: M8. Selected by owner on 2026-10-03 after postponing M7. Status: in progress.
+
+## Usable outcome
+
+Track one timed study activity across tabs and relaunch, record a continuous Reading range, add manual activities, keep a local history and daily goal, and count completed Quiz Me sessions as Reviewing without copying quiz answers.
+
+## Scope and exclusions
+
+Activity owns modes, records, active-time intervals, goals and metrics. `AppShell` exposes the current timer. Scripture provides a start-verse focus. Companion remains the source of quiz scores and answer history. Background music and Scripture narration are a later M8/M7 handoff and are excluded from this ticket.
+
+## Decisions used for this implementation
+
+- One Activity timer at a time. Paused intervals do not count.
+- Timed intervals are split at local midnight for daily metrics. Manual records count on their chosen date.
+- Custom modes count toward the goal and can be archived; historical labels remain on records.
+- Cross-book Reading stores one range and one total duration. No per-book minutes are inferred.
+- Quiz Reviewing links are imported once by quiz-session ID.
+
+## Acceptance and evidence
+
+- [x] Core record, mode, draft and local generation file added.
+- [x] Activity tab and shared timer control added.
+- [x] Reading start routes to Scripture; finish stores an inclusive range.
+- [x] Quiz link import added.
+- [x] Manual clock-time entry, overlap rejection, record correction, validated verse picker, calendar-week/month Insights, and Activity-only Files export/restore.
+- [x] Activity UI revision: full-width themed layout; Daily/Weekly/Monthly/Annual analytics with mode-filtered distribution and time charts; Today streak floor of 1; five-record History preview and grouped full history; swipe Edit/Delete and record detail; draggable cross-tab recorder with seconds and finish-sheet routing.
+- [x] Owner follow-up: recorder drag updates in its own view from the first touch; date/range picker and 40%/60% charts; Auxiliary buttons; local recurring reminders and one-time cleanup setting; full-axis selected Analytics PNG export; compact record details and red destructive actions in Activity, Chat and Quiz histories.
+- [x] Completed Quiz Me sessions now record active question time as Reviewing without a separate Activity timer or setup switch. Quiz-history deletion retains its already recorded Activity time; incomplete/abandoned quizzes do not record automatically.
+- [x] Owner reminder refinement: separate Reminders section after History with five-item preview and grouped View all; create/edit form closes after save; one-time cleanup is set per reminder; form no longer embeds the reminder list. Reminder and Print Analytics were removed from Auxiliary, with Print Analytics in the Analytics header.
+- [x] Owner goal/distribution refinement: the distribution card keeps its pie and color/type legend, with durations and shares in a detail sheet; Today is a compact total-progress card whose detail sheet shows each type's progress and expands to direct per-mode goal editing. Existing total goals migrate to Reading.
+- [x] Owner manual-entry/correction refinement: Start is required; entering End computes duration, while entering minutes computes and stores End. Editing preloads stored start/end, retains the record ID and replaces its saved interval/duration. Reminders has a dashed Add new reminder row; Start Activity floats at bottom right above the tab dock. Activity list clearance keeps bottom actions tappable.
+- [ ] Physical iPad reminder permission/delivery, PNG Files export, floating recorder feel, swipe colors and detail contrast after this follow-up install.
+- [ ] Physical iPad walkthrough: background/lock/relaunch, controls over Notes and Scripture, Reading end selection and correction. Follow [the guide](../docs/testing/sp020-ipad-guide.md).
+- [x] Focused simulator verification: `ActivityTests` passed 6/6 on iPad (A16), iPadOS 26.5, in `build/sp020-activity-install-r2.xcresult`. The signed Debug build succeeded, passed strict code-sign validation, installed in place on the paired physical iPad A16, and launched as `com.personal.SophiaScriptura`. Logs are under `build/sp020/device/`. No uninstall or data reset was performed. This establishes delivery, not the physical Activity walkthrough.
+- [x] UI revision verification: `ActivityTests` passed 9/9 in `build/sp020-ui-activity.xcresult`; dashboard and cross-tab Finish UI tests passed 1/1 each in `build/sp020-ui-screen-r3.xcresult` and `build/sp020-ui-recorder.xcresult`. Portrait light and dark landscape simulator screenshots were inspected in `build/sp020-ui-screenshots-r3/`; the full-width background, two balanced chart cards and Start Activity placement were checked. The final Debug device build succeeded, passed strict code-sign validation, installed in place, and launched on `iPad ni Paj` (`00008120-0014354C112B601E`). Logs are under `build/sp020/ui-redesign-device/`. The simulator reported a non-blocking Info.plist orientation warning; visual screenshots and install do not complete the physical interaction walkthrough.
+- [x] Follow-up simulator evidence: `ActivityTests` and `CompanionTests` passed 33/33 in `build/sp020-followup-tests-r2.xcresult`; the selected Analytics PNG renderer passed in `build/sp020-analytics-export-r3.xcresult`, and its opaque, full-width daily chart attachment was visually inspected. The cross-tab recorder drag/finish test passed in `build/sp020-recorder-r2.xcresult`, the compact record detail test passed in `build/sp020-detail-ui-r2.xcresult`, and the Settings footer layout test passed in portrait and landscape in `build/sp020-settings-ui-r5.xcresult`. The first recorder and PNG runs exposed issues that were fixed before these passing reruns. The final signed Debug device build succeeded, passed strict code-sign validation, installed in place without uninstalling, and launched on `iPad ni Paj` (`00008120-0014354C112B601E`). Logs are under `build/sp020/followup-device/`.
+- [x] Reminder-section refinement simulator evidence: `ActivityTests` passed 13/13, including legacy global-preference migration to per-reminder cleanup and recurring/dated grouping; the New → Save → close → preview → View all UI check passed 1/1. The test also confirmed Reminder and Print Analytics are absent from Auxiliary. Result bundle: `build/sp020-reminder-refinement-final-r2.xcresult`. `git diff --check` passed. The simulator still reports the existing non-blocking Info.plist orientation warning.
+- [x] Reminder-section refinement device delivery: signed Debug build succeeded and passed strict code-sign validation; `com.personal.SophiaScriptura` was installed in place and launched on `iPad ni Paj` (`00008120-0014354C112B601E`). Logs are under `build/sp020/reminder-refinement-device/`. The install retained the existing app data; physical reminder delivery and interaction checks remain open above.
+- [x] Goal/distribution refinement verification: `ActivityTests` passed 14/14, including legacy goal migration and per-mode total persistence, in `build/sp020-activity-goals-tests.xcresult`. The cross-tab Start Activity/finish UI regression passed there; that combined run failed on the initial distribution-card UI locator, which was corrected. The populated distribution and Today goal-editing UI test then passed in `build/sp020-activity-goals-ui-r8.xcresult`; screenshots under `build/sp020-activity-goals-ui-r8-images/` were inspected for the pie legend, duration/percentage row, and updated 10-of-15-minute total. The goal sheet's collapsed height was raised afterward so more mode summaries are visible before expansion.
+- [x] Goal/distribution device delivery: final `ActivityTests` passed 14/14 in `build/sp020-activity-goals-unit-final.xcresult`, and `git diff --check` passed. The signed Debug device build succeeded, passed strict code-sign verification, and installed in place on `iPad ni Paj` (`00008120-0014354C112B601E`) without uninstalling or resetting app data. Logs: `build/sp020/activity-goals-device/`. Launch attempts were denied because the physical iPad was locked; launch verification awaits unlocking.
+- [x] Manual-entry/correction verification and delivery: `ActivityTests` passed 15/15 in `build/sp020/manual-correction/ActivityTests.xcresult`. The selected reminder and cross-tab recorder UI checks passed in `build/sp020/manual-correction/UITests.xcresult`; the manual-entry detail check initially exposed the tab dock covering Add Manual, then passed after scroll clearance in `build/sp020/manual-correction/RecordUITest-r2.xcresult`. The Debug device build succeeded, strict code-sign verification passed, and `com.personal.SophiaScriptura` installed in place and launched on `iPad ni Paj` (`00008120-0014354C112B601E`). Logs: `build/sp020/manual-correction/device/`. Physical interaction acceptance remains open.
+
+The unchecked items are required before this ticket can be marked done. Do not start the separate background-music ticket from this ticket's selection.

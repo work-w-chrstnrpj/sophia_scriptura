@@ -31,52 +31,80 @@ struct CollectionArtifactRow: View {
         let base: String
         switch artifact.kind {
         case .bookmark: base = "Bookmark"
-        case .gleaning: base = artifact.insight.isEmpty ? "Gleaning" : "Gleaning · \(artifact.insight)"
+        case .gleaning: base = artifact.insight.isEmpty ? "Gleaning" : "Gleaning"
         default: base = artifact.subtitle
         }
         return placement == .subfolder ? "In a subfolder · \(base)" : base
     }
 
+    private var gleaningPreview: String? {
+        guard artifact.kind == .gleaning, !artifact.insight.isEmpty else { return nil }
+        return StudyPreviewText.truncatedInsight(artifact.insight)
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Button(action: open) {
-                HStack(alignment: .center, spacing: 14) {
-                    CollectionItemGlyph(kind: artifact.kind, accent: accent, size: 42)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(artifact.title)
-                            .font(isPassage ? .system(.body, design: .serif).weight(.semibold) : .body.weight(.semibold))
+        Button(action: open) {
+            HStack(alignment: .center, spacing: 14) {
+                CollectionItemGlyph(kind: artifact.kind, accent: accent, size: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(artifact.title)
+                        .font(isPassage ? .system(.body, design: .serif).weight(.semibold) : .body.weight(.semibold))
+                        .foregroundStyle(Color(theme.palette.ink))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    if let gleaningPreview {
+                        Text(gleaningPreview)
+                            .font(.subheadline)
                             .foregroundStyle(Color(theme.palette.ink))
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
-                        Text(caption)
-                            .font(.caption)
-                            .foregroundStyle(Color(theme.palette.secondary))
-                            .lineLimit(1)
                     }
-                    Spacer(minLength: 0)
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                        .lineLimit(1)
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("collections.open.\(artifact.title)")
-
-            Menu {
-                actions
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.secondary))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel("Actions for \(artifact.title)")
-            .accessibilityIdentifier("collections.itemActions.\(artifact.title)")
+            .padding(.leading, 14)
+            .padding(.trailing, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(theme.palette.rule), lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 4)
-        .padding(.vertical, 10)
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("collections.open.\(artifact.title)")
         .contextMenu { actions }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if placement != .subfolder && (isPassage || artifact.kind == .link) {
+                Button(role: .destructive, action: deletePassage) {
+                    Label(deleteTitle, systemImage: "trash")
+                }
+                .tint(.red)
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            switch placement {
+            case .unfiled:
+                Button(action: assign) { Label("Add to Collection", systemImage: "folder.badge.plus") }
+                    .tint(Color(theme.palette.accent))
+            case .folder:
+                Button(action: move) { Label("Move", systemImage: "folder") }
+                    .tint(Color(theme.palette.accent))
+                Button(action: assign) { Label("Add to…", systemImage: "folder.badge.plus") }
+                    .tint(.orange)
+                Button(action: remove) { Label("Remove", systemImage: "minus.circle") }
+                    .tint(.gray)
+            case .subfolder:
+                EmptyView()
+            }
+        }
     }
 
     @ViewBuilder

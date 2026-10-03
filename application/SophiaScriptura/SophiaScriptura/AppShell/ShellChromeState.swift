@@ -14,6 +14,13 @@ final class ShellChromeState {
 
     init(delay: Duration = ShellChromeState.visibilityDelay) { self.delay = delay }
 
+    func hideImmediately() {
+        hideTask?.cancel()
+        hideTask = nil
+        deadline = nil
+        isVisible = false
+    }
+
     func reveal() {
         isVisible = true
         deadline = clock.now.advanced(by: delay)

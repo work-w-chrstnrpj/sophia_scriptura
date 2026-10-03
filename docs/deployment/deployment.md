@@ -1,5 +1,40 @@
 # Personal iPad deployment
 
+## Companion native Markdown correction — 2026-10-03
+
+This update supersedes the earlier response-rendering recovery below. The signed Debug
+build passed strict signature verification, installed in place on `iPad ni Paj`, and
+launched successfully as `com.personal.SophiaScriptura`. No uninstall or data reset was
+performed. Logs are retained in `build/companion-native-markdown-device/`.
+
+`build/companion-native-markdown-final.xcresult` records 35 passing Companion and adapter
+checks. Exported light/dark previews were visually inspected in wide and narrow panels.
+Streaming and saved Markdown are preserved verbatim; Foundation supplies the full parser.
+Provider requests require standard Markdown with actual newlines. Retry an affected
+response or Edit and resend its prompt: old replies already saved with broken formatting
+are not automatically rewritten. Physical/live-provider acceptance remains an owner check.
+
+## Companion response rendering — 2026-10-03
+
+The signed Debug update passed strict signature verification and installed in place on
+`iPad ni Paj`, preserving the existing installation without uninstall or data reset.
+CoreDevice launch was denied because the device was locked. Unlock and open Sophia to
+review response headings/lists/paragraphs and content-sized prompt bubbles. Evidence is
+under `build/companion-rendering-device/`; the final Companion simulator suite passed
+33 checks in `build/companion-rendering-layout-final.xcresult`. Visual/device acceptance
+remains pending.
+
+## SP-020 Activity installation — 2026-10-03
+
+The signed Debug build passed strict local code-sign validation and was installed in
+place on the paired physical iPad A16 (`iPad ni Paj`) as
+`com.personal.SophiaScriptura`. CoreDevice launched the app successfully. No uninstall
+or data reset was performed. Build, install and launch logs are in `build/sp020/device/`;
+`build/sp020-activity-install-r2.xcresult` records 6 passing focused Activity tests on
+the iPad simulator. The [physical Activity walkthrough](../testing/sp020-ipad-guide.md)
+remains for the owner; installation and launch do not prove timer, layout, Files or
+background behavior on the device.
+
 Current product slice: M4/SP-013 Notes alongside the M2 reader and M3 annotations,
 with SP-006 retained as a DEBUG Notes experiment; current verification uses Xcode 27.0. No server or App Store
 deployment.
@@ -23,6 +58,24 @@ deployment.
 Personal Team signing is temporary; use Xcode to rebuild/redeploy when it expires.
 Reinstall over the existing app rather than deleting it to preserve local data. This
 experiment has no production backup; use synthetic content only.
+
+## SP-019 Quiz Me cache update — 2026-10-02
+
+The signed Debug build passed strict local signature
+verification, installed in place on the paired physical iPad A16 (`iPad ni Paj`), and
+launched as `com.personal.SophiaScriptura` on 2026-10-02. No uninstall or data reset was
+performed. Installation and launch verify delivery; real-provider generation speed,
+question quality, and refill behavior require owner observation in Quiz Me.
+
+### Two-quiz refill follow-up — 2026-10-03
+
+The signed Debug build for `com.personal.SophiaScriptura` passed strict local
+`codesign --verify --deep --strict`, installed in place on the paired physical
+`iPad ni Paj` (iPad A16), and launched through CoreDevice. No uninstall, data
+reset or translation sync was performed. The focused simulator suite is recorded
+in `build/sp019-two-quiz-cache-final-r3.xcresult` (26 passed). Installation and
+launch do not establish real-provider refill speed, question quality or physical
+quiz interaction acceptance.
 
 ## SP-015 Notes and Collections minimal-header refinement — 2026-10-02
 

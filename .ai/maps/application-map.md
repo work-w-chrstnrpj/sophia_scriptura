@@ -82,3 +82,24 @@ full-height Notes and ink appearance cycles.
 
 The Notes live PKCanvasView is a viewport-sized sibling of the document scroll view.
 Its zoom/content offset track that viewport while stored ink retains document coordinates.
+
+SP-019 M6 Quiz Me cache: `Core/Companion/CompanionModels.swift` defines standalone cached
+questions and scope. `Infrastructure/Companion/QuizQuestionCacheCoordinator.swift` coalesces
+per-bucket provider generation. `Features/Companion/CompanionQuizCache.swift` computes
+deficits, validates local exclusions and reserves questions; `CompanionSession` persists
+them in the existing Companion snapshot and `QuizMeView` shows warm/cold start state.
+
+SP-020 M8 Activity: `Features/Activity/ActivityView.swift` owns the Activity flows and
+`ActivityStore.swift` coordinates mutations. `Core/Activity/ActivityAnalytics.swift` and
+`ActivityHistoryGrouping.swift` calculate chart buckets and relative history groups.
+`Features/Activity/ActivityAnalyticsView.swift`, `ActivityHistoryView.swift`, and
+`ActivityRecorderControl.swift` render charts, history, and the movable timer.
+`ActivityRemindersView.swift` manages the reminder form, preview rows and grouped View all;
+`ActivityTodayDetailView.swift` renders per-mode progress and goal editing;
+`ActivityDistributionDetailView.swift` renders the selected pie/time breakdown;
+`Infrastructure/Activity/ActivityReminderNotifications.swift` schedules repeating iPad
+notifications. Activity export renders the selected chart range to PNG. One-time reminder
+cleanup is stored on each reminder.
+`RootTabView` hosts the cross-tab timer control
+and routes Reading to `ReaderSession`. Companion's Reviewing link is imported into Activity
+without quiz answer data. See `tickets/SP-020-activity-tracking.md` for remaining acceptance.

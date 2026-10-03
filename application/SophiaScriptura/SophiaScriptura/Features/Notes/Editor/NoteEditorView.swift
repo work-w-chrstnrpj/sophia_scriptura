@@ -165,6 +165,12 @@ private struct NoteDetailsView: View {
                 TextField("Title", text: $title).accessibilityIdentifier("notes.title")
                 TextField("Tags, separated by commas", text: $tags)
                 Picker("Paper", selection: $paper) { ForEach(NoteDocument.Paper.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) } }
+                if let note = session.note {
+                    Section("Dates") {
+                        LabeledContent("Created", value: note.createdAt.formatted(date: .long, time: .shortened))
+                        LabeledContent("Last modified", value: note.updatedAt.formatted(date: .long, time: .shortened))
+                    }
+                }
             }.appSurface().navigationTitle("Note details")
                 .toolbar {
                     Button("Cancel") { dismiss() }

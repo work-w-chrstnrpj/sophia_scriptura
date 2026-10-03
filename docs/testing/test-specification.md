@@ -11,10 +11,12 @@ UI checks cover movement, Undo, grouping, text edit, save/reopen, relaunch, rota
 finger-generated PencilKit input. Tests use a DEBUG-only UUID-scoped fixture directory
 so their disposable data does not overwrite the owner's normal experiment sample.
 
-## Planned M8 Activity and background-music coverage
+## M8 Activity and planned background-music coverage
 
-These cases are design acceptance targets only; no Activity or music implementation/test
-exists yet. The implementation ticket should turn them into automated and physical checks:
+Automated `MusicTests` validate the bundled catalog digests, next-track wrapping, preferences persistence, and the narration stub coordinator. Physical background, lock-screen, and interruption checks remain iPad-only.
+
+The Activity cases below are SP-020 acceptance targets; background music remains
+unimplemented. Automated cases and the iPad walkthrough cover different parts of these targets:
 
 - Timer active duration equals wall-clock elapsed time minus every pause interval; background,
   lock and relaunch preserve state without accumulating paused time.
@@ -24,9 +26,9 @@ exists yet. The implementation ticket should turn them into automated and physic
 - Manual records enforce title, mode, date and duration; optional start/end clock times
   derive duration; editing and correction preserve valid records.
 - Ten active minutes is the default daily goal/streak threshold. Timer/manual records count.
-  Whether custom modes qualify is an open owner decision. Goal progress and
-  day/week/month/mode analytics agree with saved records. Midnight and overlap cases remain
-  gated on owner policy decisions.
+  Custom modes qualify under the SP-020 implementation default. Goal progress and
+  day/week/month/mode analytics agree with saved records. Midnight and overlap rules
+  require owner acceptance on the iPad.
 - The Now Active cluster appears only for in-use timer/music services, preserves paused
   controls, disappears after stop/save, and does not obscure the tab dock or active workspace.
 - Music does not autoplay; it changes/pauses/plays on request and survives background/screen
@@ -35,11 +37,29 @@ exists yet. The implementation ticket should turn them into automated and physic
 - Every bundled track has retained source, human composer/performer, composition and
   recording license evidence, retrieval date and digest.
 
-## Planned M6 Companion and Quiz Me coverage
+## M6 Companion and Quiz Me coverage
 
-SP-016 defines planning targets only; no Companion runtime test is claimed. Each selected
-implementation ticket must convert its relevant targets into executable unit/integration/UI
-tests and retain provider fixtures without real keys or private responses:
+SP-019 adds focused checks for cache schema round trip, warm start without a provider
+request, local duplicate rejection, 20/10/6 refill targets, exact deficit replacement,
+and completion/quit refill requests without duplicate Reviewing links.
+`build/sp019-two-quiz-cache-final-r3.xcresult` records 26 passed, 0 failed, 0 skipped
+on iPad (A16) Simulator / iOS 26.5 for the SP-019 follow-up.
+The first empty-bucket generation and real-provider timing remain owner/device checks;
+in-app background work is not guaranteed after iOS suspends the app.
+`build/sp019-cache-final-r2.xcresult` records 25 passed, 0 failed, 0 skipped across
+`CompanionTests` and `QuizMeTimerTests` on iPad (A16) Simulator / iOS 26.5.
+
+SP-018 refinement evidence: `build/m6-ai-quiz-r3/results.xcresult` records 21 focused
+`CompanionTests` and `QuizMeTimerTests` passing on iPad (A16) Simulator / iOS 26.5.
+Automated coverage includes serialized persistence, last-10 per-type exclusion context,
+difficulty rubric construction, duplicate rejection, structured generated questions and
+local correct-answer repositioning across all four ordinary multiple-choice positions.
+Real-provider factual quality, semantic near-duplicates, perceived difficulty, Notes date
+appearance and physical-device launch behavior remain manual acceptance checks.
+
+SP-016 also defines broader targets. Each selected implementation ticket must convert its
+relevant targets into executable unit/integration/UI tests and retain provider fixtures
+without real keys or private responses:
 
 - Every adapter passes the same normalized streaming event, cancellation, refusal, partial
   reply, retry-idempotency and malformed-response contract while advertising differences.
@@ -55,9 +75,13 @@ tests and retain provider fixtures without real keys or private responses:
   migration, import rollback and permitted backup round trips preserve conversations/quizzes.
 - All four presets have reviewed evaluation cases for attribution, uncertain evidence,
   contested views, fabricated-source avoidance, original-language claims and pastoral tone.
-- Quiz fixtures cover every answer control, deterministic Scripture or Cap decoys, ambiguous
-  speaker exclusions, Nearly correct normalization, timeout/background pause, score/history,
+- Quiz tests cover every answer control, generated-response validation, recent-question
+  exclusions, ambiguous speaker exclusions, timeout/background pause, score/history,
   Christian History provenance, deletion and Reviewing linkage without duplicated answers.
+- Context-building tests assert the Markdown response contract and the structured Original
+  Language Analysis prompt. Quiz tests assert that Identify the Reference is not selectable,
+  Bible Quiz and Bible or False are selectable, and generated sets decode with the exact
+  count and type sequence required by the selected difficulty.
 
 ## Commands
 
@@ -418,6 +442,12 @@ assertions. Normal physical launch passed after the isolated test run.
 
 ## SP-012 annotations — 2026-09-29
 
+Owner acceptance update, 2026-10-03: the owner reports successful actual-reader Pencil
+writing, text-size alignment, palm rejection, background/relaunch, long-chapter
+responsiveness, and annotation export/restore/recovery on the iPad. This closes M3 under
+owner-reported physical acceptance. The automated results below remain separate evidence;
+no per-case timing, stroke-count or screenshot record was supplied for the owner pass.
+
 Owner-selected actual-reader implementation. Run `SophiaScripturaTests/AnnotationTests`
 and `SophiaScripturaUITests/AnnotationUITests` with the existing simulator command, plus
 reader navigation and continuous-scroll regressions. Temporary repositories and UUID
@@ -596,3 +626,13 @@ part of light/dark/preset visual review rather than an accessibility-tree assert
 skipped**, covering the new geometry plus note creation/relaunch, Notes backup access,
 collection creation/deletion and navigation retention. Compact-width wrapping, larger
 Dynamic Type, VoiceOver order and final light/dark appearance remain physical review items.
+
+## SP-020 Activity verification
+
+Run `SophiaScripturaTests/ActivityTests` on the installed iPad simulator for pause-aware
+duration, persistence, midnight totals, Reviewing idempotence, manual overlap and recovery.
+The 2026-10-03 focused result `build/sp020-activity-install-r2.xcresult` passed 6/6 on
+iPad (A16), iPadOS 26.5. The signed app was installed and launched on the paired physical
+iPad, but the Activity UI and device behavior have not been observed yet.
+The physical Activity walkthrough is in [sp020-ipad-guide.md](sp020-ipad-guide.md).
+Background/lock behavior, visual placement and Pencil coexistence require the owner's iPad.

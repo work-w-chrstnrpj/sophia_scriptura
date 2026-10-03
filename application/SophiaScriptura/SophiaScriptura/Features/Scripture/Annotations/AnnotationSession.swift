@@ -14,7 +14,7 @@ import PencilKit
     private(set) var saving = false
     private(set) var failed = false
     private(set) var notice = ""
-    var mode: Mode = .visible
+    var mode: Mode = .hidden
     var marginExpanded = false
     var toolsVisible = false
     var paletteCollapsed = false
@@ -39,8 +39,21 @@ import PencilKit
         var id: UUID { layer.id }
     }
     func layers(for document: ChapterDocument) -> [LayerChoice] {
-        snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
+        let choices = snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
             .flatMap { group in group.layers.filter { $0.deletedAt == nil }.map { LayerChoice(groupID: group.id, layer: $0, layout: $0.layout ?? group.layout) } }
+        return choices.sorted(by: Self.layerDisplaySort)
+    }
+
+    static func layerDisplaySort(_ lhs: LayerChoice, _ rhs: LayerChoice) -> Bool {
+        let left = defaultLayerNumber(lhs.layer.name)
+        let right = defaultLayerNumber(rhs.layer.name)
+        switch (left, right) {
+        case let (l?, r?): return l > r
+        case (nil, nil):
+            return lhs.layer.name.localizedStandardCompare(rhs.layer.name) == .orderedDescending
+        case (nil, _?): return false
+        case (_?, nil): return true
+        }
     }
     func deletedLayers(for document: ChapterDocument) -> [LayerChoice] {
         snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
@@ -53,7 +66,10 @@ import PencilKit
             guard !loading else { return }
             loading = true; defer { loading = false }
             do {
-                let value = try await repository.load(); snapshot = value.snapshot; loaded = true; failed = false
+                let value = try await repository.load()
+                snapshot = value.snapshot
+                repairSurroundingLayoutGeometry()
+                loaded = true; failed = false
                 notice = value.recovered ? "Recovered the previous good annotation save. Original files retained." : "Undo history starts when a layer is opened."
             } catch { failed = true; notice = error.localizedDescription; return }
         }
@@ -85,6 +101,7 @@ import PencilKit
         guard loaded, !usingTool, !saving else { return }
         flush?()
         guard dirty else { return }
+        repairSurroundingLayoutGeometry()
         saveTask?.cancel(); saving = true; notice = "Saving…"
         let version = editVersion, value = snapshot
         do {
@@ -110,8 +127,42 @@ import PencilKit
         return canTransition
     }
     func transition(_ action: @escaping @MainActor () -> Void) async {
-        guard await prepareForNavigation() else { return }
+        if usingTool { await withCheckedContinuation { strokeWaiters.append($0) } }
+        while saving { try? await Task.sleep(for: .milliseconds(20)) }
+        await save()
         action()
+    }
+
+    func applyMode(_ mode: Mode, reader: ReaderSession) async {
+        if usingTool { await withCheckedContinuation { strokeWaiters.append($0) } }
+        while saving { try? await Task.sleep(for: .milliseconds(20)) }
+        self.mode = mode
+        if mode == .draw { toolsVisible = false; paletteCollapsed = false }
+        if mode != .hidden { restoreSelectedAppearance(reader: reader) }
+    }
+
+    private func repairSurroundingLayoutGeometry() {
+        for index in snapshot.groups.indices {
+            var group = snapshot.groups[index]
+            let repairedGroupLayout = AnnotationRenderer.repairedSurroundingLayout(group.layout)
+            if repairedGroupLayout != group.layout {
+                group = AnnotationGroup(
+                    id: group.id,
+                    source: group.source,
+                    layout: repairedGroupLayout,
+                    layers: group.layers,
+                    selectedLayerID: group.selectedLayerID
+                )
+            }
+            for layerIndex in group.layers.indices {
+                guard let layout = group.layers[layerIndex].layout else { continue }
+                let repaired = AnnotationRenderer.repairedSurroundingLayout(layout)
+                if repaired != layout {
+                    group.layers[layerIndex].layout = repaired
+                }
+            }
+            snapshot.groups[index] = group
+        }
     }
     func create(document: ChapterDocument, preferences: ReaderPreferences, width: Double) async {
         guard loaded, !usingTool, !saving else { return }
@@ -123,9 +174,8 @@ import PencilKit
         guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }), snapshot.groups[g].source == AnnotationSource(document) else {
             notice = "Scripture source unavailable for a new layer."; return
         }
-        let nextName = snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
-            .flatMap(\.layers).count + 1
-        var layer = AnnotationLayer(name: "Study \(nextName)", drawing: PKDrawing().dataRepresentation())
+        let nextName = Self.nextDefaultLayerName(in: snapshot.groups[g].layers)
+        var layer = AnnotationLayer(name: nextName, drawing: PKDrawing().dataRepresentation())
         layer.layout = AnnotationRenderer.measure(document, preferences: preferences, width: width)
         layer.appearance = AnnotationLayerAppearance(preferences)
         snapshot.groups[g].layers.append(layer); snapshot.groups[g].selectedLayerID = layer.id
@@ -224,4 +274,24 @@ import PencilKit
         return try await repository.exportPreRestoreArchive()
     }
     func report(_ error: Error) { notice = error.localizedDescription }
+
+    /// Lowest unused `Annotation <n>` among live layers; renames and deleted slots are ignored.
+    static func nextDefaultLayerName(in layers: [AnnotationLayer]) -> String {
+        let used = Set(layers.compactMap { layer -> Int? in
+            guard layer.deletedAt == nil else { return nil }
+            return defaultLayerNumber(layer.name)
+        })
+        var candidate = 1
+        while used.contains(candidate) { candidate += 1 }
+        return "Annotation \(candidate)"
+    }
+
+    static func defaultLayerNumber(_ name: String) -> Int? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefix = "Annotation "
+        guard trimmed.hasPrefix(prefix) else { return nil }
+        let suffix = trimmed.dropFirst(prefix.count)
+        guard let value = Int(suffix), value > 0 else { return nil }
+        return value
+    }
 }

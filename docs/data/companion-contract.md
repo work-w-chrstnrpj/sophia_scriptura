@@ -49,6 +49,12 @@ streaming response is stored as an incomplete draft and becomes complete only af
 terminal event. Retry adds an attempt to the same assistant response slot and does not
 duplicate the user turn.
 
+Assistant deltas are concatenated verbatim, regardless of transport chunk boundaries.
+Completion and persistence retain that same Markdown source in the message and its response
+attempt. Presentation uses a full Markdown parser rather than inserting inferred whitespace,
+unescaping content or rewriting emphasis. Existing malformed saved responses are not migrated:
+the owner can retry the response or edit and resend the prompt to regenerate it.
+
 ## Context composition
 
 The context builder resolves the pinned preset exactly once, includes the current question,
@@ -74,14 +80,30 @@ shows the destination host during setup and connection testing.
 
 ## Scripture and retrieval policy
 
-Local canonical Scripture and curated quiz fixtures establish Scripture answer keys.
+The selected provider currently supplies quiz questions, provisional answer keys and cited
+references. The app validates structure, required fields, choice bounds, requested type order
+and exact duplicate exclusion, but does not independently prove the cited claim. Persisted
+question history retains the generated key and provenance disclosure for review.
+
+SP-019 stores prepared quiz questions in Companion snapshot schema v3. Each cached item is
+independent of a session and is scoped to one provider configuration, adapter, model,
+edition, difficulty, game type and prompt-contract version. The target is 20 Easy, 10
+Average and 6 Difficult items per selectable type (two complete quizzes). On quiz start, the session takes the
+required items from the cache and creates session-specific question records in the same
+in-memory mutation before the next serialized generation save. Prior v1/v2 snapshots
+decode with an empty cache; existing quiz history is not rewritten. Deleting a provider
+configuration removes its prepared items. Keys remain only in Keychain.
+Reconciliation fills one playable quiz per bucket before spare capacity, and is requested
+on start, completion, quit, app load and return to foreground. A running refill incorporates newer priorities
+at the next batch boundary, prioritizing the selected type and difficulty. Failed warmups leave existing questions intact and use bounded
+in-app retries; iPadOS suspension may prevent completion.
 Transmission is capability-checked at initial prompt, follow-up, summary, retry and retrieval
 boundaries. When text is not permitted, use a canonical reference or an explicitly permitted
 edition. External retrieved text retains source identity and permission/retention metadata.
 
-Christian History answer keys require an inspectable primary, official or academic/reference
-source record. Model output may help draft a question or explanation but cannot create or
-approve its own authoritative key.
+Christian History generation requests a concise primary, official or academic/reference
+source label. Until that source is independently resolved and checked, the generated key is
+provisional and must remain visibly AI-authored.
 
 ## Local generations, recovery and deletion
 
@@ -94,7 +116,10 @@ Backup includes permitted local conversations, source metadata, prompt snapshots
 history. It excludes API keys, authorization data, provider caches and restricted Scripture
 replicas. Conversation deletion removes messages, attempts, derived summaries and memberships.
 Quiz deletion removes questions, answers, explanations and sources; an Activity record keeps
-only its duration metadata and a source-deleted marker.
+only its duration metadata and a source-deleted marker. Deleting Quiz history does not delete
+the Reviewing Activity record. Completing all quiz questions creates the Reviewing link
+automatically, without a separate Activity timer or an opt-out switch; abandoned sessions
+remain unrecorded. Untimed quizzes track active question time as well as timed quizzes.
 
 ## Required contract tests
 

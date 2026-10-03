@@ -37,3 +37,12 @@ retains `before-note-types.notes` and leaves `before-study-page.notes` untouched
 SP-013 refinement retains schema v3 with optional shape/tint values and dotted paper.
 Canvas link payloads optionally contain validated thumbnail images and count toward the
 existing media limits. Theme presentation preserves unchanged stored ink bytes.
+
+SP-019 Companion schema v3 adds prepared quiz questions. Prior v1/v2 generations decode
+with an empty cache. A cache item is scoped by provider configuration, adapter, model,
+edition, prompt contract, game type and difficulty; quiz history remains separate.
+
+SP-020 Activity uses `Core/Activity/ActivityModels.swift` and
+`Infrastructure/Activity/ActivityFileRepository.swift`. The local Activity-v1 envelope
+has a SHA-256 payload checksum, previous-file recovery, and a separate pre-restore archive.
+Quiz linkage stores only a quiz-session ID, mode, date and duration.

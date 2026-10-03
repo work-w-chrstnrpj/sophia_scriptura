@@ -132,7 +132,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
             verifiedSource = group.source
         }
         guard matched, let font = UIFont(name: layout.fontName, size: layout.fontSize) else { return }
-        let dark = preferences.appearance == .midnightLibrary || preferences.theme == "dark" ||
+        let dark = preferences.theme == "dark" ||
             (preferences.theme == "system" && traitCollection.userInterfaceStyle == .dark)
         let palette = preferences.appearance.palette(dark: dark)
         if layoutID != layout.signature {
@@ -294,9 +294,9 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         let readingY: CGFloat? = viewport.contentOffset.y > 40 ? viewport.contentOffset.y / viewport.zoomScale - paper.frame.minY : nil
         viewport.setZoomScale(1, animated: false)
         let full = session.marginExpanded
-        let crop = full ? 0 : layout.inset - 28
+        let crop = full ? 0 : layout.inset - 36
         paper.frame = CGRect(x: -crop, y: -crop, width: layout.width, height: layout.height)
-        stage.bounds = CGRect(x: 0, y: 0, width: full ? layout.width : layout.textWidth + 56,
+        stage.bounds = CGRect(x: 0, y: 0, width: full ? layout.width : layout.textWidth + 72,
             height: full ? layout.height : layout.height - layout.inset * 2 + 68)
         stage.frame.size = stage.bounds.size
         viewport.contentSize = stage.bounds.size

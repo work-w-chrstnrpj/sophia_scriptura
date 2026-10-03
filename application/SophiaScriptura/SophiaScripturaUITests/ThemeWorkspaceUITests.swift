@@ -63,10 +63,10 @@ final class ThemeWorkspaceUITests: XCTestCase {
     }
     private func inkCycle(_ kind: String) {
         let app = launch(); appearance("Dark", app, choosePreset: true); tab("notes", app)
-        XCTAssertTrue(app.buttons["notes.new"].waitForExistence(timeout: 10))
-        app.buttons["notes.new"].tap()
+        XCTAssertTrue(app.buttons["notes.newNotes"].waitForExistence(timeout: 10))
+        app.buttons["notes.newNotes"].tap()
         let choice = app.buttons["notes.new." + kind]
-        if !choice.waitForExistence(timeout: 3) { app.buttons["notes.new"].tap() }
+        if !choice.waitForExistence(timeout: 3) { app.buttons["notes.newNotes"].tap() }
         XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
         let viewport = app.scrollViews["notes.viewport"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 10))

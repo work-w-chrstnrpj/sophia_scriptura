@@ -2,6 +2,9 @@ import SwiftUI
 
 /// Keeps destinations mounted while the shell animates navigation and its quiet tab dock.
 struct RootTabView: View {
+    private static var tabDockMaxWidth: CGFloat { ShellChromeLayout.tabDockMaxWidth }
+    private static var tabDockHorizontalInset: CGFloat { ShellChromeLayout.tabDockHorizontalInset }
+
     enum Tab: String, CaseIterable, Hashable {
         case scripture = "Scripture", collections = "Collections", notes = "Notes"
         case companion = "Companion", activity = "Activity", settings = "Settings"
@@ -22,13 +25,21 @@ struct RootTabView: View {
     @Namespace private var selectionGlow
     @State private var chrome = ShellChromeState()
     private var theme: AppTheme {
-        AppTheme(appearance: reader.preferences.appearance, dark: reader.preferences.appearance == .midnightLibrary || reader.preferences.theme == "dark" || (reader.preferences.theme == "system" && colorScheme == .dark))
+        AppTheme(appearance: reader.preferences.appearance, dark: reader.preferences.theme == "dark" || (reader.preferences.theme == "system" && colorScheme == .dark))
     }
     private var palette: ReaderPalette { theme.palette }
     @State private var annotations = AnnotationSession()
     @State private var notes = NotesSession()
     @StateObject private var collections = CollectionsStore(repository: CollectionsFileRepository(directory: CollectionsFileRepository.defaultDirectory()))
+    @StateObject private var companion = CompanionSession.live()
+    @StateObject private var activity = ActivityStore()
+    @StateObject private var music = MusicSession()
+    @StateObject private var meditationJourney = MeditationJourneyCoordinator()
     @State private var selection: Tab = .scripture
+    @State private var showMusicLibrary = false
+    @State private var shellFABEngagedUntil = Date.distantPast
+    @State private var showShellNewCollection = false
+    @State private var showShellNoteKindPicker = false
     @State private var reader = ReaderSession(content:BundledScriptureRepository(),state:Self.makeStateStore(),library:OfflineTranslationLibrary())
     private static func makeStateStore() -> ReaderStateStore? {
         #if DEBUG
@@ -41,40 +52,191 @@ struct RootTabView: View {
     private var tabAnimation: Animation {
         reduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.42, dampingFraction: 0.9)
     }
+    private var shellChromeAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.16) : .easeInOut(duration: 0.28)
+    }
     private var editingNote: Bool { selection == .notes && notes.selectedNoteID != nil }
     var body: some View {
         GeometryReader { geometry in
                 ZStack {
-                    ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CollectionsView(store:collections, notes:notes, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections).tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    CompanionView().tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    ActivityView().tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    SettingsView(reader:reader).tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
+                        .tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    ActivityView(store: activity, books: reader.books, editionID: reader.edition?.id,
+                                 referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp", startReading: { verse in
+                        selection = .scripture
+                        chrome.reveal()
+                        Task {
+                            await reader.navigate(book: verse.book, chapter: verse.chapter, verse: verse.verse, emphasis: [verse.verse])
+                            let navigation = reader.navigationID
+                            try? await Task.sleep(for: .seconds(3))
+                            reader.clearTemporaryEmphasis(ifNavigationID: navigation)
+                        }
+                    }, beginMeditationJourney: { launch in
+                        meditationJourney.begin(
+                            launch: launch,
+                            books: reader.books,
+                            repositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
+                        )
+                    }, availableVerses: { book, chapter, editionID in
+                        try await reader.availableVerses(book: book, chapter: chapter, editionID: editionID)
+                    }).tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    SettingsView(
+                        reader: reader,
+                        notes: notes,
+                        annotations: annotations,
+                        collections: collections,
+                        companion: companion,
+                        activity: activity,
+                        music: music,
+                        showMusicLibrary: $showMusicLibrary
+                    )
+                        .tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                 }
                 .animation(tabAnimation, value:selection)
                 .contentMargins(.bottom, editingNote ? 0 : 100, for: .scrollContent)
                 .clipped()
         }
         .ignoresSafeArea(.container, edges: .bottom)
-        .overlay(alignment: .bottom) { navigationDock.fixedSize(horizontal: false, vertical: true).padding(.bottom, 12) }
+        .overlay {
+            if meditationJourney.isActive {
+                MeditationJourneyView(coordinator: meditationJourney)
+            }
+        }
+        .overlay {
+            if let draft = activity.draft {
+                ActivityFloatingRecorder(
+                    draft: draft,
+                    fabEngagedUntil: $shellFABEngagedUntil,
+                    pauseOrResume: {
+                        if activity.draft?.runningSince == nil { activity.resume() } else { activity.pause() }
+                    },
+                    finish: {
+                        selection = .activity
+                        chrome.reveal()
+                        activity.requestFinish()
+                    }
+                )
+                .shellFABEngagementOpacity(engagedUntil: $shellFABEngagedUntil)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                if !meditationJourney.isActive {
+                    navigationDock.fixedSize(horizontal: false, vertical: true)
+                }
+                shellFABRow
+                    .padding(.bottom, shellFABBottomPadding)
+            }
+            .padding(.bottom, 12)
+            .animation(shellChromeAnimation, value: chrome.isVisible)
+        }
+        .sheet(isPresented: $showMusicLibrary) {
+            NavigationStack {
+                BackgroundMusicLibraryView(session: music)
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showShellNewCollection) {
+            CollectionEditorSheet(store: collections, parentID: nil)
+        }
+        .sheet(isPresented: $showShellNoteKindPicker) {
+            StudyNoteKindPicker(notes: notes) { id in
+                selection = .notes
+                chrome.reveal()
+                notes.open(id)
+            }
+        }
         .background(Color(palette.paper).ignoresSafeArea())
         .background(ScrollActivityObserver { chrome.reveal() })
         .tint(Color(palette.accent))
-        .preferredColorScheme(reader.preferences.appearance == .midnightLibrary ? .dark : reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
+        .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
         .environment(notes)
-        .task { await notes.load(); await collections.load() }
+        .onAppear {
+            companion.onCollectionsSync = { collections.upsertCompanionConversation($0) }
+            companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }
+            music.load()
+        }
+        .task { await notes.load(); await collections.load(); await companion.load(); await activity.load(); activity.importReviewingLinks(companion.reviewingLinks) }
+        .onChange(of: companion.reviewingLinks) { _, links in activity.importReviewingLinks(links) }
+        .onChange(of: activity.draft) { _, value in
+            if value == nil { activity.importReviewingLinks(companion.reviewingLinks) }
+            if value?.modeID == ActivityModeID.meditating.id, !music.preferences.showFloatingControl {
+                music.setShowFloatingControl(true)
+            }
+        }
+        .onChange(of: companion.panelExpandedToTab) { _, expanded in
+            if expanded { selection = .companion; chrome.reveal(); companion.panelExpandedToTab = false }
+        }
         .onChange(of: selection) { _, tab in notes.active = tab == .notes; if tab != .notes { notes.flushSurface?(); Task { await notes.save() } } }
         .onAppear { chrome.reveal() }
         .onDisappear { chrome.stop() }
         .onChange(of:scenePhase) { _, phase in
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && selection == .notes
-            if phase == .active { chrome.reveal() }
-            else { chrome.stop(); Task { await collections.flush() } }
+            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders() }
+            else { chrome.stop(); Task { await collections.flush(); await companion.flush(); await activity.flush() } }
         }
     }
+    private var shellFABBottomPadding: CGFloat {
+        guard !meditationJourney.isActive, chrome.isVisible else { return 0 }
+        return ShellChromeLayout.shellFABBottomPaddingWhenTabsVisible
+    }
+
+    /// Keeps music and Start Activity aligned with the tab dock’s width and horizontal inset.
+    @ViewBuilder
+    private var shellFABRow: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            if !editingNote && music.preferences.showFloatingControl {
+                BackgroundMusicFloatingControl(session: music, showLibrary: $showMusicLibrary, fabEngagedUntil: $shellFABEngagedUntil)
+                    .shellFABEngagementOpacity(engagedUntil: $shellFABEngagedUntil)
+            }
+            Spacer(minLength: 12)
+            tabSpecificShellFAB
+        }
+        .frame(maxWidth: Self.tabDockMaxWidth)
+        .padding(.horizontal, Self.tabDockHorizontalInset)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var tabSpecificShellFAB: some View {
+        if editingNote { EmptyView() }
+        else if selection == .collections {
+            shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "shell.addCollection") {
+                showShellNewCollection = true
+            }
+        } else if selection == .notes, notes.loaded {
+            shellCapsuleFAB(title: "Add Note", systemImage: "note.text.badge.plus", id: "shell.addNote") {
+                showShellNoteKindPicker = true
+            }
+        } else if selection == .companion, companion.activeConversations.isEmpty {
+            shellCapsuleFAB(title: "Start Conversation", systemImage: "square.and.pencil", id: "shell.startConversation") {
+                _ = companion.createConversation()
+            }
+        } else if selection == .activity, activity.isReady, activity.draft == nil, !meditationJourney.isActive {
+            shellCapsuleFAB(title: "Start Activity", systemImage: "play.fill", id: "activity.start") {
+                activity.requestStart()
+            }
+        }
+    }
+
+    private func shellCapsuleFAB(title: String, systemImage: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.headline.weight(.semibold))
+                .padding(.horizontal, 20)
+                .frame(height: 56)
+                .foregroundStyle(Color(palette.paper))
+                .background(Color(palette.accent), in: Capsule())
+                .shadow(color: Color(palette.ink).opacity(0.18), radius: 12, y: 5)
+        }
+        .accessibilityIdentifier(id)
+    }
+
     private func openPassage(_ passage: SavedPassage) {
         selection = .scripture
         chrome.reveal()
@@ -91,15 +253,16 @@ struct RootTabView: View {
                 tabButtons(compact:false)
                 tabButtons(compact:true)
             }
-            .padding(6).frame(maxWidth:740)
+            .padding(6).frame(maxWidth: Self.tabDockMaxWidth)
             .background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:28,style:.continuous))
             .overlay(RoundedRectangle(cornerRadius:28,style:.continuous).stroke(Color(palette.ink).opacity(0.18),lineWidth:1))
             .shadow(color:.black.opacity(0.06),radius:12,y:4)
-            .padding(.horizontal,16).padding(.vertical,10)
+            .padding(.horizontal, Self.tabDockHorizontalInset).padding(.vertical, 10)
             .opacity(chrome.isVisible ? 1 : 0)
             .offset(y:reduceMotion || chrome.isVisible ? 0 : 22)
             .allowsHitTesting(chrome.isVisible)
             .accessibilityHidden(!chrome.isVisible)
+            .gesture(tabDockSwipeToHide)
 
             if !chrome.isVisible {
                 Button { chrome.reveal() } label: {
@@ -113,18 +276,39 @@ struct RootTabView: View {
                 .transition(.opacity)
             }
         }
-        // Navigation floats over every tab and never changes the content frame.
         .frame(maxWidth:.infinity)
-        .animation(reduceMotion ? .easeOut(duration:0.16) : .easeInOut(duration:0.28), value:chrome.isVisible)
+        .animation(shellChromeAnimation, value:chrome.isVisible)
     }
+
+    private var tabDockSwipeToHide: some Gesture {
+        DragGesture(minimumDistance: 12, coordinateSpace: .local)
+            .onEnded { value in
+                guard chrome.isVisible else { return }
+                guard value.translation.height > 20,
+                      abs(value.translation.height) > abs(value.translation.width) else { return }
+                if reduceMotion {
+                    chrome.hideImmediately()
+                } else {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        chrome.hideImmediately()
+                    }
+                }
+            }
+    }
+
     private func tabButtons(compact: Bool) -> some View {
         HStack(spacing:0) {
             ForEach(Tab.allCases,id:\.self) { tab in
                 Button {
                     Task {
-                        if annotations.loaded {
-                            await annotations.transition { reader.save(); chrome.reveal(); selection = tab; annotations.active = tab == .scripture }
-                        } else { reader.save(); chrome.reveal(); selection = tab; annotations.active = tab == .scripture }
+                        chrome.reveal()
+                        let leavingScripture = selection == .scripture && tab != .scripture
+                        if leavingScripture, annotations.loaded {
+                            _ = await annotations.prepareForNavigation()
+                        }
+                        reader.save()
+                        selection = tab
+                        annotations.active = tab == .scripture
                     }
                 } label: {
                     VStack(spacing:4) {

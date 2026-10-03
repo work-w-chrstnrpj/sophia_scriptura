@@ -20,6 +20,14 @@ final class ShellChromeStateTests: XCTestCase {
         XCTAssertTrue(chrome.isVisible)
         chrome.stop()
     }
+    func testHideImmediatelyDismissesVisibleDock() {
+        let chrome = ShellChromeState()
+        chrome.reveal()
+        XCTAssertTrue(chrome.isVisible)
+        chrome.hideImmediately()
+        XCTAssertFalse(chrome.isVisible)
+    }
+
     func testStoppingBackgroundTimerPreventsStaleHideAfterResume() async throws {
         let chrome = ShellChromeState(delay: .milliseconds(100))
         chrome.reveal(); chrome.stop()

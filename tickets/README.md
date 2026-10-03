@@ -19,12 +19,18 @@ Milestone ordering lives in the [development plan](../docs/development-plan/deve
 | [SP-010](SP-010-licensed-offline-translations.md) | done; revised acceptance | Licensed offline translations and development cache authorization |
 | [SP-011](SP-011-tab-shell-motion.md) | in_progress; physical motion review pending | Timed dock/slide/glow implemented; checks passed; iPad update installed |
 
-| [SP-012](SP-012-persistent-scripture-annotations.md) | in_progress; physical acceptance pending | Actual-reader layers, durable ink, recovery and annotation-only backup |
+| [SP-012](SP-012-persistent-scripture-annotations.md) | done; owner accepted 2026-10-03 | Actual-reader layers, durable ink, recovery and annotation-only backup |
 
 | [SP-013](SP-013-freeform-notes.md) | in_progress; Canvas/Page implemented, physical acceptance pending | M4 Canvas/Page Notes, shared library, passage quotes and Notes-only recovery |
 | [SP-014](SP-014-pencil-shapes-and-app-icon.md) | implemented; physical acceptance pending | Shared held-stroke shape refinement, Notes ruler and Sophia app icon |
 | [SP-015](SP-015-collections-and-save-flow.md) | done; owner accepted 2026-10-02 | M5 persisted folders, No Folder, bookmark/gleaning save, move and cards |
 | [SP-016](SP-016-companion-planning-and-contracts.md) | done; owner approved 2026-10-02 | M6 multi-provider BYOK, Companion/Quiz design, data/privacy/recovery contracts and verification plan |
+| [SP-018](SP-018-companion-response-and-quiz-refinements.md) | implemented; focused simulator checks passed; owner acceptance pending | Markdown response contract, Original Language Analysis, Bible Quiz and Bible or False |
+| [SP-019](SP-019-quiz-question-cache.md) | implemented and installed; owner/provider acceptance pending | 18-question per-type Quiz Me cache and in-app background replenishment |
+| [SP-020](SP-020-activity-tracking.md) | in_progress; simulator verification underway | M8 Activity records, Reading timer, Reviewing import, history, insights and Files archive |
+| [SP-021](SP-021-background-music.md) | draft; not selected | M8 offline music planning, catalog rights gate and playback acceptance |
+| [SP-022](SP-022-meditation-journey.md) | implemented; owner acceptance pending | M8 Meditating fullscreen journey, optional passage or seven seed passages, swipe UX |
+| [SP-017](SP-017-maintainability-hardening.md) | ready; not selected | Cross-cutting responsibility extraction, warning/lint/concurrency gates and architecture-map reconciliation |
 
 ## Owner selection
 
@@ -34,7 +40,7 @@ complete, as is SP-003 planning. M2 is closed under the owner's 2026-09-29 revis
 acceptance: visual refinements and expiry/renewal addressed, VoiceOver waived. SP-008 is
 closed after the owner reported all criteria successful. SP-011 shell refinement is implemented with subjective motion review pending. The owner
 returned to M3 and selected SP-005 annotation planning/SP-012 scoping; that doc-only step
-is complete. The owner selected SP-012 implementation; verification and actual-reader device acceptance remain in progress. SP-007 completion does not complete M5.
+is complete. The owner accepted SP-012 actual-reader Pencil behavior and annotation restore on 2026-10-03. SP-007 completion does not complete M5.
 Before execution, announce the ticket, milestone, visible outcome, exclusions and tests.
 
 ## Readiness and completion

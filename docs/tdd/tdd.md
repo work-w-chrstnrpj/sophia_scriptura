@@ -76,14 +76,14 @@ Primary workflows:
 | Platform | Proposed: native SwiftUI with UIKit/PencilKit bridges | Deployment target follows device confirmation; iPadOS 17+ is the scaffold setting, not a newly approved requirement. |
 | Developer account | Proposed: free Personal Team signing | Periodic reinstall is a tradeoff to review; no paid membership assumed. |
 | Scripture rendering | Implemented in SP-009: continuous TextKit 1 chapter surface with horizontal chapter swipes | SP-009 must prove continuous scrolling, passage selection and accessibility; annotation geometry remains a later native gate. |
-| Scripture visual system | Implemented SP-009 refinement: OldPaper reader/shell and seven persisted color/type presets | Shared presentation tokens and bundled offline OFL fonts implement the [Scripture screen specification](../design/scripture-screen-specification.md). Reader unit/UI evidence is tracked in SP-009; owner visual acceptance is recorded in the 2026-09-29 M2 closure; VoiceOver is waived for that closure. SP-008 physical validation is owner-accepted; SP-012 implements annotation storage/recovery; actual-reader device acceptance remains pending. |
+| Scripture visual system | Implemented SP-009 refinement: OldPaper reader/shell and seven persisted color/type presets | Shared presentation tokens and bundled offline OFL fonts implement the [Scripture screen specification](../design/scripture-screen-specification.md). Reader unit/UI evidence is tracked in SP-009; owner visual acceptance is recorded in the 2026-09-29 M2 closure; VoiceOver is waived for that closure. SP-008 physical validation and SP-012 actual-reader behavior are owner-accepted; SP-012 implements annotation storage/recovery. |
 | Translations | Confirmed: prioritize free access; prefer NIV, NLT, NKJV, or ESV | WEB is the proposed bundled base; preferred-version availability is not promised. |
 | Offline | Proposed: complete permitted base text plus policy-controlled online content | Free access does not imply permanent offline storage rights. |
 | Notes | Confirmed: expandable canvas with freely positioned text, ink, and images; explicit grouping | Objects stay independent until deliberately grouped. Growth limits, detailed selection/resize behavior, and export remain open. |
 | Audio | Confirmed preference: human narration | Provider/edition rights remain open; TTS is not an approved substitute. |
 | AI | Proposed: provider-neutral boundary, one provider first, Keychain secrets | Selected-context online use and source retrieval accepted. Provider/model, source access and numeric cost controls remain open; shared foundation and all four preset wordings approved; runtime and behavior evaluation pending. |
 | Storage | Reader slice implemented: immutable bundled SQLite Scripture plus local-only SwiftData reader state; remaining study data stays proposed | The maintained reader contract defines identity, loading and restore behavior. Notes/ink/media and full backup remain SP-005 work. |
-| Annotation persistence | Implemented in SP-012: edition/revision + chapter + layer UUID + preserved layout | Versioned generation commits, recovery and ink-only backup follow the annotation contract; physical acceptance remains pending. |
+| Annotation persistence | Implemented in SP-012: edition/revision + chapter + layer UUID + preserved layout | Versioned generation commits, recovery and ink-only backup follow the annotation contract; owner-reported physical Pencil and restore acceptance closed M3 on 2026-10-03. |
 
 Non-goals: multi-user, cloud sync, App Store release, monetization, Android/web.
 
@@ -558,28 +558,47 @@ from all bias. Both inherit the approved shared guardrail; both are owner-approv
 ### 12.3 Quiz Me — owner-approved planning baseline
 
 REQ-025 adds Quiz Me as a structured mode within Companion, separate from ordinary chat
-turns. The six proposed quiz types are Identify the Verse (a passage of up to three verses),
+turns. The approved types are Identify the Verse (a passage of up to three verses),
 Complete the Verse, Scripture or Cap, Who Said It?, Christian History from Bible history
-through the early Church, and identifying the reference for a displayed verse. Difficulty
+through the early Church, Bible Quiz (a biblical question with choices), and Bible or False
+(a biblical statement judged true or false). Identify the Reference was removed because it
+duplicated Identify the Verse. Difficulty
 presets are Easy (10 questions at 1 point each), Average (5 at 3 points each), and Difficult
 (3 at 5 points each). Timed and untimed sessions are requested. The question appears in a
 centered card; after an answer the session explains correctness, records the result, and
 continues. Quiz history retains session results and per-question history locally.
 
 Use distinct logical concepts for a Quiz session, its question/answer key and source metadata,
-and the user's attempt/result; final persistence schema and retention rules remain for the
-implementation ticket. Validate Scripture keys against the selected permitted edition and
-reference. Christian History answers need inspectable source provenance. The model may help
-compose questions and explanations, but free-form model output alone must not establish the
-answer key. Do not transmit full licensed Scripture text to a provider unless its content
-rights permit that use. Show edition/source context with the explanation when applicable.
+and the user's attempt/result. The selected provider now generates the structured question,
+choices, provisional answer key, explanation and cited reference. The app validates the JSON
+shape, requested type order, count, answer-choice bounds, within-session uniqueness and exact
+recent repeats before opening a session. It does not independently establish the factual truth
+of a model-authored key, so setup and answer feedback disclose AI provenance and surface the
+cited reference. Do not transmit full licensed Scripture text to a provider unless its content
+rights permit that use.
 
-Quiz Me is launched and reviewed in Companion. Answer controls and authoritative validation
-are defined in the [Companion design](../design/companion-screen-specification.md): Scripture
-modes use canonical local keys and curated ambiguity-reviewed fixtures; Scripture or Cap
-uses deterministic altered decoys; Christian History uses inspectable primary, official or
-academic/reference provenance. Model output may help compose wording and explanations but
-cannot approve its own key.
+Quiz Me is launched and reviewed in Companion. Answer controls and structural validation are
+defined in the [Companion design](../design/companion-screen-specification.md). Model-authored
+keys are used for provisional scoring and must carry a Bible reference or concise primary
+historical source. Factual verification against local permitted Scripture and inspectable
+Christian History sources remains a quality gap; the UI must not represent an AI key as
+independently verified.
+
+Question selection is provider-generated and locally cached under SP-019. Each selectable
+type targets 20 Easy, 10 Average and 6 Difficult prepared questions, enough for two
+single-type quizzes. Refill first makes each bucket playable, then builds spare capacity.
+Starting a quiz uses available cached questions immediately; starting, completing and
+quitting request in-app reconciliation. A first or depleted quiz waits for provider
+generation. Active warmups incorporate new priorities at a batch boundary, and failures
+use bounded in-app backoff without discarding cached items. Every request includes a
+random nonce; recent full question text is no longer sent as prompt padding. Local exact
+and strong word-overlap checks reject repeats against cached and historical questions.
+Easy targets direct, widely
+known recall; Average requires broader contextual recall and plausible related distractors;
+Difficult requires precise canonical context, less-prominent details or close reading without
+ambiguity. The provider must return the complete missing set before a cold quiz opens. Semantic
+near-duplicate avoidance, factual correctness and perceived difficulty still require real-
+provider evaluation.
 
 Untimed is the default. Timed mode uses per-question limits of 60 seconds for Easy, 45 for
 Average and 30 for Difficult; background/system interruptions, between-question transitions
@@ -589,10 +608,10 @@ normalizes case, surrounding punctuation and repeated whitespace while keeping N
 correct distinct from exact Correct.
 
 Quiz history, deletion and recovery follow the
-[Companion contract](../data/companion-contract.md). **Record this as Reviewing** defaults on
-and may be disabled before starting. Completed or intentionally ended recorded sessions
-create a linked Reviewing record; active quiz time counts toward the normal Activity goal and
-streak. Abandoned sessions do not create one automatically. Activity stores duration/date,
+[Companion contract](../data/companion-contract.md). Every quiz completed through all its
+questions and final summary creates a linked Reviewing record; active question time counts
+toward the normal Activity goal and streak. Abandoned sessions do not create one
+automatically. Deleting Quiz history retains its already recorded Activity time. Activity stores duration/date,
 mode/title and quiz-session ID only; Quiz history owns correctness, answers, score, sources
 and explanations. This is approved design scope, not runtime implementation authorization.
 
@@ -652,6 +671,17 @@ diagnostics and exports.
   recordings; preserve track provenance and license evidence. The CC0 deed is a candidate
   rights framework, not evidence that any specific recording is cleared. See the Activity
   design for shell behavior and remaining track decisions.
+- SP-020 Activity implementation currently uses a separate local Activity-v1 JSON envelope
+  with checksum, previous-file recovery and Activity-only Files export/restore. Its one
+  persisted timer draft records active intervals; `RootTabView` owns the cross-tab timer
+  presentation. `CompanionSession` remains the source of quiz results and publishes a
+  lightweight Reviewing link imported once by Activity. Activity reminders, including each
+  one-time reminder's cleanup choice, are persisted with the Activity snapshot and scheduled
+  through local iPad notifications. Activity also persists per-mode daily goals, migrating
+  the former total goal to Reading and summing active mode goals for the total threshold.
+  Analytics PNG
+  export renders the complete selected chart range. See SP-020 for incomplete
+  acceptance and physical-device verification. M7 narration is postponed by owner decision.
 - Settings (fills the idea's gaps): theme mode; font family/size/line spacing;
   default translation; red-letter toggle; TTS voice and speed; AI provider + key + model
   + temperature; prompt-preset editor; data export/import; storage usage; cache refresh;

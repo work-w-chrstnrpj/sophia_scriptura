@@ -1,5 +1,8 @@
 # GitHub And Copilot Adapters
 
+This document is intentionally named `ADAPTERS.md`: GitHub prioritizes a README in
+`.github/` over the root README, which owns the Sophia repository landing page.
+
 Use this folder for repository automation, issue templates, pull-request templates, workflow files, and GitHub Copilot adapters.
 
 - Copilot agents: `.github/agents/*.agent.md`

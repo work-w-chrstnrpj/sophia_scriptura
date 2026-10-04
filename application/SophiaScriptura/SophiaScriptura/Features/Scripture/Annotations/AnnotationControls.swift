@@ -45,6 +45,7 @@ struct AnnotationControls: View {
     let reader: ReaderSession
     let width: Double
     @Binding var confirmDeleteLayer: Bool
+    var openChapterHub: (() -> Void)? = nil
     @State private var rename = false
     @State private var name = ""
     @State private var showLayers = false
@@ -269,6 +270,15 @@ struct AnnotationControls: View {
                         }
                     } label: { controlLabel("Actions", icon: "ellipsis.circle", compact: compact) }
                     .accessibilityIdentifier("annotation.backup")
+
+                    if let openChapterHub {
+                        Button(action: openChapterHub) {
+                            Label("Chapter", systemImage: "rectangle.stack")
+                                .lineLimit(1).frame(minWidth: 44, minHeight: 44)
+                        }
+                        .accessibilityIdentifier("scripture.chapterHub")
+                        .accessibilityLabel("Chapter hub")
+                    }
 
         }.buttonStyle(.borderless).font(.subheadline)
     }

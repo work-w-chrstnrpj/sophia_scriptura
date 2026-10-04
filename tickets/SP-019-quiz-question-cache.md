@@ -1,7 +1,7 @@
 # SP-019 — Quiz question cache and background replenishment
 
 - Milestone: M6 Stateful Companion.
-- Type: implementation. Status: two-quiz refill follow-up implemented, simulator-verified and installed; owner/provider acceptance pending.
+- Type: implementation. Status: done; owner verified on physical iPad 2026-10-04.
 - Selected by owner: 2026-10-02.
 - Two-quiz refill follow-up selected: 2026-10-03.
 

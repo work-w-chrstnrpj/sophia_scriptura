@@ -129,7 +129,7 @@ struct CompanionModelRoutingBar: View {
         .onChange(of: modelID) { _, newValue in
             guard !newValue.isEmpty else { return }
             if !modelOptions.contains(where: { $0.modelID == newValue }), !modelOptions.isEmpty {
-                modelID = modelOptions[0].modelID
+                alignModelSelection()
             }
         }
     }

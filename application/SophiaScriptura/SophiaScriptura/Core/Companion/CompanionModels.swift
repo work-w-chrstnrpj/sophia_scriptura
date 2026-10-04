@@ -78,6 +78,16 @@ struct CompanionPassageAnchor: Codable, Hashable, Sendable {
     }
 }
 
+/// Reference-only chapter scope, distinct from a verse range.
+struct CompanionChapterAnchor: Codable, Hashable, Identifiable, Sendable {
+    var bookID: String
+    var chapter: Int
+    var editionID: String
+    var referenceLabel: String
+
+    var id: String { "\(editionID):\(bookID):\(chapter)" }
+}
+
 enum CompanionAttachmentDisclosure: String, Codable, Sendable {
     case localOnly
     case referenceOnly
@@ -91,6 +101,7 @@ struct CompanionAttachment: Codable, Identifiable, Hashable, Sendable {
     var disclosure: CompanionAttachmentDisclosure
     var referenceLabel: String
     var payload: String?
+    var selectedText: String?
 
     init(
         id: UUID = UUID(),
@@ -98,7 +109,8 @@ struct CompanionAttachment: Codable, Identifiable, Hashable, Sendable {
         messageID: UUID? = nil,
         disclosure: CompanionAttachmentDisclosure,
         referenceLabel: String,
-        payload: String? = nil
+        payload: String? = nil,
+        selectedText: String? = nil
     ) {
         self.id = id
         self.conversationID = conversationID
@@ -106,6 +118,7 @@ struct CompanionAttachment: Codable, Identifiable, Hashable, Sendable {
         self.disclosure = disclosure
         self.referenceLabel = referenceLabel
         self.payload = payload
+        self.selectedText = selectedText
     }
 }
 
@@ -441,6 +454,7 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
     var branchPointMessageID: UUID?
     var composerDraft: String
     var passageAnchor: CompanionPassageAnchor?
+    var chapterAnchor: CompanionChapterAnchor?
 
     init(
         id: UUID = UUID(),
@@ -456,7 +470,8 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
         parentConversationID: UUID? = nil,
         branchPointMessageID: UUID? = nil,
         composerDraft: String = "",
-        passageAnchor: CompanionPassageAnchor? = nil
+        passageAnchor: CompanionPassageAnchor? = nil,
+        chapterAnchor: CompanionChapterAnchor? = nil
     ) {
         self.id = id
         self.title = title
@@ -472,6 +487,7 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
         self.branchPointMessageID = branchPointMessageID
         self.composerDraft = composerDraft
         self.passageAnchor = passageAnchor
+        self.chapterAnchor = chapterAnchor
     }
 }
 

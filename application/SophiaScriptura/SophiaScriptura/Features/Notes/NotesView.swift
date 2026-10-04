@@ -20,6 +20,7 @@ struct NotesView: View {
     @State private var archive = NotesArchiveDocument(data: Data())
     @State private var filingNote: NoteDocument?
     @State private var showingNewNote = false
+    @State private var showArchivedNotes = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var notes: [NoteDocument] {
@@ -54,13 +55,17 @@ struct NotesView: View {
                 NoteEditorView(session: session, reader: reader)
                     .toolbar(.visible, for: .navigationBar)
             }
+            .navigationDestination(isPresented: $showArchivedNotes) {
+                StudyArchivedNotesView(session: session)
+                    .toolbar(.visible, for: .navigationBar)
+            }
             .sheet(item: $filingNote) { note in
                 CollectionDestinationPicker(
                     store: collections,
                     artifact: CollectionArtifact(
                         id: note.id,
                         title: note.title,
-                        subtitle: note.kind == .page ? "Note · Page" : "Note · Canvas",
+                        subtitle: "Note · \(note.kind.displayName)",
                         kind: .note,
                         modifiedAt: note.updatedAt
                     ),
@@ -82,11 +87,11 @@ struct NotesView: View {
             }
             if deleting != nil {
                 StudyCenteredConfirmationOverlay(
-                    title: "Delete this note?",
-                    message: "You can restore it from Recently Deleted. Scripture and annotation layers are unchanged.",
-                    confirmLabel: "Delete Note",
+                    title: "Archive this note?",
+                    message: "You can restore it from Archive in Settings or the archive button. Scripture and annotation layers are unchanged.",
+                    confirmLabel: "Archive Note",
                     onConfirm: {
-                        if let id = deleting { session.delete(id) }
+                        if let id = deleting { session.archive(id) }
                         deleting = nil
                     },
                     onCancel: { deleting = nil }
@@ -116,6 +121,13 @@ struct NotesView: View {
                 .accessibilityIdentifier("notes.title")
 
             Spacer(minLength: 12)
+
+            Button { showArchivedNotes = true } label: {
+                LibraryHeaderIcon(systemImage: "archivebox")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Archived notes")
+            .accessibilityIdentifier("notes.archive")
 
             if searchPresented {
                 searchField
@@ -169,13 +181,13 @@ struct NotesView: View {
     }
 
     private var viewLabel: String {
-        if deleted { return "Recently Deleted" }
+        if deleted { return "Archived" }
         return tag.isEmpty ? sort : "\(sort) · \(tag)"
     }
 
     private var backupsMenu: some View {
         Menu {
-            Toggle("Recently Deleted", isOn: $deleted)
+            Toggle("Show archived in library", isOn: $deleted)
             Button("Export Notes backup") { Task { do { archive = NotesArchiveDocument(data: try await session.export()); exporting = true } catch { session.report(error) } } }
             Button("Restore Notes backup…") { importing = true }
             Button("Recover before last restore…") { Task { do { pendingRestore = try await session.preRestore(); confirmRestore = true } catch { session.report(error) } } }
@@ -227,14 +239,14 @@ struct NotesView: View {
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if !deleted {
                                 Button(role: .destructive) { deleting = note.id } label: {
-                                    Label("Delete", systemImage: "trash")
+                                    Label("Archive", systemImage: "archivebox")
                                 }
                                 .tint(.red)
                             }
                         }
                         .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             if deleted {
-                                Button { session.delete(note.id, restore: true) } label: {
+                                Button { session.restoreFromArchive(note.id) } label: {
                                     Label("Restore", systemImage: "arrow.uturn.backward")
                                 }
                                 .tint(Color(theme.palette.accent))
@@ -290,7 +302,7 @@ struct NotesView: View {
     private var emptyDetail: String {
         if !search.isEmpty || !tag.isEmpty { return "Try a different title, tag, or passage." }
         if deleted { return "Deleted notes stay here until you restore them." }
-        return "Start a Page or Canvas note for text, handwriting, images, and Scripture."
+        return "Start a Page, Canvas, Prayer, or Journal note for study and reflection."
     }
 
     private func noteCard(_ note: NoteDocument) -> some View {
@@ -332,7 +344,7 @@ struct NotesView: View {
                 noteDates(note, accent: accent)
                 Spacer()
                 if deleted {
-                    Button("Restore note") { session.delete(note.id, restore: true) }
+                    Button("Restore note") { session.restoreFromArchive(note.id) }
                         .buttonStyle(CollectionSecondaryButtonStyle())
                 }
             }
@@ -376,7 +388,7 @@ struct NotesView: View {
             }
             .buttonStyle(.plain)
             if deleted {
-                Button("Restore note") { session.delete(note.id, restore: true) }
+                Button("Restore note") { session.restoreFromArchive(note.id) }
                     .buttonStyle(CollectionSecondaryButtonStyle())
             }
         }
@@ -390,11 +402,11 @@ struct NotesView: View {
     @ViewBuilder
     private func noteActions(_ note: NoteDocument) -> some View {
         if deleted {
-            Button("Restore note") { session.delete(note.id, restore: true) }
+            Button("Restore note") { session.restoreFromArchive(note.id) }
         } else {
             Button("Add to Collection…", systemImage: "folder.badge.plus") { filingNote = note }
                 .accessibilityIdentifier("notes.addToCollection.\(note.title)")
-            Button("Delete note", role: .destructive) { deleting = note.id }
+            Button("Archive note", systemImage: "archivebox", role: .destructive) { deleting = note.id }
         }
     }
 
@@ -403,11 +415,15 @@ struct NotesView: View {
     }
 
     private func accent(for note: NoteDocument) -> CollectionAccent {
-        note.kind == .page ? .sage : .slate
+        switch note.kind {
+        case .page, .journal: .sage
+        case .prayer: .gold
+        case .canvas: .slate
+        }
     }
 
     private func noteGlyph(_ note: NoteDocument, accent: CollectionAccent, size: CGFloat) -> some View {
-        Image(systemName: note.kind == .page ? "doc.text.fill" : "square.on.square.dashed")
+        Image(systemName: noteKindSymbol(note.kind))
             .font(.system(size: size * 0.42, weight: .medium))
             .foregroundStyle(accent.color)
             .frame(width: size, height: size)
@@ -415,8 +431,17 @@ struct NotesView: View {
             .accessibilityHidden(true)
     }
 
+    private func noteKindSymbol(_ kind: NoteKind) -> String {
+        switch kind {
+        case .page: "doc.text.fill"
+        case .canvas: "square.on.square.dashed"
+        case .prayer: "hands.and.sparkles.fill"
+        case .journal: "book.pages.fill"
+        }
+    }
+
     private func caption(_ note: NoteDocument) -> String {
-        let kind = note.kind.rawValue.capitalized
+        let kind = note.kind.displayName
         let tags = note.tags.map { "#" + $0 }.joined(separator: " ")
         return tags.isEmpty ? kind : "\(kind) · \(tags)"
     }

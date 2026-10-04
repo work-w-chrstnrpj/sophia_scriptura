@@ -1,5 +1,62 @@
 # Personal iPad deployment
 
+## SP-023 response/source follow-up — 2026-10-04
+
+Signed Debug build, strict signature verification, in-place installation and launch on
+`iPad ni Paj` all passed. Existing data was preserved. Logs:
+`build/companion-source-repair-device-20261004/{build,signature,install,launch}.log`.
+The app was built using `build/chapter-hub-ask-device-20261004` as its derived-data directory.
+`build/companion-source-repair-r3-20261004.xcresult` records 56 passing focused tests.
+
+Chapter now sits in the annotation/actions row with its label and icon. Sources provides
+publisher passage links, model links and labeled lookup when a direct URL is absent;
+generated references are not marked as retrieved evidence. New manual Scripture Ask/chapter
+chats correct the ALLaM fallback using an available curated Groq model. Existing chats keep
+their model selection; choose a model in Model before retrying an old poor answer, or start
+a new Ask. No historic replies are rewritten. Real-provider accuracy/quality remains an
+owner acceptance check, not established by the fixture suite or installation.
+
+## SP-023 Chapter Hub and contextual Ask — 2026-10-04
+
+The signed Debug build passed strict signature verification, installed in place on
+`iPad ni Paj`, and launched successfully as `com.personal.SophiaScriptura`. No uninstall,
+data reset or translation sync was performed. Logs are retained under
+`build/chapter-hub-ask-device-20261004/{build,signature,install,launch}.log`.
+The final focused simulator suite passed **60 tests, 0 failures, 0 skipped** in
+`build/chapter-hub-ask-final-20261004.xcresult`.
+
+Start a new selection Ask or Verse Hub conversation and send a short question; authorized
+full verse context and selected wording now accompany the provider-facing question.
+Use the separate button beside the chapter title to open Chapter Hub and Ask about this
+chapter with reference-only context. Existing OLA prompting remains intact; old responses
+are not rewritten. Physical layout/routing and real-provider factual answer quality remain
+owner checks in [SP-023](../../tickets/SP-023-chapter-hub-and-contextual-ask.md).
+
+## Ask blank question composer — 2026-10-04
+
+The signed Debug update passed strict signature verification, installed in place on
+`iPad ni Paj` and launched successfully as `com.personal.SophiaScriptura`. No uninstall
+or data reset was performed. Logs are retained under
+`build/ask-blank-composer-device-20261004/`. The focused Companion suite passed 40 tests
+in `build/ask-blank-composer-20261004.xcresult`, including OLA regression coverage.
+
+Start a new Ask from Scripture: the question composer is blank and the verse remains
+attached. Type your own question, then Send. Existing messages/drafts are not rewritten;
+OLA keeps its current behavior. Actual provider answer quality remains an owner check.
+
+## OLA selection-aware analysis — 2026-10-04
+
+The signed Debug update passed strict signature verification, installed in place on
+`iPad ni Paj` and launched as `com.personal.SophiaScriptura`. No uninstall or data reset
+was performed. Evidence is retained in `build/ola-selection-device-20261004/`
+(`build.log`, `signature.log`, `install.log`, `launch.log`).
+
+Start a new Original Language Analysis request to test the `OLA:` title, selected
+word/phrase, translation and complete verse attachment. Existing conversations retain
+their original titles/prompts. The focused Companion/reader suite passed 52 tests in
+`build/ola-selection-20261004.xcresult`. No real provider request was made for verification;
+independent lexical and cross-reference checking remains an owner acceptance requirement.
+
 ## Companion native Markdown correction — 2026-10-03
 
 This update supersedes the earlier response-rendering recovery below. The signed Debug

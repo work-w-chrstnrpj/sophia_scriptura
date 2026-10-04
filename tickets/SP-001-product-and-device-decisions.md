@@ -1,6 +1,6 @@
 # SP-001 — Product and device decisions
 
-- Type: planning. Status: in_progress. Owner: Product & Planning Manager.
+- Type: planning. Status: done; owner closed at M9 integrated acceptance 2026-10-04. Owner: Product & Planning Manager.
 - Requirements: REQ-001–REQ-024 (full-product reconciliation; not implementation of those requirements).
 - Dependencies: owner answers; no code dependency.
 - Design: [product specification](../docs/product-specification/product-specification.md),

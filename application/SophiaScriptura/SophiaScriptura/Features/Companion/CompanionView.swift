@@ -17,6 +17,7 @@ struct CompanionView: View {
     @State private var quizPendingDelete: UUID?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var pendingNoteSave: StudyNoteSaveContent?
+    @State private var showArchivedConversations = false
 
     var body: some View {
         ZStack {
@@ -26,6 +27,12 @@ struct CompanionView: View {
                     LibraryHeaderTitle(title: "Companion")
                         .accessibilityIdentifier("companion.title")
                     Spacer(minLength: 12)
+                    Button { showArchivedConversations = true } label: {
+                        LibraryHeaderIcon(systemImage: "archivebox")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Archived conversations")
+                    .accessibilityIdentifier("companion.archive")
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
@@ -169,6 +176,10 @@ struct CompanionView: View {
             }
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showArchivedConversations) {
+                StudyArchivedConversationsView(session: session)
+                    .toolbar(.visible, for: .navigationBar)
+            }
         } detail: {
             if let conversation = session.selectedConversation {
                 CompanionConversationView(
@@ -383,6 +394,12 @@ struct CompanionConversationView: View {
                             CompanionPassageContextCard(
                                 referenceLabel: anchor.referenceLabel,
                                 excerpt: session.attachments.first(where: { $0.conversationID == conversation.id })?.payload,
+                                palette: theme.palette
+                            )
+                        } else if let anchor = liveConversation.chapterAnchor {
+                            CompanionPassageContextCard(
+                                referenceLabel: anchor.referenceLabel,
+                                excerpt: "Chapter reference only · no chapter text attached",
                                 palette: theme.palette
                             )
                         }

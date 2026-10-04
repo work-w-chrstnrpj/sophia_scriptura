@@ -57,6 +57,36 @@ the owner can retry the response or edit and resend the prompt to regenerate it.
 
 ## Context composition
 
+Ask-from-Scripture persists its passage anchor and permitted complete-verse attachment independently of
+the user's question. Its initial composer draft is empty and there is no auto-send action
+or generated user message. When the owner sends a question, the user turn retains exactly
+that question; the context builder prefixes the latest provider-facing user turn with the
+reference/translation, attached complete involved verses and selected focus. The system
+instruction also retains explicit attachments. This request-only composition resolves
+short questions like "What does it mean?" without changing stored user content or OLA's
+initial structured provider content. It is rebuilt on follow-up, retry and edit/resend.
+If this user-turn prefix exceeds the existing character budget it falls back to a disclosed
+reference-only prefix; earlier turns are removed first to keep the budget. Reference-only
+disclosure never adds restricted verse wording. Existing saved drafts/history are unchanged.
+
+SP-023 adds optional `CompanionAttachment.selectedText` (only authorized transmitted
+wording) and optional `CompanionConversation.chapterAnchor`. Missing fields decode as nil
+in existing v1-v3 generations; the existing v3 writer and recovery envelope stay unchanged.
+The chapter anchor stores canonical book, chapter, edition and a display reference, not
+a synthetic verse range. Chapter conversations keep a reference-only attachment with no
+payload. Request context is `In "{book} Chapter {number} ({translation})"`; no chapter text
+is loaded or transmitted for this action. Provider branches retain the same anchor and
+explicit attachments. Hub queries separate chapter and verse chats by canonical identity
+and edition, and display an overlapping multi-verse conversation only once.
+
+For Original Language Analysis, the title is prefixed `OLA:` while the passage anchor retains
+the plain canonical reference. The selected wording and translation/mode are retained in the
+user message's display content and full provider prompt; the passage attachment retains the
+authorized complete involved verse(s). Existing `providerContent` carries the structured
+instructions into follow-ups and retries. No new snapshot schema or history migration is
+required. If expanded quote authorization fails, neither selection nor passage text is sent:
+the attachment is reference-only and the prompt explains that the target wording is unavailable.
+
 The context builder resolves the pinned preset exactly once, includes the current question,
 permitted explicit attachments, recent relevant turns and still-valid summaries. It reserves
 room for the answer, records omitted ranges, and never implies that every saved message was
@@ -79,6 +109,16 @@ rejects non-HTTPS transport, does not forward a key across redirects to another 
 shows the destination host during setup and connection testing.
 
 ## Scripture and retrieval policy
+
+SP-023 source handling: bibliography entries and URLs supplied by a model have provenance
+`model-bibliography` or `model-link`; parsing them does not set retrievalPerformed or
+retrievalAvailable. Sources also derives an `attached-scripture` reference from the
+conversation anchor, linking WEB chapters to their eBible.org publisher page. This is
+the selected text's reference, not independent proof of the answer. Only valid HTTP(S)
+URLs without credentials are opened. A work without a URL offers a clearly labeled web
+search rather than a fabricated direct source. Existing replies gain these display-time
+links without rewriting stored text. Recognizable HTML/template artifacts in new replies
+produce a failed message, with raw provider text retained in the response attempt.
 
 The selected provider currently supplies quiz questions, provisional answer keys and cited
 references. The app validates structure, required fields, choice bounds, requested type order

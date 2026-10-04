@@ -257,3 +257,15 @@ and `MeditationJourneyView.swift` own the fullscreen swipe journey. Root overlay
 above tab content while keeping music and Activity recorder FABs visible; the tab dock hides
 during the journey. `ActivityView` starts the journey when Meditating is started from Start
 Activity. `Resources/Activity/meditation-passages.seed.json` supplies default seven-passage sets.
+
+## SP-023 structure update
+
+`Features/Scripture/ChapterHubView.swift` owns the chapter index over existing links and
+conversations. `Core/Companion/CompanionModels.swift` distinguishes optional chapter anchors
+from verse-range anchors; `CompanionSession` owns chapter Ask/query commands.
+`CompanionContextBuilder` composes reference-only chapter or authorized verse context beside
+manual questions without rewriting stored user messages. `ScriptureHubTests.swift` covers
+provider-bound requests, persistence, chapter aggregation and disclosure boundaries.
+`Infrastructure/Companion/CompanionStudySources.swift` owns selected-passage links and
+reference lookup/provenance; `CompanionSourcesTests.swift` covers source and model fallback
+regressions. The Chapter control is hosted in the annotation/actions row.

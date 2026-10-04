@@ -43,6 +43,8 @@ enum ProviderModelCatalog {
             ])
         case "groq":
             return options([
+                ("openai/gpt-oss-120b", "GPT OSS 120B", true),
+                ("openai/gpt-oss-20b", "GPT OSS 20B", true),
                 ("llama-3.3-70b-versatile", "Llama 3.3 70B", true),
                 ("llama-3.1-8b-instant", "Llama 3.1 8B Instant", true)
             ])
@@ -81,6 +83,10 @@ enum ProviderModelCatalog {
         }
         if merged.isEmpty { return curatedModels(adapterID: adapterID) }
         return merged.sorted { lhs, rhs in
+            let preferred = curatedModels(adapterID: adapterID).map(\.modelID)
+            let leftRank = preferred.firstIndex(of: lhs.modelID) ?? Int.max
+            let rightRank = preferred.firstIndex(of: rhs.modelID) ?? Int.max
+            if leftRank != rightRank { return leftRank < rightRank }
             if lhs.isFree != rhs.isFree { return lhs.isFree && !rhs.isFree }
             return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
         }
@@ -100,9 +106,19 @@ enum ProviderModelCatalog {
         let pool = preferFree ? filteredModels(options, adapterID: adapterID, freeOnly: true) : options
         let effective = pool.isEmpty ? options : pool
         if !currentID.isEmpty, effective.contains(where: { $0.modelID == currentID }) { return currentID }
+        if let recommended = curatedModels(adapterID: adapterID).first(where: { candidate in
+            effective.contains { $0.modelID == candidate.modelID }
+        }) { return recommended.modelID }
         if preferFree, let free = effective.first(where: \.isFree) { return free.modelID }
         if let first = effective.first?.modelID { return first }
         return defaultModelID(adapterID: adapterID)
+    }
+
+    /// Repairs the observed ALLaM fallback for newly created manual Scripture chats.
+    /// An explicit model choice after creation is retained by pickModel.
+    static func scriptureAskModel(currentID: String, options: [CompanionModelOption], adapterID: String) -> String {
+        guard adapterID == "groq", currentID == "allam-2-7b" else { return currentID }
+        return pickModel(currentID: "", options: options, adapterID: adapterID)
     }
 
     static func isLikelyFreeModel(modelID: String, adapterID: String) -> Bool {

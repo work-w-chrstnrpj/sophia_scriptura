@@ -10,7 +10,7 @@ Start with the [development plan](development-plan/development-plan.md) and
 | [Scripture annotation contract](data/scripture-annotation-contract.md) | M3 preserved layouts, durable ink commits, recovery and annotation-only backup/restore |
 | [Scripture reader data contract](data/scripture-reader-contract.md) | Edition/reference identity, bundled SQLite content, reader state and restore behavior |
 | [Scripture content](integrations/scripture-content.md) | SP-002 sources, offline baseline, provider permissions and import acceptance plan |
-| [Development plan](development-plan/development-plan.md) | M0–M9 roadmap and current position |
+| [Development plan](development-plan/development-plan.md) | M0–M9 roadmap; **M0–M9 closed 2026-10-04** (M7 audio abandoned) |
 | [Tickets](../tickets/README.md) | Selected scope, dependencies, acceptance, and evidence |
 | [UX specification](design/ux-specification.md) | Intended interaction design |
 | [App shell specification](design/app-shell-specification.md) | Shared navigation, overlays, state preservation, audio continuity and cross-screen rules |

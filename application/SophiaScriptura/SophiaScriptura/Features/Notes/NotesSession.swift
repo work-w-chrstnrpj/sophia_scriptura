@@ -63,11 +63,13 @@ import ImageIO
     }
     @discardableResult func create(kind: NoteKind = .page, quote: NoteQuote? = nil) -> UUID? {
         guard !restoring, loaded, snapshot.notes.count < 200 else { notice = "Notes is unavailable or its 200-note safety limit has been reached."; return nil }
-        var note = NoteDocument(page: kind == .page ? NotePage() : nil)
+        var note = NoteDocument(kind: kind)
+        if kind == .prayer { note.title = "Untitled Prayer" }
+        if kind == .journal { note.title = "Untitled Journal" }
         if let quote {
             do { try quote.validate() } catch { report(error); return nil }
             note.title = quote.reference
-            if kind == .page { note.page?.insert(quote, at: 0) }
+            if kind.usesPageBody { note.page?.insert(quote, at: 0) }
             else { note.objects.append(NoteObject(kind: .quote, quote: quote)) }
             if NotePageTypography.height(of: note.page?.body ?? "") > NoteDocument.extent - 400 { notice = "That passage is too long for one note."; return nil }
         }
@@ -104,10 +106,33 @@ import ImageIO
         snapshot.notes[i].updatedAt = Date()
         changed()
     }
-    func delete(_ id: UUID, restore: Bool = false) {
+    /// Hides the note in the library; restore from Archive.
+    func archive(_ id: UUID) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
-        snapshot.notes[i].deletedAt = restore ? nil : Date(); snapshot.notes[i].updatedAt = Date(); changed()
+        snapshot.notes[i].deletedAt = Date()
+        snapshot.notes[i].updatedAt = Date()
+        changed()
         if id == selectedNoteID { selectedNoteID = nil; surfaceGeneration = UUID() }
+    }
+
+    func restoreFromArchive(_ id: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        snapshot.notes[i].deletedAt = nil
+        snapshot.notes[i].updatedAt = Date()
+        changed()
+    }
+
+    /// Removes the note from the library entirely. Prefer archiving for reversible removal.
+    func permanentlyDelete(_ id: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        snapshot.notes.remove(at: i)
+        changed()
+        if id == selectedNoteID { selectedNoteID = nil; surfaceGeneration = UUID() }
+    }
+
+    @available(*, deprecated, message: "Use archive(_:) or restoreFromArchive(_:)")
+    func delete(_ id: UUID, restore: Bool = false) {
+        if restore { restoreFromArchive(id) } else { archive(id) }
     }
     private var index: Int? { snapshot.notes.firstIndex { $0.id == selectedNoteID } }
     func edit(_ operation: (inout NoteDocument) -> Void, record: Bool = true) {
@@ -141,7 +166,7 @@ import ImageIO
     func insert(_ kind: NoteObject.Kind, payload: Data = Data(), url: String = "", shape: NoteShape? = nil, sticker: String? = nil, tint: NoteTint? = nil) {
         guard kind != .ink else { toolsVisible = true; toolsRequest = UUID(); return }
         guard let note, note.allObjects.count < 200 else { notice = "This note has reached its object limit."; return }
-        if note.kind == .page {
+        if note.kind.usesPageBody {
             switch kind {
             case .link:
                 guard let link = URL(string: url), ["http", "https"].contains(link.scheme?.lowercased() ?? ""), link.host != nil else { report(NotesError.invalid); return }
@@ -176,7 +201,7 @@ import ImageIO
             object.frame.origin = CGPoint(x: max(0, min(NoteDocument.extent - object.frame.width, insertionPoint.x - object.frame.width / 2)), y: max(0, min(NoteDocument.extent - object.frame.height, insertionPoint.y - object.frame.height / 2)))
         }
         edit {
-            if $0.kind == .page { $0.page?.insertAttachment(object, at: bodySelection.location) }
+            if $0.kind.usesPageBody { $0.page?.insertAttachment(object, at: bodySelection.location) }
             else { $0.objects.append(object) }
         }; selection = [object.id]
         mode = kind == .ink ? .draw : [.text, .bullets, .numbered].contains(kind) ? .text : .select
@@ -326,7 +351,7 @@ import ImageIO
     private func appendCompanionPlainText(_ text: String, kind: NoteKind) {
         flushSurface?()
         edit { note in
-            if kind == .page {
+            if kind.usesPageBody {
                 guard var page = note.page else { return }
                 let prefix = page.body.isEmpty ? "" : "\n\n"
                 page.replace(NSRange(location: page.body.utf16.count, length: 0), with: prefix + text + "\n")
@@ -345,7 +370,7 @@ import ImageIO
         guard selectedNoteID != nil else { _ = create(quote: quote); return }
         flushSurface?()
         edit { note in
-            if note.kind == .page {
+            if note.kind.usesPageBody {
                 // Scripture saves are append-only. A reopened Page has no active body caret,
                 // so retaining its previous selection would otherwise insert at the beginning.
                 guard var page = note.page else { return }
@@ -404,5 +429,100 @@ import ImageIO
             surfaceGeneration = UUID(); flushSurface = nil; snapshot = next; loaded = true
             selectedNoteID = nil; selection = []; undoStack = []; redoStack = []; notice = "Notes backup restored. The pre-restore copy is available in Backups."
         } catch { report(error) }
+    }
+
+    static func prayerDayKey(for date: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    @discardableResult
+    func recordPrayerTap() -> Bool {
+        guard !restoring else { return false }
+        var recorded = false
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            let today = Self.prayerDayKey()
+            guard content.lastPrayedDay != today else { return }
+            content.lastPrayedDay = today
+            content.prayerCount += 1
+            note.content = .prayer(content)
+            recorded = true
+        }
+        return recorded
+    }
+
+    func canRecordPrayerTapToday() -> Bool {
+        guard let content = note?.prayerContent else { return false }
+        return content.lastPrayedDay != Self.prayerDayKey()
+    }
+
+    func setPrayerStatus(_ status: PrayerStatus) {
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            content.status = status
+            note.content = .prayer(content)
+        }
+    }
+
+    func setJournalScriptureVisible(_ visible: Bool) {
+        edit({ note in
+            guard case .journal(var content) = note.content else { return }
+            content.scriptureVisible = visible
+            note.content = .journal(content)
+        }, record: false)
+    }
+
+    func addPrayerUpdate(_ body: String) {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard (note?.prayerContent?.updates.count ?? 0) < 200 else { notice = "This prayer has reached its update limit."; return }
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            content.updates.insert(PrayerUpdate(body: String(trimmed.prefix(20_000))), at: 0)
+            note.content = .prayer(content)
+        }
+    }
+
+    func updatePrayerUpdate(id: UUID, body: String) {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            guard let index = content.updates.firstIndex(where: { $0.id == id }) else { return }
+            content.updates[index].body = String(trimmed.prefix(20_000))
+            content.updates[index].updatedAt = Date()
+            note.content = .prayer(content)
+        }
+    }
+
+    func deletePrayerUpdate(id: UUID) {
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            content.updates.removeAll { $0.id == id }
+            note.content = .prayer(content)
+        }
+    }
+
+    func clearPrayerContent() {
+        edit { note in
+            guard case .prayer(var content) = note.content else { return }
+            content.page = NotePage()
+            note.content = .prayer(content)
+        }
+    }
+
+    func archiveCurrentNote() {
+        guard let id = note?.id else { return }
+        archive(id)
+    }
+
+    func permanentlyDeleteCurrentNote() {
+        guard let id = note?.id else { return }
+        permanentlyDelete(id)
     }
 }

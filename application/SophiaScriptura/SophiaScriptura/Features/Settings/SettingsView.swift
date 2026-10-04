@@ -36,6 +36,7 @@ struct SettingsView: View {
                     providerSection
                     musicSection
                     shellSection
+                    archiveSection
                     backupSection
                     if let notice = reader.notice {
                         settingsCard {
@@ -99,6 +100,23 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
+            }
+        }
+    }
+
+    private var archiveSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Archive")
+                Text("Browse archived notes, collections, and Companion conversations in one place.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                NavigationLink {
+                    SettingsArchiveHubView(notes: notes, collections: collections, companion: companion)
+                } label: {
+                    settingsLinkRow("Open archive")
+                }
+                .accessibilityIdentifier("settings.archive")
             }
         }
     }

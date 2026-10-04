@@ -37,6 +37,21 @@ final class NotesTests: XCTestCase {
         note = NoteDocument(objects: [NoteObject(kind: .link, url: "javascript:alert(1)")])
         XCTAssertThrowsError(try note.validate())
     }
+    func testPrayerNoteTracksDailyPrayerCount() throws {
+        var note = NoteDocument(kind: .prayer)
+        note.content = .prayer(PrayerContent(page: NotePage(body: "Lord, help me trust you today.")))
+        try note.validate()
+        var session = NotesSession(repository: NotesFileRepository(directory: try folder()))
+        let id = note.id
+        session.snapshot.notes = [note]
+        session.loaded = true
+        session.open(id)
+        XCTAssertTrue(session.recordPrayerTap())
+        XCTAssertEqual(session.note?.prayerContent?.prayerCount, 1)
+        XCTAssertFalse(session.recordPrayerTap())
+        XCTAssertEqual(session.note?.prayerContent?.prayerCount, 1)
+    }
+
     func testLicensedSourceQuoteCanBeSavedWithAttribution() async throws {
         let verse = VerseID(referenceSystemID: "org.sophia.api.bible.example", book: "JHN", chapter: 3, verse: 16)
         let quote = NoteQuote(verse: verse, editionID: "api.bible.example", contentRevision: "fixture", attribution: "Fixture", source: "Licensed fixture text")
@@ -117,10 +132,10 @@ final class NotesTests: XCTestCase {
         editor.redo(); XCTAssertNotEqual(editor.note!.objects.map(\.frame), before)
         let id = editor.selectedNoteID!
         await editor.save(); XCTAssertFalse(editor.dirty)
-        editor.delete(id); await editor.save()
+        editor.archive(id); await editor.save()
         let reopened = NotesSession(repository: repository); await reopened.load()
         XCTAssertNotNil(reopened.snapshot.notes.first?.deletedAt)
-        reopened.delete(id, restore: true); reopened.open(id)
+        reopened.restoreFromArchive(id); reopened.open(id)
         XCTAssertEqual(reopened.note?.objects.count, 4)
     }
     func testRealInkAndSourceQuoteRoundTrip() async throws {

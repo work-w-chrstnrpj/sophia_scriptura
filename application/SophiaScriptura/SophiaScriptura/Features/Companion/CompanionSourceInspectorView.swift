@@ -10,7 +10,7 @@ struct CompanionSourceInspectorView: View {
                 Section {
                     Text("No sources for this reply")
                         .font(.headline)
-                    Text("The model can append a Sophia bibliography section at the end of its answer. Sophia removes that section from the visible message and lists it here.")
+                    Text("This reply did not provide external references. No web research has been verified for this answer.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -19,12 +19,17 @@ struct CompanionSourceInspectorView: View {
                     ForEach(sources) { source in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(source.title).font(.headline)
+                            Text(CompanionStudySources.provenanceLabel(for: source))
+                                .font(.caption).foregroundStyle(.secondary)
                             if let author = source.authorOrPublisher, !author.isEmpty {
                                 Text(author).font(.subheadline).foregroundStyle(.secondary)
                             }
-                            if let url = source.url, let link = URL(string: url) {
-                                Link(link.absoluteString, destination: link)
+                            if let url = source.url, let link = CompanionResponseFormatting.validWebURL(url) {
+                                Link("Open reference · \(link.host ?? "website")", destination: link)
                                     .font(.caption)
+                            } else if let lookup = CompanionStudySources.lookupURL(for: source) {
+                                Text("No direct source link was supplied.").font(.caption).foregroundStyle(.secondary)
+                                Link("Find this reference online", destination: lookup).font(.caption)
                             }
                             if let claim = source.claim, !claim.isEmpty {
                                 Text(claim).font(.caption)

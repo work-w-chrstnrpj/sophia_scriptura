@@ -496,8 +496,40 @@ Select indexed relationships versus embedded references when the data contract i
   There is no runtime consumer or provider integration yet; approval is for wording only.
 - Presets are user-editable in Settings; edits never delete the built-in defaults
   (defaults can be reset).
-- ASK-from-scripture injects the selected passage and reference into the first user
-  message and auto-links the conversation to the verse.
+- ASK-from-scripture attaches the permitted complete involved verse(s), selected wording,
+  active translation/reference and auto-links
+  the conversation to the verse. It opens a blank composer: the owner types the question,
+  with no generated question or automatic send. The attachment accompanies that question
+  as context rather than being inserted into the owner's saved message. SP-023 supplies
+  this context beside the latest question in the provider-facing user turn as well as in
+  the system instruction; retries and edit/resend rebuild it from retained attachments.
+  Text authorization applies to expanded verses before transmitting the selection.
+- SP-023 Chapter Hub opens from the labeled icon button `Chapter` in the annotation/actions
+  control row, as a wide-layout popover or narrow-layout sheet. Its only sections are
+  Links (existing verse links ordered numerically), Chapter Conversations, and Verse
+  Conversations (existing chapter-contained verse/range chats listed once in verse order).
+  Queries remain edition-specific. Chapter Ask opens blank and sends reference-only
+  context such as `In "Matthew Chapter 1 (WEB)"` with the owner's question, never the
+  whole chapter. A separate optional chapter anchor distinguishes these conversations
+  from verse chats; existing histories remain readable and unchanged.
+- SP-023 response/source follow-up: model fallback prioritizes curated chat models over
+  alphabetical ordering. New manual Scripture Ask/chapter chats previously defaulting to
+  Groq ALLaM choose an available curated model, starting with GPT OSS 120B, with a visible
+  notice and editable Model control. Existing explicit routing and OLA model selection remain.
+  Output instructions request direct Markdown explanations without example answer scaffolds;
+  recognizable draft artifacts are retained in the attempt and surfaced as a failed reply.
+  This is a format check, not factual verification. Sources show the selected WEB chapter's
+  eBible link, model-provided links and bibliography entries; missing URLs get a labeled
+  reference search. Generated citations never establish that web retrieval occurred.
+- Original Language Analysis (SP-018 follow-up) creates `OLA: {reference}` conversations.
+  It distinguishes selected translated wording from the complete involved verse(s), labels
+  the active translation, and authorizes expanded context before transmission. One selected
+  word requests a lemma/sense study and representative same-lemma biblical usages; multiple
+  words request contextual phrase/grammar analysis. Translation-to-original alignment is not
+  assumed one-to-one. Prompts require uncertainty disclosure and forbid invented original text,
+  lexical evidence or citations; this is AI-assisted study, not an independently verified
+  lexicon/concordance. Existing history is not rewritten; OLA remains a separate auto-send
+  action from the manually composed Ask flow.
 - Proposed reliability requirements: snapshot preset version per conversation; distinguish
   retrieved evidence from model recollection; never invent citations, claim a search
   without retrieval, or present model output as divine revelation. APA formatting is
@@ -681,7 +713,8 @@ diagnostics and exports.
   the former total goal to Reading and summing active mode goals for the total threshold.
   Analytics PNG
   export renders the complete selected chart range. See SP-020 for incomplete
-  acceptance and physical-device verification. M7 narration is postponed by owner decision.
+  acceptance and physical-device verification. M7 Scripture audio is **abandoned** by owner
+  decision on 2026-10-04; narration will not resume without a new explicit ticket.
 - Settings (fills the idea's gaps): theme mode; font family/size/line spacing;
   default translation; red-letter toggle; TTS voice and speed; AI provider + key + model
   + temperature; prompt-preset editor; data export/import; storage usage; cache refresh;

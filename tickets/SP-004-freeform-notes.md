@@ -1,6 +1,6 @@
 # SP-004 — Freeform Notes design
 
-- Type: design. Status: in_progress. Owner: Frontend UI/UX Developer.
+- Type: design. Status: done; editor design delivered through SP-013; owner closed 2026-10-04. Owner: Frontend UI/UX Developer.
 - Requirements: REQ-008, REQ-009, REQ-016, REQ-017.
 - Dependencies: expandable canvas and explicit grouping accepted; growth/navigation, detailed selection/resize, and export remain open. Can proceed independently of Bible provider access.
 - Design: [canvas comparison](../docs/design/ux-specification.md#freeform-canvas-alternatives),

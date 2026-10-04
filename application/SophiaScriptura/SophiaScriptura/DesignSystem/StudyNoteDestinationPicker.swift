@@ -23,6 +23,10 @@ struct StudyNoteDestinationPicker: View {
                         .accessibilityIdentifier("study.saveNote.newPage")
                     Button { create(.canvas) } label: { Label("New Canvas", systemImage: "rectangle.dashed") }
                         .accessibilityIdentifier("study.saveNote.newCanvas")
+                    Button { create(.prayer) } label: { Label("New Prayer", systemImage: "hands.and.sparkles") }
+                        .accessibilityIdentifier("study.saveNote.newPrayer")
+                    Button { create(.journal) } label: { Label("New Journal", systemImage: "book.pages") }
+                        .accessibilityIdentifier("study.saveNote.newJournal")
                 }
                 Section("Existing note") {
                     if availableNotes.isEmpty {
@@ -33,7 +37,7 @@ struct StudyNoteDestinationPicker: View {
                             Button { add(to: note) } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(note.title)
-                                    Text(note.kind == .page ? "Page" : "Canvas")
+                                    Text(note.kind.displayName)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -77,6 +81,14 @@ struct StudyNoteKindPicker: View {
                 },
                 .init(id: "notes.new.canvas", title: "Canvas", systemImage: "square.on.square") {
                     guard let id = notes.create(kind: .canvas) else { return }
+                    onCreated(id)
+                },
+                .init(id: "notes.new.prayer", title: "Prayer", systemImage: "hands.and.sparkles") {
+                    guard let id = notes.create(kind: .prayer) else { return }
+                    onCreated(id)
+                },
+                .init(id: "notes.new.journal", title: "Journal", systemImage: "book.pages") {
+                    guard let id = notes.create(kind: .journal) else { return }
                     onCreated(id)
                 },
             ],

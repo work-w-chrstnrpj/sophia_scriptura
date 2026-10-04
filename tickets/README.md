@@ -2,46 +2,41 @@
 
 Tickets connect [requirements](../docs/product-specification/product-specification.md)
 to [technical intent](../docs/tdd/tdd.md), acceptance criteria, and verification evidence.
-Current milestones are M0–M9; feature phases M2–M8 follow the owner's order.
-Milestone ordering lives in the [development plan](../docs/development-plan/development-plan.md).
+Milestones **M0–M9 are closed** as of **2026-10-04**. M7 Scripture audio is **abandoned**.
+Milestone ordering and closure evidence live in the
+[development plan](../docs/development-plan/development-plan.md).
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
-| [SP-001](SP-001-product-and-device-decisions.md) | in_progress | Full-design reconciliation and owner scope/device decisions |
+| [SP-001](SP-001-product-and-device-decisions.md) | done; owner closed 2026-10-04 | Product scope and delivery sequence closed at M9 |
 | [SP-002](SP-002-free-scripture-access.md) | done | WEBP baseline verified; preferred editions conditional; import plan documented |
 | [SP-003](SP-003-scripture-ink-layout.md) | done | Renderer/layout decision and native validation plan; no implementation |
-| [SP-004](SP-004-freeform-notes.md) | in_progress | Expandable canvas selected; editor interaction design |
-| [SP-005](SP-005-data-and-quality-contracts.md) | in progress; reader slice complete | Data, recovery, and testing contracts by feature |
+| [SP-004](SP-004-freeform-notes.md) | done; owner closed 2026-10-04 | Editor design delivered through SP-013 |
+| [SP-005](SP-005-data-and-quality-contracts.md) | done; owner closed 2026-10-04 | Data, recovery, and testing contracts closed for personal use |
 | [SP-006](SP-006-native-canvas-experiment.md) | done | Bounded canvas experiment closed with owner-approved deferred checks |
 | [SP-007](SP-007-collections-ui-slice.md) | done | Bounded Collections prototype; simulator and physical UI verification passed |
 | [SP-008](SP-008-scripture-layout-validation.md) | done; bounded validation | All physical criteria owner-reported successful; production ink remains separate |
 | [SP-009](SP-009-first-offline-scripture-reader.md) | done; revised acceptance | Offline WEBP Scripture reader; owner M2 closure |
 | [SP-010](SP-010-licensed-offline-translations.md) | done; revised acceptance | Licensed offline translations and development cache authorization |
-| [SP-011](SP-011-tab-shell-motion.md) | in_progress; physical motion review pending | Timed dock/slide/glow implemented; checks passed; iPad update installed |
-
+| [SP-011](SP-011-tab-shell-motion.md) | done; owner verified 2026-10-04 | Timed dock/slide/glow; owner accepted on iPad |
 | [SP-012](SP-012-persistent-scripture-annotations.md) | done; owner accepted 2026-10-03 | Actual-reader layers, durable ink, recovery and annotation-only backup |
-
-| [SP-013](SP-013-freeform-notes.md) | in_progress; Canvas/Page implemented, physical acceptance pending | M4 Canvas/Page Notes, shared library, passage quotes and Notes-only recovery |
-| [SP-014](SP-014-pencil-shapes-and-app-icon.md) | implemented; physical acceptance pending | Shared held-stroke shape refinement, Notes ruler and Sophia app icon |
+| [SP-013](SP-013-freeform-notes.md) | done; owner accepted 2026-10-01 | M4 Canvas/Page Notes, shared library, passage quotes and Notes-only recovery |
+| [SP-014](SP-014-pencil-shapes-and-app-icon.md) | done; owner verified 2026-10-04 | Shared held-stroke shape refinement, Notes ruler and Sophia app icon |
 | [SP-015](SP-015-collections-and-save-flow.md) | done; owner accepted 2026-10-02 | M5 persisted folders, No Folder, bookmark/gleaning save, move and cards |
-| [SP-016](SP-016-companion-planning-and-contracts.md) | done; owner approved 2026-10-02 | M6 multi-provider BYOK, Companion/Quiz design, data/privacy/recovery contracts and verification plan |
-| [SP-018](SP-018-companion-response-and-quiz-refinements.md) | implemented; focused simulator checks passed; owner acceptance pending | Markdown response contract, Original Language Analysis, Bible Quiz and Bible or False |
-| [SP-019](SP-019-quiz-question-cache.md) | implemented and installed; owner/provider acceptance pending | 18-question per-type Quiz Me cache and in-app background replenishment |
-| [SP-020](SP-020-activity-tracking.md) | in_progress; simulator verification underway | M8 Activity records, Reading timer, Reviewing import, history, insights and Files archive |
-| [SP-021](SP-021-background-music.md) | draft; not selected | M8 offline music planning, catalog rights gate and playback acceptance |
-| [SP-022](SP-022-meditation-journey.md) | implemented; owner acceptance pending | M8 Meditating fullscreen journey, optional passage or seven seed passages, swipe UX |
-| [SP-017](SP-017-maintainability-hardening.md) | ready; not selected | Cross-cutting responsibility extraction, warning/lint/concurrency gates and architecture-map reconciliation |
+| [SP-016](SP-016-companion-planning-and-contracts.md) | done; owner approved 2026-10-02 | M6 multi-provider BYOK, Companion/Quiz design, data/privacy/recovery contracts |
+| [SP-017](SP-017-maintainability-hardening.md) | done; not selected | Closed at M9 without implementation |
+| [SP-018](SP-018-companion-response-and-quiz-refinements.md) | done; owner verified 2026-10-04 | Markdown response contract, Original Language Analysis, Bible Quiz and Bible or False |
+| [SP-019](SP-019-quiz-question-cache.md) | done; owner verified 2026-10-04 | Quiz Me cache and in-app replenishment |
+| [SP-020](SP-020-activity-tracking.md) | done; owner verified 2026-10-04 | M8 Activity records, Reading timer, Reviewing import, history, insights and Files archive |
+| [SP-021](SP-021-background-music.md) | done; owner verified 2026-10-04 | M8 offline music wiring; commercial track catalog not approved |
+| [SP-022](SP-022-meditation-journey.md) | done; owner verified 2026-10-04 | M8 Meditating fullscreen journey |
+| [SP-023](SP-023-chapter-hub-and-contextual-ask.md) | implemented; hub 60/source follow-up 56 checks passed; owner acceptance pending | Chapter Hub, contextual Ask, model fallback and usable source links |
 
 ## Owner selection
 
 See [How we develop Sophia](../docs/guidelines/ai-structure-guidelines.md).
-SP-006 and SP-007 are closed with documented prototype limitations. SP-002 research is
-complete, as is SP-003 planning. M2 is closed under the owner's 2026-09-29 revised
-acceptance: visual refinements and expiry/renewal addressed, VoiceOver waived. SP-008 is
-closed after the owner reported all criteria successful. SP-011 shell refinement is implemented with subjective motion review pending. The owner
-returned to M3 and selected SP-005 annotation planning/SP-012 scoping; that doc-only step
-is complete. The owner accepted SP-012 actual-reader Pencil behavior and annotation restore on 2026-10-03. SP-007 completion does not complete M5.
-Before execution, announce the ticket, milestone, visible outcome, exclusions and tests.
+The M0–M9 baseline is closed. SP-023 is the owner-selected post-baseline follow-up.
+Other new work requires owner selection.
 
 ## Readiness and completion
 

@@ -14,12 +14,13 @@ struct CollectionsView: View {
     @State private var showingNewCollection = false
     @State private var editingCollection: StudyCollection?
     @State private var deletingCollection: StudyCollection?
+    @State private var showArchivedCollections = false
 
     private var unfiled: StudyCollection? { store.collection(id: StudyCollection.unfiledID) }
 
     private var topics: [StudyCollection] {
         let candidates = store.collections.filter { collection in
-            guard !collection.isUnfiled else { return false }
+            guard !collection.isUnfiled, collection.archivedAt == nil else { return false }
             guard !searchText.isEmpty else { return collection.parentID == nil }
             return collection.name.localizedCaseInsensitiveContains(searchText) ||
                 collection.detail.localizedCaseInsensitiveContains(searchText)
@@ -101,6 +102,10 @@ struct CollectionsView: View {
                 }
             }
             .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
+            .navigationDestination(isPresented: $showArchivedCollections) {
+                StudyArchivedCollectionsView(store: store)
+                    .toolbar(.visible, for: .navigationBar)
+            }
         }
     }
 
@@ -124,6 +129,9 @@ struct CollectionsView: View {
                 editingCollection = collection
             }
             if !collection.isUnfiled {
+                Button("Archive Collection", systemImage: "archivebox") {
+                    store.archiveCollection(id: collection.id)
+                }
                 Button("Delete Collection", systemImage: "trash", role: .destructive) {
                     deletingCollection = collection
                 }
@@ -170,6 +178,13 @@ struct CollectionsView: View {
                 .accessibilityIdentifier("collections.title")
 
             Spacer(minLength: 12)
+
+            Button { showArchivedCollections = true } label: {
+                LibraryHeaderIcon(systemImage: "archivebox")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Archived collections")
+            .accessibilityIdentifier("collections.archive")
 
             if searchPresented {
                 searchField

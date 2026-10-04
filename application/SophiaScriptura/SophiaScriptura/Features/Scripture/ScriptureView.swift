@@ -20,6 +20,7 @@ struct ScriptureView: View {
     @State private var hubLinkURL = "https://"
     @State private var hubMessage: String?
     @State private var hubShare: HubShare?
+    @State private var hubChapter: CompanionChapterAnchor?
     @State private var wideLayout = false
     @State private var landscapeLayout = false
     @State private var confirmDeleteLayer = false
@@ -86,7 +87,13 @@ struct ScriptureView: View {
                     Text(session.edition?.name ?? session.abbreviation)
                         .font(ScriptureFonts.interface(appearance,size:13)).foregroundStyle(Color(palette.secondary))
                 }.padding(.top,10).padding(.horizontal,24)
-                AnnotationControls(annotations: annotations, reader: session, width: contentWidth, confirmDeleteLayer: $confirmDeleteLayer)
+                AnnotationControls(annotations: annotations, reader: session, width: contentWidth,
+                                   confirmDeleteLayer: $confirmDeleteLayer, openChapterHub: {
+                    hubChapter = CompanionChapterAnchor(
+                        bookID: document.book, chapter: document.chapter, editionID: document.editionID,
+                        referenceLabel: "\(session.currentBook?.title ?? document.book) Chapter \(document.chapter) (\(session.abbreviation))"
+                    )
+                })
                 if let group = annotations.group {
                     if annotations.layoutAvailable && group.source == AnnotationSource(document) {
                         annotatedReader(document, group: group)
@@ -199,6 +206,11 @@ struct ScriptureView: View {
         })
         .sheet(item:hubBinding(wide:false)) { hub($0) }
         .popover(item:hubBinding(wide:true),arrowEdge:.top) { hub($0).frame(width:440,height:600) }
+        .sheet(item: chapterHubBinding(wide: false)) { chapterHub($0) }
+        .popover(item: chapterHubBinding(wide: true), arrowEdge: .top) {
+            chapterHub($0).frame(width: 440, height: 600)
+        }
+        .onChange(of: session.navigationID) { _, _ in hubChapter = nil }
         .sheet(item: $pendingQuote) { pending in
             StudyNoteDestinationPicker(content: .scriptureQuote(pending.quote), notes: notes, openNote: openNote)
         }
@@ -333,6 +345,32 @@ struct ScriptureView: View {
     }
     private func hubBinding(wide: Bool) -> Binding<VerseID?> {
         Binding(get:{ wideLayout == wide ? session.hubVerse : nil },set:{ session.hubVerse = $0 })
+    }
+
+    private func chapterHubBinding(wide: Bool) -> Binding<CompanionChapterAnchor?> {
+        Binding(get: { wideLayout == wide ? hubChapter : nil }, set: { hubChapter = $0 })
+    }
+
+    private func chapterHub(_ chapter: CompanionChapterAnchor) -> some View {
+        ChapterHubView(
+            chapter: chapter, companion: companion, collections: collections,
+            onClose: { hubChapter = nil },
+            onStartConversation: {
+                guard companion.askFromChapter(chapter) != nil else { return }
+                hubChapter = nil
+                openCompanion()
+            },
+            onOpenConversation: { id in
+                hubChapter = nil
+                companion.selectConversation(id)
+                companion.scripturePanelConversationID = id
+                openCompanion()
+            },
+            onOpenLink: { id in
+                hubChapter = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { hubLinkCard = id }
+            }
+        )
     }
     private func hub(_ verse: VerseID) -> some View {
             let verseBody = session.document?.body(for: verse.verse) ?? ""
@@ -579,8 +617,22 @@ struct ScriptureView: View {
             startVerse: start,
             endVerse: end
         )
+        let translationName = session.edition.map { "\($0.name) (\($0.abbreviation))" } ?? session.abbreviation
+        let contextSelection = ChapterTextMap(document: document).fullVerseSelection(for: selection)
         Task {
-            let text = await session.authorizeQuote(selection)
+            let text: String?
+            let verseContextText: String?
+            if action == .originalLanguageAnalysis {
+                // Authorize the expanded passage once, before either it or the selection leaves the device.
+                verseContextText = if let contextSelection {
+                    await session.authorizeQuote(contextSelection)
+                } else { nil }
+                text = verseContextText == nil ? nil : selection.text
+            } else {
+                // Ask needs the full involved verse(s), not just the highlighted fragment.
+                verseContextText = await session.authorizeQuote(contextSelection ?? selection)
+                text = verseContextText == nil ? nil : selection.text
+            }
             _ = companion.askFromScripture(
                 selection: selection,
                 referenceLabel: reference,
@@ -589,7 +641,9 @@ struct ScriptureView: View {
                 chapter: document.chapter,
                 startVerse: start,
                 endVerse: end,
-                action: action
+                action: action,
+                translationName: translationName,
+                verseContextText: verseContextText
             )
         }
     }

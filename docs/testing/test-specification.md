@@ -1,5 +1,63 @@
 # Test specification — Sophia Scriptura
 
+## M9 integrated closure — 2026-10-04
+
+**Owner verification:** The owner tested the app on a physical iPad and reported **all pass**
+for personal daily use. That gate covers cross-tab study flows, Pencil behavior, data
+persistence and feature integration. It does not replace automated regression below.
+
+**M7 Scripture audio:** Abandoned; listening steps in manual journeys are **Not Run**.
+
+**Automated regression (full scheme):** Run every `SophiaScripturaTests` and
+`SophiaScripturaUITests` target on iPad (A16) Simulator:
+
+```sh
+mkdir -p build/m9-full-suite
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+  -scheme SophiaScriptura \
+  -destination 'platform=iOS Simulator,id=523DDB8A-9EF6-44ED-A4F8-F8059ECB7725' \
+  -derivedDataPath build/m9-full-suite/DerivedData \
+  -resultBundlePath build/m9-full-suite/results.xcresult \
+  -parallel-testing-enabled NO \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+Evidence bundle: `build/m9-full-suite/results.xcresult`. Summarize with:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun xcresulttool get test-results summary \
+  --path build/m9-full-suite/results.xcresult
+```
+
+### Recorded evidence — M9 automated runs (2026-10-04)
+
+**Unit tests (`SophiaScripturaTests` only):** **181 passed, 0 failed, 0 skipped** on iPad
+(A16) Simulator / iOS 26.5. Result bundle: `build/m9-unit-suite/results.xcresult`.
+**TEST SUCCEEDED.**
+
+**Full scheme (unit + UI):** **200 passed, 23 failed, 1 skipped** on the same destination.
+Result bundle: `build/m9-full-suite/results.xcresult`. Failures are confined to
+`SophiaScripturaUITests` (landscape timing, dock visibility, scroll/hittable flakes after
+feature growth). Failing classes on 2026-10-04: `AnnotationUITests` (2),
+`CanvasExperimentUITests` (4), `CollectionsUITests` (2), `NotesUITests` (4),
+`PencilShapeUITests` (1), `ScriptureReaderUITests` (2), `ShellNavigationUITests` (5),
+`ThemeWorkspaceUITests` (3). **TEST FAILED** for the combined scheme; M9 closure treats
+owner physical verification as authoritative for UI while unit automation stays green.
+
+Re-run unit gate only:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+  -scheme SophiaScriptura \
+  -destination 'platform=iOS Simulator,id=523DDB8A-9EF6-44ED-A4F8-F8059ECB7725' \
+  -derivedDataPath build/m9-unit-suite/DerivedData \
+  -resultBundlePath build/m9-unit-suite/results.xcresult \
+  -only-testing:SophiaScripturaTests \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+```
+
 ## Current implemented coverage
 
 SP-006 has hosted XCTest model/store/session tests and XCUITest interaction tests under
@@ -38,6 +96,60 @@ unimplemented. Automated cases and the iPad walkthrough cover different parts of
   recording license evidence, retrieval date and digest.
 
 ## M6 Companion and Quiz Me coverage
+
+SP-023 response/source/control-row follow-up (2026-10-04):
+`build/companion-source-repair-r3-20261004.xcresult` records **56 passed, 0 failed,
+0 skipped** across CompanionTests, ScriptureHubTests, CompanionSourcesTests and
+CompanionAdapterConformanceTests on iPad (A16) Simulator / iOS 26.5. Coverage verifies
+source URL normalization/rejection, publisher passage links, lookup for missing URLs,
+no false retrieval flags from bibliographies, draft-artifact failure with retained raw
+attempts, curated model fallback, new manual Ask model correction and unchanged OLA
+selection. Earlier request/persistence/Markdown regressions passed. No real provider
+response quality is established by fixtures. On device, start a new Ask, check the Model
+selection, open Sources links, and verify Chapter appears in the annotation/actions row.
+
+SP-023 Chapter Hub and contextual Ask (2026-10-04):
+`build/chapter-hub-ask-final-20261004.xcresult` records **60 passed, 0 failed, 0 skipped**
+on iPad (A16) Simulator / iOS 26.5 across CompanionTests, ScriptureHubTests and
+ScriptureReaderTests. Tests capture Session-to-provider requests, verify the serialized
+Groq-compatible user turn carries reference/translation and full authorized verse context,
+and cover blank drafts, retry/edit-resend, reference/local-only exclusion, selected focus,
+chapter persistence/separation, old optional-field decoding, edition filtering, verse-order
+aggregation, range deduplication and request character budget. Existing OLA coverage passed.
+The first run had two new fixture failures because Quiz Me background warmup was captured
+as chat traffic; the fixture now separates chat requests without disabling app lifecycle.
+
+Reproduce with the documented simulator command and
+`-only-testing:SophiaScripturaTests/CompanionTests`,
+`-only-testing:SophiaScripturaTests/ScriptureHubTests`, and
+`-only-testing:SophiaScripturaTests/ScriptureReaderTests`.
+No real provider credentials or calls are used. Follow the [SP-023 iPad cases](../../tickets/SP-023-chapter-hub-and-contextual-ask.md)
+for physical hub routing, rotation/narrow widths, real-model explanation quality and
+chapter/verse conversation reopen acceptance. Automated request correctness does not
+guarantee factual accuracy or model compliance.
+
+Manual Ask composer follow-up (2026-10-04): `build/ask-blank-composer-20261004.xcresult`
+records **40 passed, 0 failed, 0 skipped** in CompanionTests on iPad (A16) Simulator /
+iOS 26.5. New checks cover a blank composer with no automatic/empty send, save/reopen,
+the exact owner question plus separately attached verse context, and reference-only Ask
+without restricted text. OLA regression tests passed unchanged. On device, start a new
+Ask from Scripture, confirm the blank question box and verse attachment, type your own
+question and send; verify OLA still follows its existing auto-send analysis behavior.
+
+OLA selection-aware follow-up (2026-10-04): `build/ola-selection-20261004.xcresult`
+records **52 passed, 0 failed, 0 skipped** across Companion and Scripture reader tests on
+iPad (A16) Simulator / iOS 26.5. Coverage includes word/phrase classification, translation
+and context prompt contracts, OLA title/provider-content/attachment save and reopen,
+restricted-text exclusion, unchanged ordinary Ask, and full involved verse expansion with
+split/bridged bodies, Unicode and excluded headings/footnotes.
+
+Owner acceptance for this follow-up: start a new OLA request from one word and another
+from a phrase or multi-verse selection. Check the `OLA:` title, selected wording, active
+translation and complete verse attachment; inspect whether the real model analyzes the
+actual target, keeps the correct book/reference, distinguishes senses from contextual
+meaning, and cites genuine same-lemma usages. Independently check original forms and
+references against a trustworthy text/lexicon. Prompt-contract tests do not verify model
+claims or establish exhaustive concordance coverage.
 
 SP-019 adds focused checks for cache schema round trip, warm start without a provider
 request, local duplicate rejection, 20/10/6 refill targets, exact deficit replacement,

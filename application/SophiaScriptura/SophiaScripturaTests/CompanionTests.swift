@@ -50,7 +50,7 @@ final class CompanionTests: XCTestCase {
         XCTAssertLessThanOrEqual(request.turns.map(\.content.count).reduce(0, +), CompanionContextBuilder.maxTurnCharacters)
         XCTAssertTrue(request.systemInstruction.contains("Output contract (required)"))
         XCTAssertTrue(request.systemInstruction.contains("Every assistant reply MUST be valid Markdown"))
-        XCTAssertTrue(request.systemInstruction.contains("### Main idea"))
+        XCTAssertFalse(request.systemInstruction.contains("First short paragraph."))
         XCTAssertTrue(request.systemInstruction.contains("The app previews standard Markdown"))
         XCTAssertTrue(request.systemInstruction.contains("Use actual newline characters"))
         XCTAssertFalse(request.systemInstruction.contains("you may use the literal"))
@@ -190,7 +190,7 @@ final class CompanionTests: XCTestCase {
             referenceLabel: "John 1:1",
             transmittedText: "In the beginning was the Word"
         )
-        XCTAssertTrue(card.contains("**Original Language Analysis:**"))
+        XCTAssertTrue(card.contains("Original Language Analysis — Phrase analysis"))
         XCTAssertTrue(card.contains("In the beginning was the Word"))
         XCTAssertTrue(card.contains("*John 1:1*"))
         XCTAssertFalse(card.contains("Koine Greek"))
@@ -207,7 +207,7 @@ final class CompanionTests: XCTestCase {
         """
         let parsed = CompanionResponseFormatting.splitSourcesAppendix(from: raw)
         XCTAssertFalse(parsed.displayMarkdown.contains("Sophia bibliography"))
-        XCTAssertEqual(parsed.appendixSources.count, 2)
+        XCTAssertEqual(parsed.appendixSources.count, 1)
         XCTAssertEqual(parsed.appendixSources[0].title, "Brown-Driver-Briggs")
         XCTAssertEqual(parsed.appendixSources[0].url, "https://example.org/bdb")
     }
@@ -220,6 +220,240 @@ final class CompanionTests: XCTestCase {
         )
         XCTAssertTrue(prompt.contains("Biblical Hebrew"))
         XCTAssertFalse(prompt.contains("Koine Greek"))
+    }
+
+    func testOLAAutomaticallyClassifiesSelectedWordingWithoutCountingAttribution() {
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "  “covetousness,” \n"), .word)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "well-being"), .word)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "God's"), .word)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "we wanted to come"), .phrase)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "wanted\nto come"), .phrase)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: "— …"), .referenceOnly)
+        XCTAssertEqual(ScriptureCompanionPrompts.analysisMode(selectedText: nil), .referenceOnly)
+    }
+
+    func testOLAWordPromptContainsTranslationFullVerseAndContextualUsageRules() {
+        let prompt = ScriptureCompanionPrompts.originalLanguageAnalysis(
+            referenceLabel: "1 Thessalonians 2:5", bookID: "1TH", transmittedText: "covetousness",
+            translationName: "World English Bible (WEB)",
+            verseContextText: "For neither were we at any time found using words of flattery, nor a cloak of covetousness."
+        )
+        XCTAssertTrue(prompt.contains("I selected the word below from 1 Thessalonians 2:5"))
+        XCTAssertTrue(prompt.contains("World English Bible (WEB) translation"))
+        XCTAssertTrue(prompt.contains("Analysis mode: Word study"))
+        XCTAssertTrue(prompt.contains("Koine Greek"))
+        XCTAssertTrue(prompt.contains("> covetousness"))
+        XCTAssertTrue(prompt.contains("Attached verse(s) — 1 Thessalonians 2:5"))
+        XCTAssertTrue(prompt.contains("words of flattery"))
+        XCTAssertTrue(prompt.contains("## Possible meanings"))
+        XCTAssertTrue(prompt.contains("## Biblical usage"))
+        XCTAssertTrue(prompt.contains("same original-language lemma"))
+        XCTAssertTrue(prompt.contains("which sense fits this sentence"))
+        XCTAssertTrue(prompt.contains("Do not claim the examples cover every occurrence"))
+        XCTAssertTrue(prompt.contains("Model recollection is not verified lexical evidence"))
+        XCTAssertTrue(prompt.contains("do not invent wording"))
+        XCTAssertTrue(prompt.contains("Perform the analysis directly"))
+        XCTAssertFalse(prompt.contains("## Key words and grammar"))
+    }
+
+    func testOLAPhrasePromptFocusesOnGrammarAlignmentAndExactReference() {
+        let prompt = ScriptureCompanionPrompts.originalLanguageAnalysis(
+            referenceLabel: "1 Thessalonians 2:18", bookID: "1TH", transmittedText: "Satan hindered us",
+            translationName: "WEB", verseContextText: "We wanted to come to you, but Satan hindered us."
+        )
+        XCTAssertTrue(prompt.contains("Analysis mode: Phrase analysis"))
+        XCTAssertTrue(prompt.contains("## Key words and grammar"))
+        XCTAssertTrue(prompt.contains("grammatical relationships, syntax and idioms"))
+        XCTAssertTrue(prompt.contains("Do not mechanically reverse-translate English"))
+        XCTAssertTrue(prompt.contains("several translated words represent one original word"))
+        XCTAssertTrue(prompt.contains("Keep the exact book and reference 1 Thessalonians 2:18"))
+        XCTAssertFalse(prompt.contains("## Biblical usage"))
+        let card = ScriptureCompanionPrompts.originalLanguageDisplayCard(
+            referenceLabel: "1 Thessalonians 2:18", transmittedText: "Satan hindered us", translationName: "WEB"
+        )
+        XCTAssertTrue(card.contains("I selected the words below"))
+        XCTAssertTrue(card.contains("> Satan hindered us"))
+        XCTAssertTrue(card.contains("1 Thessalonians 2:18 (WEB)"))
+    }
+
+    func testOLARestrictedWordingDoesNotLeakSelectionOrInventContext() async throws {
+        let session = CompanionSession(
+            presetCatalog: try PromptPresetCatalog.bundled(), repository: nil,
+            credentials: InMemoryCompanionCredentialsStore(),
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()])
+        )
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        let selection = ChapterTextMap.Selection(
+            text: "restricted target", editionID: "api.bible.fixture", contentRevision: "test",
+            sourceLabels: ["18"],
+            passages: [PassageRange(start: VerseID(book: "1TH", chapter: 2, verse: 18),
+                                    end: VerseID(book: "1TH", chapter: 2, verse: 18))]
+        )
+        let id = try XCTUnwrap(session.askFromScripture(
+            selection: selection, referenceLabel: "1 Thessalonians 2:18", transmittedText: nil,
+            bookID: "1TH", chapter: 2, startVerse: 18, endVerse: 18,
+            action: .originalLanguageAnalysis, translationName: "Fixture",
+            verseContextText: "restricted full verse"
+        ))
+        let attachment = try XCTUnwrap(session.attachments.first { $0.conversationID == id })
+        XCTAssertEqual(attachment.disclosure, .referenceOnly)
+        XCTAssertNil(attachment.payload)
+        let pending = try XCTUnwrap(session.scriptureAutoSend)
+        XCTAssertFalse(pending.providerContent.contains("restricted target"))
+        XCTAssertFalse(pending.providerContent.contains("restricted full verse"))
+        XCTAssertFalse(pending.displayContent.contains("restricted target"))
+        XCTAssertTrue(pending.providerContent.contains("Do not guess the selection"))
+    }
+
+    func testOLATitleAttachmentAndHiddenPromptSurviveSendSaveAndReopen() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("companion-ola-" + UUID().uuidString, isDirectory: true)
+        let repository = CompanionFileRepository(directory: directory)
+        let catalog = try PromptPresetCatalog.bundled()
+        let credentials = InMemoryCompanionCredentialsStore()
+        let registry = ProviderRegistry(adapters: [MockLLMProviderAdapter()])
+        let session = CompanionSession(
+            presetCatalog: catalog, repository: repository, credentials: credentials, registry: registry
+        )
+        await session.load()
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        let selection = ChapterTextMap.Selection(
+            text: "hindered", editionID: "web.engwebp", contentRevision: "test", sourceLabels: ["18"],
+            passages: [PassageRange(start: VerseID(book: "1TH", chapter: 2, verse: 18),
+                                    end: VerseID(book: "1TH", chapter: 2, verse: 18))]
+        )
+        let fullVerse = "We wanted to come to you, but Satan hindered us."
+        let id = try XCTUnwrap(session.askFromScripture(
+            selection: selection, referenceLabel: "1 Thessalonians 2:18", transmittedText: "hindered",
+            bookID: "1TH", chapter: 2, startVerse: 18, endVerse: 18,
+            action: .originalLanguageAnalysis, translationName: "WEB", verseContextText: fullVerse
+        ))
+        XCTAssertEqual(session.selectedConversation?.title, "OLA: 1 Thessalonians 2:18")
+        XCTAssertEqual(session.selectedConversation?.passageAnchor?.startVerse, 18)
+        XCTAssertEqual(session.attachments.last?.payload, fullVerse)
+        XCTAssertTrue(session.scriptureAutoSend?.providerContent.contains("Analysis mode: Word study") == true)
+        await session.flushScriptureAutoSendIfNeeded(conversationID: id)
+        await session.flush()
+
+        let reopened = CompanionSession(
+            presetCatalog: catalog, repository: repository, credentials: credentials, registry: registry
+        )
+        await reopened.load()
+        let conversation = try XCTUnwrap(reopened.conversations.first { $0.id == id })
+        XCTAssertEqual(conversation.title, "OLA: 1 Thessalonians 2:18")
+        XCTAssertEqual(reopened.attachments.first { $0.conversationID == id }?.payload, fullVerse)
+        let messages = reopened.messages(for: id)
+        let user = try XCTUnwrap(messages.first)
+        XCTAssertTrue(user.content.contains("I selected the word below"))
+        XCTAssertTrue(user.content.contains("WEB"))
+        XCTAssertTrue(user.providerContent?.contains("## Biblical usage") == true)
+        let request = CompanionContextBuilder.completionRequest(
+            conversation: conversation, messages: messages, attachments: reopened.attachments, pendingUserText: ""
+        )
+        XCTAssertTrue(request.turns.first?.content.contains("Analysis mode: Word study") == true)
+        XCTAssertTrue(request.systemInstruction.contains(fullVerse))
+        XCTAssertTrue(request.systemInstruction.contains("Study scope:"))
+
+        // Ordinary Ask retains its existing title and fragment attachment.
+        let askID = try XCTUnwrap(session.askFromScripture(
+            selection: selection, referenceLabel: "1 Thessalonians 2:18", transmittedText: "hindered",
+            bookID: "1TH", chapter: 2, startVerse: 18, endVerse: 18
+        ))
+        XCTAssertEqual(session.selectedConversation?.title, "1 Thessalonians 2:18")
+        XCTAssertEqual(session.attachments.first { $0.conversationID == askID }?.payload, "hindered")
+        XCTAssertNil(session.scriptureAutoSend)
+        XCTAssertTrue(session.composerText.isEmpty)
+        XCTAssertTrue(session.selectedConversation?.composerDraft.isEmpty == true)
+    }
+
+    func testAskOpensBlankDraftAndSendsOnlyOwnersQuestionWithPassageContext() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("companion-manual-ask-" + UUID().uuidString, isDirectory: true)
+        let repository = CompanionFileRepository(directory: directory)
+        let catalog = try PromptPresetCatalog.bundled()
+        let credentials = InMemoryCompanionCredentialsStore()
+        let registry = ProviderRegistry(adapters: [MockLLMProviderAdapter()])
+        let session = CompanionSession(
+            presetCatalog: catalog, repository: repository, credentials: credentials, registry: registry
+        )
+        await session.load()
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        session.composerText = "An unrelated previous draft"
+        let passage = "For you yourselves know, brothers, our visit to you wasn't in vain."
+        let selection = ChapterTextMap.Selection(
+            text: passage, editionID: "web.engwebp", contentRevision: "test", sourceLabels: ["1"],
+            passages: [PassageRange(start: VerseID(book: "1TH", chapter: 2, verse: 1),
+                                    end: VerseID(book: "1TH", chapter: 2, verse: 1))]
+        )
+        let id = try XCTUnwrap(session.askFromScripture(
+            selection: selection, referenceLabel: "1 Thessalonians 2:1", transmittedText: passage,
+            bookID: "1TH", chapter: 2, startVerse: 1, endVerse: 1
+        ))
+        XCTAssertEqual(session.selectedConversation?.title, "1 Thessalonians 2:1")
+        XCTAssertEqual(session.selectedConversation?.passageAnchor?.startVerse, 1)
+        XCTAssertEqual(session.attachments.first { $0.conversationID == id }?.payload, passage)
+        XCTAssertTrue(session.composerText.isEmpty)
+        XCTAssertEqual(session.selectedConversation?.composerDraft, "")
+        XCTAssertNil(session.scriptureAutoSend)
+        await session.flushScriptureAutoSendIfNeeded(conversationID: id)
+        await session.sendMessage()
+        XCTAssertTrue(session.messages(for: id).isEmpty, "Opening Ask or sending an empty draft must not generate a turn.")
+        await session.flush()
+
+        let reopened = CompanionSession(
+            presetCatalog: catalog, repository: repository, credentials: credentials, registry: registry
+        )
+        await reopened.load()
+        reopened.selectConversation(id)
+        XCTAssertEqual(reopened.composerText, "")
+        XCTAssertEqual(reopened.selectedConversation?.composerDraft, "")
+        XCTAssertTrue(reopened.messages(for: id).isEmpty)
+        XCTAssertEqual(reopened.attachments.first { $0.conversationID == id }?.payload, passage)
+        let question = "What does 'wasn't in vain' mean here?"
+        reopened.updateComposerDraft(question)
+        await reopened.sendMessage()
+        let messages = reopened.messages(for: id)
+        XCTAssertEqual(messages.first?.content, question)
+        XCTAssertNil(messages.first?.providerContent)
+        let request = CompanionContextBuilder.completionRequest(
+            conversation: try XCTUnwrap(reopened.selectedConversation),
+            messages: messages, attachments: reopened.attachments, pendingUserText: ""
+        )
+        XCTAssertTrue(request.turns.first?.content.hasSuffix("My question:\n" + question) == true)
+        XCTAssertTrue(request.turns.first?.content.contains(passage) == true)
+        XCTAssertTrue(request.systemInstruction.contains("Attached passage 1 Thessalonians 2:1"))
+        XCTAssertTrue(request.systemInstruction.contains(passage))
+        XCTAssertFalse(request.turns.contains { $0.content.contains("Help me understand") })
+    }
+
+    func testAskReferenceOnlyAlsoHasBlankComposerWithoutExposingRestrictedText() throws {
+        XCTAssertEqual(CompanionSession.ScriptureCompanionAction.ask.composerPrompt(
+            referenceLabel: "1 Thessalonians 2:1", bookID: "1TH", transmittedText: nil
+        ), "")
+        let session = CompanionSession(
+            presetCatalog: try PromptPresetCatalog.bundled(), repository: nil,
+            credentials: InMemoryCompanionCredentialsStore(),
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()])
+        )
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        let selection = ChapterTextMap.Selection(
+            text: "Restricted verse wording", editionID: "api.bible.fixture", contentRevision: "test",
+            sourceLabels: ["1"], passages: []
+        )
+        _ = try XCTUnwrap(session.askFromScripture(
+            selection: selection, referenceLabel: "1 Thessalonians 2:1", transmittedText: nil,
+            bookID: "1TH", chapter: 2, startVerse: 1, endVerse: 1
+        ))
+        XCTAssertTrue(session.composerText.isEmpty)
+        XCTAssertNil(session.scriptureAutoSend)
+        XCTAssertEqual(session.attachments.last?.disclosure, .referenceOnly)
+        XCTAssertNil(session.attachments.last?.payload)
+        let request = CompanionContextBuilder.completionRequest(
+            conversation: try XCTUnwrap(session.selectedConversation), messages: [],
+            attachments: session.attachments, pendingUserText: "What is the meaning of this verse?"
+        )
+        XCTAssertTrue(request.systemInstruction.contains("Attached passage reference (reference only): 1 Thessalonians 2:1"))
+        XCTAssertFalse(request.systemInstruction.contains("Restricted verse wording"))
     }
 
     func testRepositoryRoundTripAndRecovery() async throws {

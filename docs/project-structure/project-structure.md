@@ -30,6 +30,14 @@ acceptance pending, 2026-09-29.
 
 ## Proposed application organization
 
+SP-023 adds `Features/Scripture/ChapterHubView.swift` for chapter-index presentation and
+link aggregation. Companion domain/session own distinct chapter anchors and conversation
+queries; infrastructure owns provider-facing context composition. Focused coverage is in
+`SophiaScripturaTests/ScriptureHubTests.swift`. No new module/package or backend is added.
+Its source follow-up adds `Infrastructure/Companion/CompanionStudySources.swift` for
+selected-passage links and reference lookup/provenance, with source/model regression
+coverage in `SophiaScripturaTests/CompanionSourcesTests.swift`.
+
 Keep one application target initially. Group UI and feature state under each feature;
 place reusable passage, persistence, content-provider, and drawing boundaries in Core
 only when needed. The freeform NoteCanvas owns document-coordinate editing behavior.

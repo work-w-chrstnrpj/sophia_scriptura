@@ -250,6 +250,10 @@ final class CompanionSession: ObservableObject {
         conversations.filter { $0.state == .active }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    var archivedConversations: [CompanionConversation] {
+        conversations.filter { $0.state == .archived }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     var completedQuizSessions: [QuizSession] {
         quizSessions.filter { $0.completionState == "completed" }.sorted { ($0.completedAt ?? $0.createdAt) > ($1.completedAt ?? $1.createdAt) }
     }
@@ -277,6 +281,13 @@ final class CompanionSession: ObservableObject {
         conversations[index].state = .archived
         conversations[index].updatedAt = Date()
         if selectedConversationID == conversationID { selectedConversationID = activeConversations.first?.id }
+        scheduleSave()
+    }
+
+    func unarchiveConversation(_ conversationID: UUID) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        conversations[index].state = .active
+        conversations[index].updatedAt = Date()
         scheduleSave()
     }
 
@@ -357,6 +368,8 @@ final class CompanionSession: ObservableObject {
         let detail: String
         if let anchor = conversation.passageAnchor {
             detail = "Passage · \(anchor.referenceLabel)"
+        } else if let anchor = conversation.chapterAnchor {
+            detail = "Chapter · \(anchor.referenceLabel)"
         } else {
             detail = "\(conversation.presetSnapshot.displayName) · \(conversation.modelID)"
         }
@@ -514,16 +527,23 @@ final class CompanionSession: ObservableObject {
             messages[index].sourceIDs.append(source.id)
             messages[index].retrievalPerformed = true
         case .completed:
+            if CompanionResponseFormatting.containsDraftArtifacts(messages[index].content) {
+                // Preserve the provider output in its attempt, but do not present scaffolding as a study answer.
+                let rejectedContent = messages[index].content
+                messages[index].content = "This model returned malformed study text. Choose another model in Model, then retry this response."
+                markAssistant(assistantID, state: .failed, outcome: .failed, error: "Malformed study response")
+                if let attemptIndex = messages[index].attempts.indices.last {
+                    messages[index].attempts[attemptIndex].content = rejectedContent
+                }
+                return
+            }
             let parsed = CompanionResponseFormatting.splitSourcesAppendix(from: messages[index].content)
             messages[index].content = parsed.displayMarkdown
             for source in parsed.appendixSources {
                 sources.append(source)
                 messages[index].sourceIDs.append(source.id)
             }
-            if !parsed.appendixSources.isEmpty {
-                messages[index].retrievalPerformed = true
-                messages[index].retrievalAvailable = true
-            }
+            // A model-generated bibliography is not evidence of retrieval.
             messages[index].deliveryState = .complete
             if var attempt = messages[index].attempts.last {
                 attempt.completedAt = Date()
@@ -688,6 +708,43 @@ final class CompanionSession: ObservableObject {
         }
     }
 
+    func chapterConversations(for chapter: CompanionChapterAnchor) -> [CompanionConversation] {
+        conversations.filter {
+            $0.chapterAnchor?.id == chapter.id
+        }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    func verseConversations(in chapter: CompanionChapterAnchor) -> [CompanionConversation] {
+        conversations.filter {
+            guard let anchor = $0.passageAnchor else { return false }
+            return anchor.bookID == chapter.bookID && anchor.chapter == chapter.chapter &&
+                anchor.editionID == chapter.editionID && $0.chapterAnchor == nil
+        }.sorted {
+            let left = $0.passageAnchor?.startVerse ?? 0
+            let right = $1.passageAnchor?.startVerse ?? 0
+            return left == right ? $0.updatedAt > $1.updatedAt : left < right
+        }
+    }
+
+    @discardableResult
+    func askFromChapter(_ anchor: CompanionChapterAnchor) -> UUID? {
+        guard let id = createConversation(),
+              var conversation = conversations.first(where: { $0.id == id }) else { return nil }
+        conversation.title = anchor.referenceLabel
+        conversation.chapterAnchor = anchor
+        selectStudyModel(for: &conversation)
+        replaceConversation(conversation)
+        syncCollections(conversation)
+        attachments.append(CompanionAttachment(
+            conversationID: id, disclosure: .referenceOnly, referenceLabel: anchor.referenceLabel
+        ))
+        updateComposerDraft("")
+        scriptureAutoSend = nil
+        scripturePanelConversationID = id
+        scheduleSave()
+        return id
+    }
+
     @discardableResult
     func askFromScripture(
         selection: ChapterTextMap.Selection,
@@ -697,11 +754,14 @@ final class CompanionSession: ObservableObject {
         chapter: Int,
         startVerse: Int,
         endVerse: Int,
-        action: ScriptureCompanionAction = .ask
+        action: ScriptureCompanionAction = .ask,
+        translationName: String? = nil,
+        verseContextText: String? = nil
     ) -> UUID? {
         guard let conversationID = createConversation() else { return nil }
         guard var conversation = conversations.first(where: { $0.id == conversationID }) else { return nil }
-        conversation.title = referenceLabel
+        conversation.title = action == .originalLanguageAnalysis ? "OLA: \(referenceLabel)" : referenceLabel
+        if action == .ask { selectStudyModel(for: &conversation) }
         conversation.passageAnchor = CompanionPassageAnchor(
             bookID: bookID,
             chapter: chapter,
@@ -712,14 +772,23 @@ final class CompanionSession: ObservableObject {
         )
         replaceConversation(conversation)
         syncCollections(conversation)
-        let disclosure: CompanionAttachmentDisclosure = transmittedText == nil ? .referenceOnly : .textTransmitted
+        // No selected text means permission was not granted; never send context alone in that case.
+        let attachmentText = transmittedText == nil ? nil :
+            (action == .originalLanguageAnalysis ? verseContextText : (verseContextText ?? transmittedText))
+        let disclosure: CompanionAttachmentDisclosure = attachmentText == nil ? .referenceOnly : .textTransmitted
+        let attachmentReference = action == .ask
+            ? translationName.map { "\(referenceLabel) (\($0))" } ?? referenceLabel : referenceLabel
         attachments.append(CompanionAttachment(
             conversationID: conversationID,
             disclosure: disclosure,
-            referenceLabel: referenceLabel,
-            payload: transmittedText
+            referenceLabel: attachmentReference,
+            payload: attachmentText,
+            selectedText: action == .ask && attachmentText != nil ? transmittedText : nil
         ))
-        let prompt = action.composerPrompt(referenceLabel: referenceLabel, bookID: bookID, transmittedText: transmittedText)
+        let prompt = action.composerPrompt(
+            referenceLabel: referenceLabel, bookID: bookID, transmittedText: transmittedText,
+            translationName: translationName, verseContextText: attachmentText
+        )
         switch action {
         case .ask:
             composerText = prompt
@@ -730,7 +799,10 @@ final class CompanionSession: ObservableObject {
             updateComposerDraft("")
             scriptureAutoSend = ScriptureAutoSend(
                 conversationID: conversationID,
-                displayContent: ScriptureCompanionPrompts.originalLanguageDisplayCard(referenceLabel: referenceLabel, transmittedText: transmittedText),
+                displayContent: ScriptureCompanionPrompts.originalLanguageDisplayCard(
+                    referenceLabel: referenceLabel, transmittedText: transmittedText,
+                    translationName: translationName
+                ),
                 providerContent: prompt
             )
         }
@@ -740,23 +812,39 @@ final class CompanionSession: ObservableObject {
         return conversationID
     }
 
+    private func selectStudyModel(for conversation: inout CompanionConversation) {
+        let model = ProviderModelCatalog.scriptureAskModel(
+            currentID: conversation.modelID, options: modelOptions(for: conversation.providerConfigID),
+            adapterID: conversation.providerAdapterID
+        )
+        guard model != conversation.modelID, let adapter = registry.adapter(id: conversation.providerAdapterID) else { return }
+        conversation.modelID = model
+        conversation.capabilitySnapshot = ProviderCapabilitySnapshot.from(adapter: adapter, modelID: model)
+        notice = "Using \(model) for this Scripture conversation. You can change it in Model."
+    }
+
     enum ScriptureCompanionAction {
         case ask
         case originalLanguageAnalysis
 
-        func composerPrompt(referenceLabel: String, bookID: String, transmittedText: String?) -> String {
+        func composerPrompt(
+            referenceLabel: String, bookID: String, transmittedText: String?,
+            translationName: String? = nil, verseContextText: String? = nil
+        ) -> String {
             let passage = transmittedText.flatMap { text in
                 text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
             }
             switch self {
             case .ask:
-                if let passage { return "Help me understand \(referenceLabel):\n\n\(passage)" }
-                return "Help me understand \(referenceLabel)."
+                // The passage is attached separately; the owner supplies the question.
+                return ""
             case .originalLanguageAnalysis:
                 return ScriptureCompanionPrompts.originalLanguageAnalysis(
                     referenceLabel: referenceLabel,
                     bookID: bookID,
-                    transmittedText: passage
+                    transmittedText: passage,
+                    translationName: translationName,
+                    verseContextText: passage == nil ? nil : verseContextText
                 )
             }
         }
@@ -776,9 +864,16 @@ final class CompanionSession: ObservableObject {
             capabilitySnapshot: ProviderCapabilitySnapshot.from(adapter: adapter, modelID: config.defaultModelID),
             parentConversationID: source.id,
             branchPointMessageID: messages(for: source.id).last?.id,
-            passageAnchor: source.passageAnchor
+            passageAnchor: source.passageAnchor,
+            chapterAnchor: source.chapterAnchor
         )
         conversations.insert(branch, at: 0)
+        // A provider continuation must retain the same explicitly attached study context.
+        attachments += attachments.filter { $0.conversationID == source.id }.map {
+            CompanionAttachment(conversationID: branch.id, disclosure: $0.disclosure,
+                                referenceLabel: $0.referenceLabel, payload: $0.payload,
+                                selectedText: $0.selectedText)
+        }
         selectedConversationID = branch.id
         composerText = branch.composerDraft
         syncCollections(branch)
@@ -844,7 +939,14 @@ final class CompanionSession: ObservableObject {
     }
 
     func sources(for message: CompanionMessage) -> [CompanionSource] {
-        message.sourceIDs.compactMap { id in sources.first { $0.id == id } }
+        var result = message.sourceIDs.compactMap { id in sources.first { $0.id == id } }
+        result += CompanionResponseFormatting.linkedSources(in: message.content)
+        if let conversation = conversations.first(where: { $0.id == message.conversationID }),
+           let passage = CompanionStudySources.passageSource(for: conversation) {
+            result.insert(passage, at: 0)
+        }
+        var seen = Set<String>()
+        return result.filter { seen.insert($0.url ?? ($0.title + ($0.authorOrPublisher ?? ""))).inserted }
     }
 
     @discardableResult

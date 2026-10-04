@@ -92,16 +92,7 @@ struct OpenAICompatibleProviderAdapter: LLMProviderAdapter {
         applyAuthHeaders(to: &urlRequest, apiKey: apiKey)
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        var messages: [[String: String]] = [["role": "system", "content": request.systemInstruction]]
-        for turn in request.turns {
-            messages.append(["role": turn.role.rawValue, "content": turn.content])
-        }
-        let body: [String: Any] = [
-            "model": request.modelID,
-            "messages": messages,
-            "stream": true
-        ]
-        urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
+        urlRequest.httpBody = try Self.completionBody(for: request)
 
         let (bytes, response) = try await session.bytes(for: urlRequest)
         try LLMHTTPHelpers.validateHTTP(response)
@@ -129,6 +120,15 @@ struct OpenAICompatibleProviderAdapter: LLMProviderAdapter {
         }
         continuation.yield(.completed)
         continuation.finish()
+    }
+
+    /// The same body used by live Groq/OpenAI-compatible requests, testable without a key.
+    static func completionBody(for request: LLMCompletionRequest) throws -> Data {
+        var messages: [[String: String]] = [["role": "system", "content": request.systemInstruction]]
+        messages += request.turns.map { ["role": $0.role.rawValue, "content": $0.content] }
+        return try JSONSerialization.data(withJSONObject: [
+            "model": request.modelID, "messages": messages, "stream": true
+        ])
     }
 
     private func applyAuthHeaders(to request: inout URLRequest, apiKey: String) {

@@ -14,9 +14,19 @@ struct NoteEditorView: View {
     @State private var linkPrompt = false
     @State private var link = "https://"
     var body: some View {
+        Group {
+            if session.note?.kind == .prayer {
+                NotePrayerEditorView(session: session, reader: reader)
+            } else {
+                pageOrJournalEditor
+            }
+        }
+    }
+
+    private var pageOrJournalEditor: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                if scriptureVisible {
+                if showsScripturePane {
                     NoteScripturePane(reader: reader, notes: session)
                         .frame(width: max(240, min(400, geometry.size.width * 0.36)))
                     Divider()
@@ -31,8 +41,10 @@ struct NoteEditorView: View {
         .toolbar {
             ToolbarItem(placement: .principal) { titleButton }
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Button(scriptureVisible ? "Hide Scripture" : "Show Scripture", systemImage: "sidebar.left") { scriptureVisible.toggle() }
-                    .accessibilityIdentifier("notes.scripture.toggle")
+                if session.note?.kind == .page || session.note?.kind == .journal {
+                    Button(showsScripturePane ? "Hide Scripture" : "Show Scripture", systemImage: "sidebar.left") { toggleScripturePane() }
+                        .accessibilityIdentifier("notes.scripture.toggle")
+                }
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo).accessibilityIdentifier("notes.undo")
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo).accessibilityIdentifier("notes.redo")
                 optionsMenu
@@ -46,6 +58,22 @@ struct NoteEditorView: View {
         .sheet(isPresented: $showDetails) { NoteDetailsView(session: session) }
         .sheet(item: Binding(get: { session.editingObjectID.flatMap { id in session.note?.allObjects.first { $0.id == id } } }, set: { if $0 == nil { session.editingObjectID = nil } })) { object in
             NoteObjectInspector(session: session, object: object)
+        }
+    }
+
+    private var showsScripturePane: Bool {
+        switch session.note?.kind {
+        case .journal: session.note?.journalScriptureVisible ?? true
+        case .page: scriptureVisible
+        default: false
+        }
+    }
+
+    private func toggleScripturePane() {
+        if session.note?.kind == .journal {
+            session.setJournalScriptureVisible(!showsScripturePane)
+        } else {
+            scriptureVisible.toggle()
         }
     }
     private func galleryBinding(_ kind: String) -> Binding<Bool> {
@@ -86,7 +114,11 @@ struct NoteEditorView: View {
     }
     private var surfaceToken: String { "\(session.renderRevision)|\(session.selection)|\(session.surfaceGeneration)|\(session.focusRequest)|\(session.toolsRequest)|\(session.toolsVisible)|\(session.active)|\(session.mode)" }
     private func openCitation(_ quote: NoteQuote) {
-        scriptureVisible = true
+        if session.note?.kind == .journal {
+            session.setJournalScriptureVisible(true)
+        } else {
+            scriptureVisible = true
+        }
         Task {
             if reader.edition?.id != quote.editionID { await reader.selectEdition(quote.editionID) }
             guard reader.edition?.id == quote.editionID else { session.notice = "That translation is unavailable. Your saved quote remains in the note."; return }
@@ -131,7 +163,7 @@ struct NoteEditorView: View {
             Divider()
             if session.note?.kind == .canvas {
                 NoteCanvasSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: openCitation)
-            } else {
+            } else if session.note?.kind.usesPageBody == true {
                 NotePageSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: openCitation)
             }
 

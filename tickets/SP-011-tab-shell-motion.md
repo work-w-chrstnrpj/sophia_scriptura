@@ -1,6 +1,6 @@
 # SP-011 — Quiet tab dock and navigation motion
 
-- Type: product UI refinement. Status: in_progress; implemented and verified, owner physical motion review pending. Selected 2026-09-29.
+- Type: product UI refinement. Status: done; owner verified on physical iPad 2026-10-04. Selected 2026-09-29.
 - Milestone: shared-shell refinement between accepted SP-008 validation and M3 production ink.
 - Owner: Frontend UI/UX Developer.
 - Requirements: REQ-016/018/020; owner refinement to the bottom-navigation decision D-11.

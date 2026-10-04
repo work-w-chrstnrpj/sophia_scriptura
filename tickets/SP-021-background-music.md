@@ -1,6 +1,6 @@
 # SP-021 — Offline background music
 
-Milestone: M8. Status: in progress; core playback, shell cluster and Settings wiring landed 2026-10-03. Track catalog still uses integration placeholders pending owner listening and rights approval. M7 Scripture narration remains postponed. This ticket starts only after the owner selects it; SP-020 physical acceptance remains separate.
+Milestone: M8. Status: done; owner verified on physical iPad 2026-10-04. Core playback, shell cluster and Settings wiring shipped 2026-10-03; track catalog uses integration placeholders (commercial rights not approved). M7 Scripture narration is abandoned 2026-10-04.
 
 ## Usable outcome
 

@@ -60,6 +60,26 @@ struct ChapterTextMap {
                          editionID: document.editionID, contentRevision: document.contentRevision,
                          sourceLabels: labels, passages: verses.map { PassageRange(start: document.verse($0), end: document.verse($0)) })
     }
+    /// Expands a partial selection to complete involved verse bodies, without headings or notes.
+    /// Bridged verse blocks are included once, using the same typed mapping as selection.
+    func fullVerseSelection(for selected: Selection) -> Selection? {
+        guard selected.editionID == document.editionID,
+              selected.contentRevision == document.contentRevision,
+              !selected.passages.isEmpty,
+              selected.passages.allSatisfy({
+                  $0.start.book == document.book && $0.end.book == document.book &&
+                  $0.start.chapter == document.chapter && $0.end.chapter == document.chapter &&
+                  $0.start.verse > 0 && $0.end.verse >= $0.start.verse
+              }) else { return nil }
+        let verses = Set(selected.passages.flatMap { Array($0.start.verse...$0.end.verse) })
+        let body = runs.filter {
+            $0.block.kind == "body" && $0.range.length > 0 &&
+            $0.block.verses.contains(where: verses.contains)
+        }
+        guard let first = body.first, let last = body.last else { return nil }
+        return selection(in: NSUnionRange(first.range, last.range))
+    }
+
     func range(for verse: Int) -> NSRange? {
         runs.first { $0.block.kind == "label" && $0.block.verses.contains(verse) }?.range
     }

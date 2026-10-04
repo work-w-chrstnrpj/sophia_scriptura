@@ -1,9 +1,10 @@
 # Activity and background music — design specification
 
 Status: owner-approved behavior baseline, 2026-10-02. SP-020 Activity implementation
-started 2026-10-03 after the owner postponed M7. Background music is a separate M8
+started 2026-10-03 after the owner deferred M7; M7 Scripture audio is **abandoned**
+2026-10-04. Background music is a separate M8
 ticket and is not implemented. Requirements: REQ-015, REQ-016, REQ-018 and REQ-025.
-Milestone: M8; Activity proceeds before postponed M7.
+Milestone: M8 closed 2026-10-04; M7 abandoned.
 
 Related: [product specification](../product-specification/product-specification.md),
 [technical design](../tdd/tdd.md), and [app shell](app-shell-specification.md).

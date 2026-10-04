@@ -112,27 +112,82 @@ struct NotePage: Codable, Equatable, Sendable {
     }
 }
 
-enum NoteKind: String, Codable, CaseIterable, Sendable { case canvas, page }
+enum NoteKind: String, Codable, CaseIterable, Sendable { case canvas, page, prayer, journal }
+
+extension NoteKind {
+    var displayName: String {
+        switch self {
+        case .canvas: "Canvas"
+        case .page: "Page"
+        case .prayer: "Prayer"
+        case .journal: "Journal"
+        }
+    }
+
+    var usesPageBody: Bool { self == .page || self == .journal || self == .prayer }
+}
+
+enum PrayerStatus: String, Codable, CaseIterable, Sendable {
+    case waiting, answered, redirected
+
+    var label: String {
+        switch self {
+        case .waiting: "Praying & waiting"
+        case .answered: "Prayer answered"
+        case .redirected: "Prayer redirected"
+        }
+    }
+}
+
+struct PrayerUpdate: Codable, Equatable, Identifiable, Sendable {
+    var id = UUID()
+    var body = ""
+    var createdAt = Date()
+    var updatedAt = Date()
+}
+
+struct PrayerContent: Codable, Equatable, Sendable {
+    var page = NotePage()
+    var status = PrayerStatus.waiting
+    var prayerCount = 0
+    /// Calendar day (`yyyy-MM-dd`) of the last counted prayer tap.
+    var lastPrayedDay: String?
+    var updates: [PrayerUpdate] = []
+}
+
 struct CanvasContent: Codable, Equatable, Sendable { var objects: [NoteObject] = [] }
 struct PageContent: Codable, Equatable, Sendable {
     var page = NotePage()
     // Existing v2 floating items are retained at their exact positions; new items flow inline.
     var legacyObjects: [NoteObject] = []
 }
+struct JournalContent: Codable, Equatable, Sendable {
+    var page = NotePage()
+    var legacyObjects: [NoteObject] = []
+    var scriptureVisible = true
+}
 enum NoteContent: Equatable, Sendable, Codable {
     case canvas(CanvasContent)
     case page(PageContent)
-    private enum CodingKeys: String, CodingKey { case kind, canvas, page }
+    case prayer(PrayerContent)
+    case journal(JournalContent)
+    private enum CodingKeys: String, CodingKey { case kind, canvas, page, prayer, journal }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         guard let kind = NoteKind(rawValue: try c.decode(String.self, forKey: .kind)) else { throw NotesError.unsupported }
         switch kind {
         case .canvas:
-            guard !c.contains(.page) else { throw NotesError.invalid }
+            guard !c.contains(.page), !c.contains(.prayer), !c.contains(.journal) else { throw NotesError.invalid }
             self = .canvas(try c.decode(CanvasContent.self, forKey: .canvas))
         case .page:
-            guard !c.contains(.canvas) else { throw NotesError.invalid }
+            guard !c.contains(.canvas), !c.contains(.prayer), !c.contains(.journal) else { throw NotesError.invalid }
             self = .page(try c.decode(PageContent.self, forKey: .page))
+        case .prayer:
+            guard !c.contains(.canvas), !c.contains(.page), !c.contains(.journal) else { throw NotesError.invalid }
+            self = .prayer(try c.decode(PrayerContent.self, forKey: .prayer))
+        case .journal:
+            guard !c.contains(.canvas), !c.contains(.page), !c.contains(.prayer) else { throw NotesError.invalid }
+            self = .journal(try c.decode(JournalContent.self, forKey: .journal))
         }
     }
     func encode(to encoder: Encoder) throws {
@@ -140,6 +195,8 @@ enum NoteContent: Equatable, Sendable, Codable {
         switch self {
         case .canvas(let value): try c.encode(NoteKind.canvas, forKey: .kind); try c.encode(value, forKey: .canvas)
         case .page(let value): try c.encode(NoteKind.page, forKey: .kind); try c.encode(value, forKey: .page)
+        case .prayer(let value): try c.encode(NoteKind.prayer, forKey: .kind); try c.encode(value, forKey: .prayer)
+        case .journal(let value): try c.encode(NoteKind.journal, forKey: .kind); try c.encode(value, forKey: .journal)
         }
     }
 }
@@ -161,24 +218,64 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     var paper = Paper.plain
     var color = Color.neutral
     var content = NoteContent.canvas(CanvasContent())
-    var kind: NoteKind { if case .page = content { return .page }; return .canvas }
-    var objects: [NoteObject] {
-        get { switch content { case .canvas(let c): c.objects; case .page(let p): p.legacyObjects } }
-        set { switch content {
-        case .canvas: content = .canvas(CanvasContent(objects: newValue))
-        case .page(var p): p.legacyObjects = newValue; content = .page(p)
-        } }
-    }
-    var page: NotePage? {
-        get { if case .page(let p) = content { return p.page }; return nil }
-        set {
-            if let newValue { content = .page(PageContent(page: newValue, legacyObjects: objects)) }
-            // Undo within Canvas must never change its type.
+    var kind: NoteKind {
+        switch content {
+        case .page: .page
+        case .canvas: .canvas
+        case .prayer: .prayer
+        case .journal: .journal
         }
     }
+    var objects: [NoteObject] {
+        get {
+            switch content {
+            case .canvas(let c): c.objects
+            case .page(let p): p.legacyObjects
+            case .journal(let j): j.legacyObjects
+            case .prayer: []
+            }
+        }
+        set {
+            switch content {
+            case .canvas: content = .canvas(CanvasContent(objects: newValue))
+            case .page(var p): p.legacyObjects = newValue; content = .page(p)
+            case .journal(var j): j.legacyObjects = newValue; content = .journal(j)
+            case .prayer: break
+            }
+        }
+    }
+    var page: NotePage? {
+        get {
+            switch content {
+            case .page(let p): p.page
+            case .prayer(let p): p.page
+            case .journal(let j): j.page
+            case .canvas: nil
+            }
+        }
+        set {
+            guard let newValue else { return }
+            switch content {
+            case .page: content = .page(PageContent(page: newValue, legacyObjects: objects))
+            case .prayer(var p): p.page = newValue; content = .prayer(p)
+            case .journal(var j): j.page = newValue; content = .journal(j)
+            case .canvas: break // Undo within Canvas must never change its type.
+            }
+        }
+    }
+    var prayerContent: PrayerContent? { if case .prayer(let value) = content { return value }; return nil }
+    var journalScriptureVisible: Bool {
+        if case .journal(let value) = content { return value.scriptureVisible }
+        return false
+    }
     var allObjects: [NoteObject] { objects + (page?.attachments.map(\.object) ?? []) }
-    init(objects: [NoteObject] = [], page: NotePage? = nil) {
-        content = page.map { .page(PageContent(page: $0, legacyObjects: objects)) } ?? .canvas(CanvasContent(objects: objects))
+    init(kind: NoteKind = .canvas, objects: [NoteObject] = [], page: NotePage? = nil) {
+        switch kind {
+        case .canvas: content = .canvas(CanvasContent(objects: objects))
+        case .page: content = .page(PageContent(page: page ?? NotePage(), legacyObjects: objects))
+        case .prayer: content = .prayer(PrayerContent(page: page ?? NotePage()))
+        case .journal: content = .journal(JournalContent(page: page ?? NotePage(), legacyObjects: objects))
+        }
     }
     private enum CodingKeys: String, CodingKey { case id, title, tags, createdAt, updatedAt, deletedAt, paper, color, content, objects, page }
     init(from decoder: Decoder) throws {
@@ -211,7 +308,8 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
                height: min(Self.extent, max(1400, (objects.map(\.frame.maxY).max() ?? 0) + 240)))
     }
     var searchableText: String {
-        ([title, page?.body ?? ""] + tags + allObjects.flatMap { [$0.text, $0.url, $0.quote?.reference ?? "", $0.quote?.source ?? ""] + $0.cells.flatMap { $0 } }).joined(separator: " ")
+        let prayerText = prayerContent.map { $0.updates.map(\.body).joined(separator: " ") + " " + $0.status.label } ?? ""
+        return ([title, page?.body ?? "", prayerText] + tags + allObjects.flatMap { [$0.text, $0.url, $0.quote?.reference ?? "", $0.quote?.source ?? ""] + $0.cells.flatMap { $0 } }).joined(separator: " ")
     }
     func members(_ selected: Set<UUID>) -> Set<UUID> {
         let groups = Set(objects.filter { (kind == .canvas || $0.kind != .ink) && selected.contains($0.id) }.compactMap(\.group))
@@ -244,23 +342,15 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
     }
     func validate() throws {
-        if let page {
-            guard page.width.isFinite, page.height.isFinite, (1200...Self.extent).contains(page.width),
-                  (800...Self.extent).contains(page.height), page.body.count <= 100_000,
-                  page.ink.count <= 16 * 1024 * 1024, page.citations.count <= 500,
-                  Set(page.citations.map(\.id)).count == page.citations.count else { throw NotesError.limit }
-            guard !objects.contains(where: { $0.kind == .ink }), page.attachments.count <= 200,
-                  Set(page.attachments.map(\.location)).count == page.attachments.count else { throw NotesError.invalid }
-            for attachment in page.attachments {
-                guard [.image, .table].contains(attachment.object.kind), attachment.object.group == nil,
-                      attachment.location >= 0, attachment.location < page.body.utf16.count,
-                      (page.body as NSString).substring(with: NSRange(location: attachment.location, length: 1)) == "\u{FFFC}" else { throw NotesError.invalid }
+        if case .prayer(let prayer) = content {
+            try validate(page: prayer.page, allowLegacyInkObjects: false)
+            guard prayer.prayerCount >= 0, prayer.updates.count <= 200,
+                  Set(prayer.updates.map(\.id)).count == prayer.updates.count else { throw NotesError.invalid }
+            for update in prayer.updates {
+                guard !update.body.isEmpty, update.body.count <= 20_000 else { throw NotesError.invalid }
             }
-            for citation in page.citations {
-                guard citation.location >= 0, citation.length > 0, citation.location <= page.body.utf16.count,
-                      citation.length <= page.body.utf16.count - citation.location else { throw NotesError.invalid }
-                try citation.quote.validate()
-            }
+        } else if let page {
+            try validate(page: page, allowLegacyInkObjects: kind != .prayer)
         }
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.count <= 200,
               tags.count <= 30, tags.allSatisfy({ !$0.isEmpty && $0.count <= 60 }),
@@ -290,6 +380,26 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
         for group in Set(objects.compactMap(\.group)) {
             guard objects.filter({ $0.group == group }).count >= 2 else { throw NotesError.invalid }
+        }
+    }
+
+    private func validate(page: NotePage, allowLegacyInkObjects: Bool) throws {
+        guard page.width.isFinite, page.height.isFinite, (1200...Self.extent).contains(page.width),
+              (800...Self.extent).contains(page.height), page.body.count <= 100_000,
+              page.ink.count <= 16 * 1024 * 1024, page.citations.count <= 500,
+              Set(page.citations.map(\.id)).count == page.citations.count else { throw NotesError.limit }
+        guard allowLegacyInkObjects ? !objects.contains(where: { $0.kind == .ink }) : objects.isEmpty,
+              page.attachments.count <= 200,
+              Set(page.attachments.map(\.location)).count == page.attachments.count else { throw NotesError.invalid }
+        for attachment in page.attachments {
+            guard [.image, .table].contains(attachment.object.kind), attachment.object.group == nil,
+                  attachment.location >= 0, attachment.location < page.body.utf16.count,
+                  (page.body as NSString).substring(with: NSRange(location: attachment.location, length: 1)) == "\u{FFFC}" else { throw NotesError.invalid }
+        }
+        for citation in page.citations {
+            guard citation.location >= 0, citation.length > 0, citation.location <= page.body.utf16.count,
+                  citation.length <= page.body.utf16.count - citation.location else { throw NotesError.invalid }
+            try citation.quote.validate()
         }
     }
 }

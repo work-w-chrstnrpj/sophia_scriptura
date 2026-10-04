@@ -1,6 +1,6 @@
 # SP-022 — Meditation journey mode
 
-Status: implemented; unit verification passed; simulator UI and owner iPad acceptance pending.
+Status: done; owner verified on physical iPad 2026-10-04.
 
 Milestone: M8 Activity phase.
 

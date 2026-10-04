@@ -1,7 +1,7 @@
 # SP-018 — Companion response and Quiz Me refinements
 
-- Type: implementation. Status: expanded implementation; focused simulator verification
-  passed; owner/provider and physical-device acceptance pending.
+- Type: implementation. Status: baseline owner verified on physical iPad 2026-10-04;
+  OLA and manual Ask follow-ups implemented, focused regression passed; owner acceptance pending.
 - Milestone: M6 Stateful Companion.
 - Selected by owner: 2026-10-02.
 
@@ -52,6 +52,58 @@
 - Notes show labeled Created and Last modified values without changing the Notes schema.
 
 ## Verification
+
+### Manual Ask composer follow-up — 2026-10-04
+
+- Owner selected blank manual question composition for Ask; explicitly keep the improved
+  OLA behavior unchanged. No provider/preset changes, answer rewriting or history migration.
+- Ask retains its verse-reference title, passage anchor and authorized selected-text
+  attachment but generates no initial question. Blank drafts cannot create a user turn;
+  the owner-written question is sent verbatim, with the passage attached separately.
+- Reference-only Ask also opens blank and does not expose restricted wording. Existing
+  saved conversations/drafts are retained rather than cleared.
+- Regression tests cover initial blank state, no auto-send/empty-send, save/reopen,
+  exact owner question with attached context, reference-only exclusion and preserved OLA
+  auto-send/title/word-or-phrase prompting.
+- `build/ask-blank-composer-20261004.xcresult`: **40 passed, 0 failed, 0 skipped** in
+  CompanionTests on iPad (A16) Simulator / iOS 26.5, including the OLA regression tests.
+  `git diff --check` passes. All provider calls in tests use fixtures, not real credentials.
+- Signed Debug build and strict signature verification passed; installed in place and
+  launched successfully on `iPad ni Paj`, preserving data. Logs:
+  `build/ask-blank-composer-device-20261004/{build,signature,install,launch}.log`.
+  Delivery is complete; new Ask/OLA physical interaction and real-answer quality remain
+  owner acceptance checks.
+
+### OLA selection-aware follow-up — 2026-10-04
+
+- Owner selected the previously explained behavior: new titles `OLA: {reference}`, separate
+  selected wording/full involved verse(s), active translation name and automatic word/phrase
+  analysis. Ordinary Ask, existing histories, provider adapters and theological presets stay
+  unchanged. No new mode toggle, corpus, lexicon, retrieval integration or schema migration.
+- `ChapterTextMap.fullVerseSelection` expands the selected source spans to complete involved
+  body blocks, excluding headings and footnotes and retaining bridged verse mapping.
+  `ScriptureView` authorizes that expanded selection once before transmitting either it or
+  the highlighted wording. Attribution remains in authorized passage context.
+- `CompanionSession.askFromScripture` sets OLA titles, attaches full context separately,
+  and preserves mode/translation/selected wording in the visible card and provider prompt.
+- `ScriptureCompanionPrompts` classifies one whitespace-delimited word versus multiple words.
+  Word study requests form/lemma, relevant senses, representative same-lemma biblical uses
+  and contextual meaning. Phrase analysis requests original alignment, syntax, idioms and
+  contextual interpretation. Both forbid invented evidence and instruction-repeating responses.
+- Restricted transmission remains reference-only. No automatic rewrite of existing OLA
+  conversations; start a new OLA request to use the changed title, context and prompt.
+- Tests cover classification, both prompt contracts, translation inclusion, restricted-text
+  exclusion, ordinary Ask regression, title/attachment/message/provider-prompt persistence
+  and full verse expansion across split/bridged blocks with Unicode.
+- `build/ola-selection-20261004.xcresult`: **52 passed, 0 failed, 0 skipped** across
+  Companion and Scripture reader tests on iPad (A16) Simulator / iOS 26.5.
+  `git diff --check` passes. No real provider calls or credentials were used.
+  Model accuracy and verified lexical claims cannot be established by prompt-contract tests.
+- Signed Debug build and strict signature verification passed; installed in place and
+  launched on `iPad ni Paj`, without uninstall or data reset. Logs:
+  `build/ola-selection-device-20261004/{build,signature,install,launch}.log`.
+  Implementation and delivery are complete; owner acceptance of new live-provider OLA
+  responses remains pending, separate from the earlier baseline closure.
 
 2026-10-03 native Markdown follow-up (supersedes the rendering recovery below):
 

@@ -282,7 +282,8 @@ private final class NoteInkCanvas: PKCanvasView {
         placeholder.textColor = theme.palette.secondary
         bodyText.typingAttributes = NotePageTypography.attributes(ink: theme.palette.ink)
         applying = true; defer { applying = false }
-        bodyText.isHidden = isCanvas; placeholder.isHidden = isCanvas || !page.body.isEmpty
+        bodyText.isHidden = isCanvas
+        placeholder.isHidden = isCanvas || note.kind == .prayer || !page.body.isEmpty
         let restoringSurface = noteID != note.id || generation != session.surfaceGeneration
         if restoringSurface {
             acceptsInkChanges = false; usingPencil = false; view.endEditing(true)
@@ -649,7 +650,9 @@ private final class NoteInkCanvas: PKCanvasView {
         if bodyText.isFirstResponder { bodyText.resignFirstResponder() }
         for object in objects.values where object.isFirstResponder { object.resignFirstResponder() }
         if isCanvas { ink.layer.opacity = 1; for object in session.note?.objects ?? [] where object.kind == .ink { objects[object.id]?.isHidden = true } }
-        // Do not reconfigure the tool picker or responder during an in-flight stroke.
+        if session.note?.kind == .prayer || session.toolsVisible {
+            showTools()
+        }
     }
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
         usingPencil = false
@@ -663,6 +666,7 @@ private final class NoteInkCanvas: PKCanvasView {
             refinementStatus = "rough"
         }
         flush(); apply()
+        if session.note?.kind == .prayer || session.toolsVisible { showTools() }
     }
     private func replaceInkDrawing(_ drawing: PKDrawing, status: String) {
         let current = ink.drawing

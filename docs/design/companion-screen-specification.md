@@ -45,11 +45,45 @@ recovery inserts inferred breaks or changes URLs, code or escaped content. Provi
 request valid Markdown with actual newlines. User-message bubbles hug short prompts and wrap longer
 prompts within the available panel width, capped at 560 points; they remain trailing aligned.
 
-Scripture selection includes both **Ask** and **Original Language Analysis**. The latter
-opens a passage-linked Companion draft that identifies Hebrew, Aramaic or Koine Greek as
-appropriate and requests original wording, transliteration, key words/grammar, literary and
-historical context, meaning in context and translation observations. It explicitly rejects
-root-only word studies and decontextualized dictionary-gloss lists.
+Scripture selection includes both **Ask** and **Original Language Analysis**. Ask creates
+a passage-linked conversation with the permitted complete involved verse(s), selected
+wording and translation/reference attached, then
+opens a blank question composer. It does not prefill "Help me understand…" or create/send
+a synthetic user turn. The owner supplies the question; the attachment provides its
+passage context. Blank/whitespace-only questions cannot be sent. The same behavior applies
+to reference-only selections when text transmission is unavailable. Existing saved drafts
+and messages are not rewritten.
+
+SP-023 applies the same behavior to Verse Hub → Start a new conversation. The outgoing
+request includes Scripture context immediately before the owner's question, in addition
+to the system-level attachment. Saved question bubbles remain exactly owner-written.
+Chapter Hub → Ask about this chapter also opens blank, with only a chapter-reference card
+such as `Matthew Chapter 1 (WEB)` and explicit "no chapter text attached" disclosure.
+Chapter conversations are persisted separately from verse-range conversations.
+
+OLA opens
+and auto-sends a passage-linked conversation titled `OLA: {reference}`, for example
+`OLA: 1 Thessalonians 2:18`. The visible user card identifies the selected wording,
+translation, reference and automatic analysis mode; the separate passage attachment contains
+the complete involved verse(s), not just the highlighted fragment. Quote authorization applies
+to that expanded context before either context or selection is transmitted.
+
+One whitespace-delimited selected word requests **Word study**: identify the original form
+and lemma, explain relevant possible senses, compare representative occurrences of the same
+original-language lemma with references, then explain the contextual meaning here. Multiple
+words request **Phrase analysis**: original wording/alignment, key words, syntax, idioms,
+literary/historical setting, contextual meaning and translation observations. No mode toggle
+is added. Apostrophes/hyphens within a word do not make it a phrase.
+
+Prompts require direct analysis of the exact passage rather than repeated instructions,
+distinguish Hebrew/Aramaic/Koine Greek as appropriate, and reject root-only interpretations,
+mechanical English reverse-translation and importing every dictionary sense into one
+occurrence. They require uncertainty disclosure and forbid invented forms, lexical citations,
+occurrence counts or claims of research not actually performed. A translated word can map
+to several original words and vice versa. No original-language corpus or verified lexicon
+is bundled by this change, so model-authored factual accuracy remains an owner check.
+Unavailable transmission permission produces reference-only context without exposing the
+selection or reconstructing restricted text. Existing conversations are not renamed.
 
 ## Provider settings
 
@@ -63,6 +97,17 @@ reporting and cancellation. A missing capability is disabled with an explanation
 does not silently claim that a search, tool or citation check occurred.
 
 ## Retrieval and source presentation
+
+SP-023 follow-up: Sources always exposes the selected WEB passage's eBible chapter link
+for anchored chats, plus valid links in the answer and supplied bibliography entries.
+Model references are labeled unverified; bibliography parsing is not web retrieval.
+Where no direct URL was supplied, "Find this reference online" opens a search for the
+title/author, visibly distinguished from "Open reference". Empty states state that no
+external references were provided; they do not describe internal parsing instructions.
+New manual Scripture Ask/chapter chats whose Groq default was ALLaM use an available
+curated study model and show the change; owners can still choose a model explicitly.
+Clear draft artifacts produce a failed response with retry guidance rather than a
+completed answer. This does not certify factual accuracy of otherwise valid prose.
 
 Local Scripture retrieval remains Sophia-owned and uses canonical references plus a
 permitted local edition. A model may compose an explanation but does not establish a

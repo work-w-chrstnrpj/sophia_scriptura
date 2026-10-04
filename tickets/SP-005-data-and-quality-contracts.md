@@ -1,6 +1,6 @@
 # SP-005 — Data, recovery, and quality contracts
 
-- Type: planning. Status: in progress — reader slice complete; annotation slice specified; other feature slices remain open. Owner: System Architect.
+- Type: planning. Status: done; owner closed at M9 integrated acceptance 2026-10-04 (personal-use scope). Owner: System Architect.
 - Requirements: REQ-004, REQ-007, REQ-008, REQ-017, REQ-018, REQ-019.
 - Dependencies: SP-002 content policy and SP-003 layout identity are complete for the
   reader slice. SP-004 note geometry and later feature decisions still block the
@@ -88,3 +88,9 @@ SP-013 implements the [Notes contract](../docs/data/notes-contract.md): UUID obj
 geometry/grouping, source quotes, validated media, current/previous/pre-restore revisions,
 Notes-only archives and damaged/unknown-schema preservation. Cross-feature memberships
 and full-app backup remain later contracts. Physical Files recovery remains acceptance.
+
+## M9 closure — 2026-10-04
+
+Owner closed SP-005 at integrated acceptance for personal-use scope. Per-feature recovery
+behavior was verified on device (all pass). A unified full-app export manifest remains a
+future enhancement if the owner selects new work.

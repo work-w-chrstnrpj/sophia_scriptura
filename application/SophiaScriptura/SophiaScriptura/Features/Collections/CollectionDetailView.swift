@@ -155,6 +155,9 @@ struct CollectionDetailView: View {
                     Button("Add Study Material", systemImage: "plus") { showingPicker = true }
                     Button("New Subfolder", systemImage: "folder.badge.plus") { showingSubfolderEditor = true }
                     Button("Edit Collection…", systemImage: "pencil") { showingEditor = true }
+                    Button("Archive Collection", systemImage: "archivebox") {
+                        store.archiveCollection(id: collectionID)
+                    }
                     Divider()
                     Button("Delete Collection", systemImage: "trash", role: .destructive) {
                         showingDeleteAlert = true

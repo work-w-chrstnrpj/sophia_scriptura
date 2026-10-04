@@ -303,6 +303,7 @@ struct StudyCollection: Codable, Identifiable, Hashable {
     var icon: CollectionIcon? = nil
     var modifiedAt: Date
     var isUnfiled: Bool = false
+    var archivedAt: Date? = nil
 
     static func unfiled(accent: CollectionAccent, modifiedAt: Date = .distantPast) -> StudyCollection {
         StudyCollection(

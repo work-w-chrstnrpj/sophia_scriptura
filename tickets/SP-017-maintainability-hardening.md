@@ -1,6 +1,6 @@
 # SP-017 — Maintainability hardening and responsibility extraction
 
-- Type: refactor and engineering-quality chore. Status: ready; not selected.
+- Type: refactor and engineering-quality chore. Status: done; closed without implementation at M9 2026-10-04 (owner did not select).
 - Milestones: cross-cutting M0/M1 engineering quality and M9 integrated acceptance.
 - Requirements: supports REQ-021 quality, recovery and maintainability; no new product
   requirement or user-visible feature.
@@ -8,8 +8,7 @@
   session extractions; SQA Engineer owns regression gates; Technical Documentation
   Specialist owns maps and evidence reconciliation.
 - Created from read-only source assessment: 2026-10-02.
-- Owner selection: not yet selected. This ticket is an implementation option, not authority
-  to refactor the application automatically.
+- Owner selection: closed without implementation at M9 2026-10-04. Reopen only with an explicit new selection.
 - Execution branch: before any implementation edit, create and switch to the dedicated branch
   `refactor/sp-017` from the owner-approved clean
   baseline. Implementation must not begin on `main`, another feature branch or a dirty
@@ -432,4 +431,4 @@ When selected and implemented, append:
 - documentation files reconciled;
 - any deferred package with its reason.
 
-Status remains **ready; not selected** until the owner explicitly selects implementation.
+Status: **done; closed without implementation** at M9 2026-10-04. Reopen only with an explicit new owner selection.

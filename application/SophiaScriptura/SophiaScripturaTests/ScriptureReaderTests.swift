@@ -67,6 +67,46 @@ final class ScriptureReaderTests: XCTestCase {
         XCTAssertEqual(selection.text,"é 👋")
         XCTAssertEqual(selection.passages.map(\.start.verse),[3,4])
     }
+    func testOLAExpandsWordAndPhraseToFullInvolvedVersesWithoutNotesOrHeadings() throws {
+        let blocks = [
+            ScriptureBlock(id: "h", kind: "heading", text: "Heading", label: "", verses: [], style: "d"),
+            ScriptureBlock(id: "l1", kind: "label", text: "1", label: "1", verses: [1], style: "p"),
+            ScriptureBlock(id: "a", kind: "body", text: "First target line.", label: "1", verses: [1], style: "p"),
+            ScriptureBlock(id: "n", kind: "note", text: "Private footnote", label: "1", verses: [1], style: "f"),
+            ScriptureBlock(id: "br", kind: "break", text: "", label: "1", verses: [1], style: "p"),
+            ScriptureBlock(id: "b", kind: "body", text: "Second line.", label: "1", verses: [1], style: "p"),
+            ScriptureBlock(id: "l2", kind: "label", text: "2–3", label: "2–3", verses: [2, 3], style: "p"),
+            ScriptureBlock(id: "c", kind: "body", text: "Bridged é words.", label: "2–3", verses: [2, 3], style: "p"),
+            ScriptureBlock(id: "l4", kind: "label", text: "4", label: "4", verses: [4], style: "p"),
+            ScriptureBlock(id: "d", kind: "body", text: "Unrelated next verse.", label: "4", verses: [4], style: "p")
+        ]
+        let map = ChapterTextMap(document: ChapterDocument(
+            schemaVersion: 1, editionID: "web.engwebp", contentRevision: "test", book: "GEN", chapter: 1, blocks: blocks
+        ))
+        let source = map.text as NSString
+        let word = map.selection(in: source.range(of: "target"))
+        XCTAssertEqual(word.text, "target")
+        let wordContext = try XCTUnwrap(map.fullVerseSelection(for: word))
+        XCTAssertEqual(wordContext.text, "First target line.\nSecond line.")
+        XCTAssertEqual(wordContext.passages.map(\.start.verse), [1])
+        let phraseRange = NSRange(location: source.range(of: "target").location,
+                                  length: NSMaxRange(source.range(of: "é words")) - source.range(of: "target").location)
+        let phrase = map.selection(in: phraseRange)
+        let phraseContext = try XCTUnwrap(map.fullVerseSelection(for: phrase))
+        XCTAssertEqual(phraseContext.text, "First target line.\nSecond line. Bridged é words.")
+        XCTAssertEqual(phraseContext.passages.map(\.start.verse), [1, 2, 3])
+        XCTAssertFalse(phraseContext.text.contains("Heading"))
+        XCTAssertFalse(phraseContext.text.contains("footnote"))
+        XCTAssertFalse(phraseContext.text.contains("Unrelated"))
+        let stale = ChapterTextMap.Selection(
+            text: word.text, editionID: "other", contentRevision: "test",
+            sourceLabels: word.sourceLabels, passages: word.passages
+        )
+        XCTAssertNil(map.fullVerseSelection(for: stale))
+        let empty = map.selection(in: source.range(of: "Heading"))
+        XCTAssertNil(map.fullVerseSelection(for: empty))
+    }
+
     @MainActor func testWholeVerseFocusExcludesNotesAndClearsAfterRapidJumps() async throws {
         let blocks = [
             ScriptureBlock(id:"l",kind:"label",text:"1",label:"1",verses:[1],style:"p"),

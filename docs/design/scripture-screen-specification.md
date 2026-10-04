@@ -264,6 +264,21 @@ without redundant annotation layout work.
 
 ## Verse hub
 
+### Chapter Hub — SP-023
+
+A 44-point `Chapter` button with a rectangle-stack icon in the annotation/actions row opens
+Chapter Hub; the chapter heading remains non-clickable. Presentation follows Verse Hub (popover above 900 points,
+sheet otherwise). The three sections are Links, Chapter Conversations and Verse
+Conversations; no chapter quote, Notes, Save or Share sections are added.
+Links aggregate existing links in this book/chapter/edition in numeric verse order.
+Chapter Conversations offers "Ask about this chapter" and previously saved chapter chats.
+It opens a blank composer with reference-only chapter context, never chapter wording.
+Verse Conversations aggregates existing verse/range chats once each, including OLA, in
+verse-start order, with references visible. Opening an item resumes that same conversation
+or link card rather than duplicating it. Empty sections explain that no items exist.
+
+### Verse Hub
+
 The verse hub is the screen’s organizing principle: every artifact attached to a verse is
 reachable from the verse itself.
 

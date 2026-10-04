@@ -126,7 +126,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func children(of collectionID: UUID?) -> [StudyCollection] {
-        collections.filter { $0.parentID == collectionID }
+        collections.filter { $0.parentID == collectionID && $0.archivedAt == nil }
     }
 
     func membershipCount(for collectionID: UUID, includingDescendants: Bool = false) -> Int {
@@ -289,6 +289,26 @@ final class CollectionsStore: ObservableObject {
         return owner?.accent ?? collection(id: StudyCollection.unfiledID)?.accent ?? .slate
     }
 
+    func archiveCollection(id: UUID) {
+        guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
+        collections[index].archivedAt = Date()
+        touch(id)
+        enqueueWrite()
+    }
+
+    func unarchiveCollection(id: UUID) {
+        guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[index].archivedAt = nil
+        touch(id)
+        enqueueWrite()
+    }
+
+    var archivedCollections: [StudyCollection] {
+        collections
+            .filter { !$0.isUnfiled && $0.archivedAt != nil }
+            .sorted { ($0.archivedAt ?? $0.modifiedAt) > ($1.archivedAt ?? $1.modifiedAt) }
+    }
+
     func deleteCollection(id: UUID) {
         guard let removed = collection(id: id), !removed.isUnfiled else { return }
         let promotedParent = removed.parentID
@@ -360,7 +380,7 @@ final class CollectionsStore: ObservableObject {
             CollectionArtifact(
                 id: note.id,
                 title: note.title,
-                subtitle: note.kind == .page ? "Note · Page" : "Note · Canvas",
+                subtitle: "Note · \(note.kind.displayName)",
                 kind: .note,
                 modifiedAt: note.updatedAt
             )

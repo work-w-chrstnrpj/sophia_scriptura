@@ -78,7 +78,8 @@ not only the note subset of the unapproved M2 proposal.
 
 Before accepting a feature, review consistency with the shared visual direction,
 readability, accessible controls, input responsiveness, preservation of context and clear
-feedback. M9 is the final cross-app refinement pass, not the first time quality is added.
+feedback. M9 integrated acceptance closed 2026-10-04 with owner verification (all pass);
+automated unit tests are green while selected UI tests remain flaky on simulator.
 Bottom placement (D-11) and the OldPaper UI direction are owner-selected. The detailed
 [Scripture screen specification](scripture-screen-specification.md) is now the interaction
 and visual source for the reader: OldPaper's black-and-white base, seven selected

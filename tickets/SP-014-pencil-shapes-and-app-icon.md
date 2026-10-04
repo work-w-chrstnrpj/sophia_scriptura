@@ -1,6 +1,6 @@
 # SP-014 — Pencil shape refinement and app icon
 
-- Type: implementation. Status: implemented; physical Pencil and installed-icon acceptance pending.
+- Type: implementation. Status: done; owner verified on physical iPad 2026-10-04.
 - Milestones: cross-cutting M3 Scripture annotations and M4 Study Notes refinement before M5.
 - Requirements: REQ-006, REQ-008, REQ-016, REQ-021.
 - Owner: Frontend UI/UX Developer.

@@ -4,13 +4,11 @@ enum CompanionResponseFormatting {
     /// Marker the model must place at the very end; stripped before display and parsed into Sources.
     static let sourcesAppendixHeading = "### Sophia bibliography (app only)"
     static let sourcesAppendixInstruction = """
-    Bibliography appendix (required for every reply):
-    After the full study answer, append a final section headed exactly:
+    Sources: Never invent a reference or imply a source was consulted when it was not.
+    If you actually cite an identifiable external work, append a final section headed exactly:
     \(sourcesAppendixHeading)
-    List real reference works only (lexicons, commentaries, Bible dictionaries, primary texts)—never invented footnote numbers or placeholder citations like "footnote 1119".
-    Each line is one bullet in this pipe format (URL may be `none`):
-    - Title | Author or publisher | https://example.org or none | One-sentence claim
-    The app removes this entire section from the visible answer and shows it under Sources. Do not refer to this appendix in the body of your reply.
+    Each bullet contains four fields separated by |: title, author or publisher, exact HTTP(S) URL (or none if unknown), and the specific claim it supports.
+    Provide a real direct URL only when known; never guess a URL. Omit this section entirely when no external works are cited. Do not add sources just to fill a bibliography. Do not mention these formatting instructions in the answer.
     """
 
     struct ParsedAssistantResponse: Equatable {
@@ -49,7 +47,8 @@ enum CompanionResponseFormatting {
             let parts = payload.split(separator: "|", omittingEmptySubsequences: false).map {
                 String($0).trimmingCharacters(in: .whitespaces)
             }
-            guard let title = parts.first, !title.isEmpty else { continue }
+            guard parts.count >= 4, let title = parts.first, !title.isEmpty,
+                  !["none", "n/a", "no sources"].contains(title.lowercased()) else { continue }
             let author = parts.count > 1 ? parts[1] : nil
             let urlRaw = parts.count > 2 ? parts[2] : nil
             let claim = parts.count > 3 ? parts[3] : nil
@@ -65,12 +64,39 @@ enum CompanionResponseFormatting {
         return results
     }
 
-    private static func normalizedURL(_ raw: String?) -> String? {
+    static func normalizedURL(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         let lower = raw.lowercased()
         if lower == "none" || lower == "n/a" || lower == "-" { return nil }
-        if raw.hasPrefix("http://") || raw.hasPrefix("https://") { return raw }
-        return nil
+        let text = raw.trimmingCharacters(in: CharacterSet(charactersIn: "<>` "))
+        if let match = text.range(of: #"\]\((https?://[^\s]+)\)$"#, options: .regularExpression) {
+            let suffix = String(text[match]).dropFirst(2).dropLast()
+            return validWebURL(String(suffix))?.absoluteString
+        }
+        return validWebURL(text)?.absoluteString
+    }
+
+    static func validWebURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw), ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              let host = url.host, host.contains("."), url.user == nil, url.password == nil,
+              !raw.contains(where: \.isWhitespace) else { return nil }
+        return url
+    }
+
+    static func linkedSources(in markdown: String) -> [CompanionSource] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return [] }
+        var seen = Set<String>()
+        return detector.matches(in: markdown, range: NSRange(markdown.startIndex..., in: markdown)).compactMap {
+            guard let raw = $0.url?.absoluteString, let url = validWebURL(raw), seen.insert(raw).inserted else { return nil }
+            return CompanionSource(title: url.host ?? "Linked reference", url: raw,
+                                   retrievalProvider: "model-link", claim: "Link supplied in the answer; not independently verified.")
+        }
+    }
+
+    /// Detects concrete template artifacts, not factual correctness or interpretive disagreement.
+    static func containsDraftArtifacts(_ text: String) -> Bool {
+        text.range(of: #"<\s*PRESIDIO_ANDROID|<div\s+class\s*=\s*["']verse["']|\[Question or engagement prompt"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     /// Removes parenthetical hallucinated footnote tags from visible markdown.

@@ -240,17 +240,13 @@ private final class NoteInkCanvas: PKCanvasView {
         }
     }
     private func hideTools() {
-        if #available(iOS 26.0, *) { ink.pencilKitResponderState.toolPickerVisibility = .inactive }
         picker.setVisible(false, forFirstResponder: ink); ink.resignFirstResponder()
         if #available(iOS 18.0, *) { ink.isDrawingEnabled = session.active }
     }
     private func showTools() {
         guard session.active, session.toolsVisible, view.window != nil else { return }
         view.endEditing(true); ink.becomeFirstResponder()
-        if #available(iOS 26.0, *) {
-            ink.pencilKitResponderState.activeToolPicker = picker
-            ink.pencilKitResponderState.toolPickerVisibility = .visible
-        } else { picker.setVisible(true, forFirstResponder: ink) }
+        picker.setVisible(true, forFirstResponder: ink)
         #if DEBUG
         // Pixel regression must not inherit a previous simulator tool/color selection.
         if ProcessInfo.processInfo.environment["SP013_NEUTRAL_INK"] == "1" {

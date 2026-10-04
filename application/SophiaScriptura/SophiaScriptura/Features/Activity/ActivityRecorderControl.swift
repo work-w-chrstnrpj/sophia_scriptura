@@ -161,9 +161,10 @@ private struct ActivityRecorderClockIcon: View {
     }
 
     private func drawHand(context: inout GraphicsContext, center: CGPoint, length: CGFloat, width: CGFloat, angle: Angle, opacity: Double) {
+        let radians = angle.radians
         let end = CGPoint(
-            x: center.x + cos(angle.radians) * length,
-            y: center.y + sin(angle.radians) * length
+            x: center.x + CGFloat(cos(radians)) * length,
+            y: center.y + CGFloat(sin(radians)) * length
         )
         var path = Path()
         path.move(to: center)

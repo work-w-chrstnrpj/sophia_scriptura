@@ -104,7 +104,6 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     override func viewWillDisappear(_ animated: Bool) { stop(); super.viewWillDisappear(animated) }
     func stop() {
         publish(); picker.setVisible(false, forFirstResponder: selectedCanvas ?? text)
-        if #available(iOS 26.0, *) { selectedCanvas?.pencilKitResponderState.toolPickerVisibility = .inactive }
         selectedCanvas?.resignFirstResponder(); pickerVisible = false; pickerActive = false
     }
     func dispose() {
@@ -160,7 +159,6 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         if selectedID != session.selected?.id {
             publish(); selectedCanvas?.isHidden = true
             picker.setVisible(false, forFirstResponder: selectedCanvas ?? text)
-            if #available(iOS 26.0, *) { selectedCanvas?.pencilKitResponderState.toolPickerVisibility = .inactive }
             selectedCanvas?.resignFirstResponder(); pickerVisible = false; pickerActive = false
             selectedID = session.selected?.id
             if let layer = session.selected {
@@ -193,12 +191,8 @@ struct AnnotationSurface: UIViewControllerRepresentable {
                 pickerActive = draw; pickerVisible = showTools
                 if draw {
                     canvas.becomeFirstResponder()
-                    if #available(iOS 26.0, *) {
-                        canvas.pencilKitResponderState.activeToolPicker = picker
-                        canvas.pencilKitResponderState.toolPickerVisibility = showTools ? .visible : .hidden
-                    } else { picker.setVisible(showTools, forFirstResponder: canvas) }
+                    picker.setVisible(showTools, forFirstResponder: canvas)
                 } else {
-                    if #available(iOS 26.0, *) { canvas.pencilKitResponderState.toolPickerVisibility = .inactive }
                     picker.setVisible(false, forFirstResponder: canvas)
                     canvas.resignFirstResponder()
                 }
@@ -276,8 +270,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         strokeRefiner?.beginStroke()
         session.beginStroke()
-        if #available(iOS 26.0, *) { canvasView.pencilKitResponderState.toolPickerVisibility = .hidden }
-        else { picker.setVisible(false, forFirstResponder: canvasView) }
+        picker.setVisible(false, forFirstResponder: canvasView)
         pickerVisible = false
         // Keep the picker active and canvas first responder while its UI is minimized.
     }

@@ -37,7 +37,6 @@ struct NoteCanvasInk {
                   a.mask?.cgPath == b.mask?.cgPath, a.path.creationDate == b.path.creationDate,
                   a.path.count == b.path.count else { return false }
             return zip(a.path, b.path).allSatisfy { x, y in
-                if #available(iOS 26.0, *), x.threshold != y.threshold { return false }
                 return x.location == y.location && x.timeOffset == y.timeOffset && x.size == y.size &&
                     x.opacity == y.opacity && x.force == y.force && x.azimuth == y.azimuth &&
                     x.altitude == y.altitude && x.secondaryScale == y.secondaryScale

@@ -8,7 +8,18 @@ attachment and object subtotals; no history limits or persistence formats change
 The prayer-count test now uses `@MainActor`, async repository loading and public note
 creation rather than an unsupported initializer and private setters. It additionally
 checks that the count and same-day guard survive saving/reopening. Hosted verification
-is pending a run of these changes. Existing `v0.1.0` remains unchanged.
+also exposed equivalent compiler-complexity failures in note search text and the
+Collections detail view. These now use smaller expressions/view boundaries without
+changing behavior. Two stale tests were corrected: the legacy v2 fixture explicitly
+constructs Page content, and No Folder expects its fixed neutral accent. The workflow
+selects an available iPad using `simctl` JSON and waits for boot instead of relying on
+`grep`/`head` output parsing under `pipefail`.
+
+Local final app-code verification: **202 passed, 0 failed, 0 skipped**, recorded in
+`build/ci-repair-complete-20261004.xcresult`. Hosted run `37207083125` is the final
+workflow verification: **passed**, including simulator build and unit tests. Its
+publish job confirmed the existing tag and skipped release creation. Existing `v0.1.0` remains unchanged; fixes on main are newer
+than that immutable release snapshot.
 
 ## M9 integrated closure — 2026-10-04
 

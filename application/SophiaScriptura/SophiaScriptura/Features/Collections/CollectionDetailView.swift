@@ -58,6 +58,14 @@ struct CollectionDetailView: View {
     var body: some View {
         Group {
             if let collection = currentCollection {
+                collectionDetail(collection)
+            } else {
+                ContentUnavailableView("Collection unavailable", systemImage: "folder.badge.questionmark")
+            }
+        }
+    }
+
+    private func collectionContent(_ collection: StudyCollection) -> some View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 32) {
                         header(collection)
@@ -75,6 +83,10 @@ struct CollectionDetailView: View {
                 .navigationTitle(collection.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar(collection) }
+    }
+
+    private func collectionSheets(_ collection: StudyCollection) -> some View {
+                collectionContent(collection)
                 .sheet(isPresented: $showingPicker) {
                     CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes)
                 }
@@ -103,6 +115,10 @@ struct CollectionDetailView: View {
                 .sheet(item: $organizing) { item in
                     CollectionDestinationPicker(store: store, artifact: item.artifact, mode: item.mode, notes: notes)
                 }
+    }
+
+    private func collectionDetail(_ collection: StudyCollection) -> some View {
+                collectionSheets(collection)
                 .studyCenteredConfirmation(
                     isPresented: $showingDeleteAlert,
                     title: "Delete \(collection.name)?",
@@ -143,10 +159,6 @@ struct CollectionDetailView: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.18), value: pendingDeletion != nil)
-            } else {
-                ContentUnavailableView("Collection unavailable", systemImage: "folder.badge.questionmark")
-            }
-        }
     }
 
     @ToolbarContentBuilder

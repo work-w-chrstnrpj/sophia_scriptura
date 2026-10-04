@@ -235,7 +235,10 @@ final class NotesTests: XCTestCase {
         for version in [1, 2] {
             let directory = try folder(), id = UUID()
             var source = sample(); source.schemaVersion = version
-            if version == 2 { source.notes[0].objects.removeAll { $0.kind == .ink }; source.notes[0].page = NotePage() }
+            if version == 2 {
+                let legacyObjects = source.notes[0].objects.filter { $0.kind != .ink }
+                source.notes[0].content = .page(PageContent(page: NotePage(), legacyObjects: legacyObjects))
+            }
             // Encode the historical wire shape, not today's tagged model.
             var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
             var notes = try XCTUnwrap(json["notes"] as? [[String: Any]])

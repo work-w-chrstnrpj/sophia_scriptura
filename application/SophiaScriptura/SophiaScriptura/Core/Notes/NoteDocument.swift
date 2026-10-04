@@ -326,7 +326,14 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
 
     var searchableText: String {
         let prayerText = prayerContent.map { $0.updates.map(\.body).joined(separator: " ") + " " + $0.status.label } ?? ""
-        return ([title, page?.body ?? "", prayerText] + tags + allObjects.flatMap { [$0.text, $0.url, $0.quote?.reference ?? "", $0.quote?.source ?? ""] + $0.cells.flatMap { $0 } }).joined(separator: " ")
+        var parts = [title, page?.body ?? "", prayerText]
+        parts.append(contentsOf: tags)
+        for object in allObjects {
+            parts.append(contentsOf: [object.text, object.url,
+                                      object.quote?.reference ?? "", object.quote?.source ?? ""])
+            parts.append(contentsOf: object.cells.flatMap { $0 })
+        }
+        return parts.joined(separator: " ")
     }
     func members(_ selected: Set<UUID>) -> Set<UUID> {
         let groups = Set(objects.filter { (kind == .canvas || $0.kind != .ink) && selected.contains($0.id) }.compactMap(\.group))

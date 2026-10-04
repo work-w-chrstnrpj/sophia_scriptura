@@ -138,7 +138,8 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(reopened.collection(id: folder)?.accent, .sage)
         XCTAssertEqual(reopened.collection(id: folder)?.icon, .heart)
         XCTAssertEqual(reopened.collection(id: folder)?.parentID, nil)
-        XCTAssertEqual(reopened.collection(id: StudyCollection.unfiledID)?.accent, .gold)
+        XCTAssertEqual(reopened.collection(id: StudyCollection.unfiledID)?.accent, .noFolder,
+                       "The virtual No Folder tray retains its fixed neutral accent")
         XCTAssertEqual(reopened.passage(id: passage.id)?.referenceLabel, "Romans 8:1 (WEB)")
         XCTAssertTrue(reopened.contains(passage.id, in: folder))
         XCTAssertFalse(reopened.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: []).contains { $0.id == passage.id })

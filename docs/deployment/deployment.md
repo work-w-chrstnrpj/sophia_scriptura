@@ -96,6 +96,17 @@ Current product slice: M4/SP-013 Notes alongside the M2 reader and M3 annotation
 with SP-006 retained as a DEBUG Notes experiment; current verification uses Xcode 27.0. No server or App Store
 deployment.
 
+## App version numbers
+
+Settings shows **Version** from the app bundle. Before each sideload release, bump both values on the **SophiaScriptura** target:
+
+| Setting | Xcode UI | `project.pbxproj` key | Shown in app as |
+| --- | --- | --- | --- |
+| Marketing version | General → Identity → **Version** | `MARKETING_VERSION` | `CFBundleShortVersionString` (e.g. `0.1.0`) |
+| Build number | General → Identity → **Build** | `CURRENT_PROJECT_VERSION` | `CFBundleVersion` (e.g. `1`) |
+
+Canonical file: `application/SophiaScriptura/SophiaScriptura.xcodeproj/project.pbxproj` (Debug and Release both list the same keys). Runtime reader: `AppShell/AppVersion.swift`. In-app **Settings → About** shows version, developer, GPL v3, and third-party notices. Bundled license files live under `SophiaScriptura/Resources/Legal/`; the repository root `LICENSE` matches the app’s GPL v3 terms.
+
 1. Open `application/SophiaScriptura/SophiaScriptura.xcodeproj` in Xcode.
 2. Press Command-1, select the blue project icon, then **TARGETS → SophiaScriptura**.
 3. In **Signing & Capabilities**, enable **Automatically manage signing** and select

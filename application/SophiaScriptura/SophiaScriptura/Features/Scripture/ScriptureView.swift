@@ -425,7 +425,7 @@ struct ScriptureView: View {
                             saveToNote(selected)
                         }.disabled(!notes.loaded)
                         ForEach(notes.snapshot.notes.filter { note in
-                            note.deletedAt == nil && (note.objects.contains { $0.quote?.verse == verse } || note.page?.citations.contains { $0.quote.verse == verse } == true)
+                            note.isActiveInLibrary && (note.objects.contains { $0.quote?.verse == verse } || note.page?.citations.contains { $0.quote.verse == verse } == true)
                         }) { note in
                             Button(note.title) { session.hubVerse = nil; openNote(note.id) }
                         }
@@ -686,7 +686,7 @@ struct ScriptureView: View {
     private func saveToNote(_ selection: ChapterTextMap.Selection) {
         Task {
             guard let quote = await notes.quote(for: selection, reader: session) else { return }
-            if let note = notes.note, note.deletedAt == nil {
+            if let note = notes.note, note.isActiveInLibrary {
                 notes.appendQuote(quote)
                 openNote(note.id)
             } else {

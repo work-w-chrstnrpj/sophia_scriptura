@@ -24,9 +24,18 @@ final class NotesUITests: XCTestCase {
         }
         XCTAssertTrue(create.waitForExistence(timeout: 5) && create.isHittable)
     }
+    private func newNote(_ app: XCUIApplication, kind: String) {
+        app.buttons["notes.newNotes"].tap()
+        let kindButton = app.buttons["notes.new." + kind]
+        XCTAssertTrue(kindButton.waitForExistence(timeout: 5))
+        kindButton.tap()
+        let create = app.buttons["notes.new.create"]
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+    }
     func testBlankNoteDirectTextMetadataAndRelaunch() {
         let app = launch(); notes(app)
-        app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.page"].tap()
+        newNote(app, kind: "page")
         XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
         let text = app.textViews["notes.body"]
         XCTAssertTrue(text.waitForExistence(timeout: 5)); text.tap(); text.typeText("Grace and truth")
@@ -47,7 +56,7 @@ final class NotesUITests: XCTestCase {
         XCTAssertEqual(app.textViews["notes.body"].value as? String, "Grace and truth")
     }
     func testContextActionsShapeStickerPaperTitleAndRotation() {
-        let app = launch(); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        let app = launch(); notes(app); newNote(app, kind: "canvas")
         if app.buttons["notes.scripture.toggle"].label == "Hide Scripture" { app.buttons["notes.scripture.toggle"].tap() }
         XCTAssertFalse(app.buttons["Done typing"].exists); XCTAssertFalse(app.buttons["notes.objects"].exists)
         let viewport = app.scrollViews["notes.viewport"]
@@ -57,7 +66,14 @@ final class NotesUITests: XCTestCase {
         title.tap(); title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (title.value as? String ?? "").count)); title.typeText("Canvas study")
         app.alerts.buttons["Save"].tap()
         app.buttons["notes.options"].tap(); app.buttons["Paper"].tap(); app.buttons["Dotted"].tap()
-        app.buttons["notes.options"].tap(); app.buttons["Note Color"].tap(); app.buttons["notes.color.sage"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let canvasCard = app.buttons.containing(.staticText, identifier: "Canvas study").firstMatch
+        XCTAssertTrue(canvasCard.waitForExistence(timeout: 10))
+        canvasCard.press(forDuration: 1.2)
+        app.buttons["notes.editNote"].tap()
+        app.buttons["notes.color.sage"].tap()
+        app.buttons["notes.edit.save"].tap()
+        canvasCard.tap()
         app.buttons["notes.shapes"].tap(); app.buttons["notes.shape.star"].tap()
         XCTAssertTrue(app.buttons["notes.action.duplicate"].waitForExistence(timeout: 5))
         app.buttons["notes.action.duplicate"].tap()
@@ -100,7 +116,7 @@ final class NotesUITests: XCTestCase {
     }
 
     func testCanvasFingerMovesAndResizesObject() {
-        let app = launch(); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        let app = launch(); notes(app); newNote(app, kind: "canvas")
         XCTAssertFalse(app.textViews["notes.body"].exists)
         app.buttons["notes.insert"].tap(); app.buttons["Shape"].tap(); app.buttons["notes.shape.circle"].tap()
         let shape = app.descendants(matching: .any).matching(identifier: "notes.object.shape").firstMatch
@@ -119,7 +135,7 @@ final class NotesUITests: XCTestCase {
     }
 
     func testPageInlineTableAndScriptureVisibilityPersist() {
-        let app = launch(); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.page"].tap()
+        let app = launch(); notes(app); newNote(app, kind: "page")
         XCTAssertTrue(app.buttons["notes.scripture.toggle"].waitForExistence(timeout: 10))
         let toggle = app.buttons["notes.scripture.toggle"]
         if toggle.label == "Show Scripture" { toggle.tap() }
@@ -142,7 +158,7 @@ final class NotesUITests: XCTestCase {
 
     func testCanvasDrawingObjectMovesAndReopens() {
         let app = launch(fingerInk: true); notes(app)
-        app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        newNote(app, kind: "canvas")
         let viewport = app.scrollViews["notes.viewport"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 10))
         viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.2)).press(forDuration: 0.1, thenDragTo: viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4)))
@@ -178,7 +194,7 @@ final class NotesUITests: XCTestCase {
     }
 
     func testCanvasWebsitePreviewLoadsAndReopens() {
-        let app = launch(); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        let app = launch(); notes(app); newNote(app, kind: "canvas")
         if app.buttons["notes.scripture.toggle"].label == "Hide Scripture" { app.buttons["notes.scripture.toggle"].tap() }
         app.buttons["notes.insert"].tap(); app.buttons["Link"].tap()
         let url = app.alerts["Insert link"].textFields.firstMatch
@@ -198,7 +214,7 @@ final class NotesUITests: XCTestCase {
     }
 
     func testCanvasYouTubePreviewLoadsAndReopens() {
-        let app = launch(); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        let app = launch(); notes(app); newNote(app, kind: "canvas")
         if app.buttons["notes.scripture.toggle"].label == "Hide Scripture" { app.buttons["notes.scripture.toggle"].tap() }
         app.buttons["notes.insert"].tap(); app.buttons["Link"].tap()
         let url = app.alerts["Insert link"].textFields.firstMatch
@@ -218,7 +234,7 @@ final class NotesUITests: XCTestCase {
     }
 
     func testInkAutosavesAcrossTabAndRelaunch() {
-        let app = launch(fingerInk: true); notes(app); app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.page"].tap()
+        let app = launch(fingerInk: true); notes(app); newNote(app, kind: "page")
         let ink = app.descendants(matching: .any).matching(identifier: "notes.ink").firstMatch
         XCTAssertTrue(ink.waitForExistence(timeout: 10))
         let viewport = app.scrollViews["notes.viewport"]
@@ -242,7 +258,7 @@ final class NotesUITests: XCTestCase {
 
     func testCanvasRepeatedInkUsesViewportAndActivePenIndicator() {
         let app = launch(fingerInk: true); notes(app)
-        app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        newNote(app, kind: "canvas")
         let viewport = app.scrollViews["notes.viewport"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 10))
         let tools = app.buttons["notes.tools"]

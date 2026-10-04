@@ -28,10 +28,10 @@ final class ThemeWorkspaceUITests: XCTestCase {
             for _ in 0..<4 where !preset.isHittable { form.swipeUp() }
             XCTAssertTrue(preset.isHittable); preset.tap()
         }
-        let picker = app.buttons["settings.theme"]
+        let picker = app.segmentedControls["settings.theme"]
         for _ in 0..<4 where !picker.isHittable { form.swipeUp() }
-        XCTAssertTrue(picker.isHittable, app.debugDescription); picker.tap()
-        app.buttons[value].tap()
+        XCTAssertTrue(picker.isHittable, app.debugDescription)
+        picker.buttons[value].tap()
     }
     private func capture(_ app: XCUIApplication, _ name: String) -> UIImage {
         let shot = app.screenshot()
@@ -68,6 +68,8 @@ final class ThemeWorkspaceUITests: XCTestCase {
         let choice = app.buttons["notes.new." + kind]
         if !choice.waitForExistence(timeout: 3) { app.buttons["notes.newNotes"].tap() }
         XCTAssertTrue(choice.waitForExistence(timeout: 5)); choice.tap()
+        let createNote = app.buttons["notes.new.create"]
+        XCTAssertTrue(createNote.waitForExistence(timeout: 5)); createNote.tap()
         let viewport = app.scrollViews["notes.viewport"]
         XCTAssertTrue(viewport.waitForExistence(timeout: 10))
         if app.buttons["notes.scripture.toggle"].label == "Hide Scripture" { app.buttons["notes.scripture.toggle"].tap() }

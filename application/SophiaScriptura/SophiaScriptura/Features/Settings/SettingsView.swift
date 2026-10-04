@@ -9,6 +9,7 @@ struct SettingsView: View {
     @ObservedObject var activity: ActivityStore
     @ObservedObject var music: MusicSession
     @ObservedObject var shellPreferences: ShellPreferencesSession
+    @ObservedObject var userProfile: UserProfileSession
     @Binding var showMusicLibrary: Bool
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -29,6 +30,7 @@ struct SettingsView: View {
                     LibraryHeaderTitle(title: "Settings")
                         .accessibilityIdentifier("settings.title")
 
+                    profileSection
                     appearanceSection
                     readingSection
                     offlineSection
@@ -37,7 +39,10 @@ struct SettingsView: View {
                     musicSection
                     shellSection
                     archiveSection
+                    trashSection
+                    deleteDataSection
                     backupSection
+                    aboutSection
                     if let notice = reader.notice {
                         settingsCard {
                             Text(notice)
@@ -56,6 +61,59 @@ struct SettingsView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $showVersions) { ScriptureVersionsView(session: reader) }
+    }
+
+    private var profileSection: some View {
+        settingsCard {
+            NavigationLink {
+                SettingsUserProfileView(userProfile: userProfile)
+            } label: {
+                HStack(spacing: 14) {
+                    settingsProfileAvatar(size: 52)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profileSectionTitle)
+                            .font(.headline)
+                            .foregroundStyle(Color(theme.palette.ink))
+                        Text("Name, birthday, church, and photo")
+                            .font(.footnote)
+                            .foregroundStyle(Color(theme.palette.secondary))
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color(theme.palette.secondary))
+                }
+                .padding(.vertical, 4)
+            }
+            .accessibilityIdentifier("settings.profile")
+        }
+    }
+
+    private var profileSectionTitle: String {
+        let name = userProfile.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Your profile" : name
+    }
+
+    @ViewBuilder
+    private func settingsProfileAvatar(size: CGFloat) -> some View {
+        Group {
+            if let image = userProfile.profilePhoto {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(Color(theme.palette.secondary))
+                    .padding(size * 0.12)
+                    .background(Color(theme.palette.paper))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color(theme.palette.rule), lineWidth: 1))
+        .accessibilityHidden(true)
     }
 
     private var shellSection: some View {
@@ -108,7 +166,7 @@ struct SettingsView: View {
         settingsCard {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeading("Archive")
-                Text("Browse archived notes, collections, and Companion conversations in one place.")
+                Text("Browse archived notes, collections, and Companion conversations. Unarchive to return them to your library.")
                     .font(.footnote)
                     .foregroundStyle(Color(theme.palette.secondary))
                 NavigationLink {
@@ -117,6 +175,45 @@ struct SettingsView: View {
                     settingsLinkRow("Open archive")
                 }
                 .accessibilityIdentifier("settings.archive")
+            }
+        }
+    }
+
+    private var trashSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Trash")
+                Text("Deleted items stay for \(TrashRetention.dayCount) days. Restore them or delete permanently before auto-removal.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                NavigationLink {
+                    SettingsTrashHubView(notes: notes, collections: collections, companion: companion)
+                } label: {
+                    settingsLinkRow("Open trash")
+                }
+                .accessibilityIdentifier("settings.trash")
+            }
+        }
+    }
+
+    private var deleteDataSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Delete data")
+                Text("Permanently clear notes, collections, conversations, quiz history, reminders, activity history, bookmarks, gleanings, and links on this iPad.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                NavigationLink {
+                    SettingsDeleteDataHubView(
+                        notes: notes,
+                        collections: collections,
+                        companion: companion,
+                        activity: activity
+                    )
+                } label: {
+                    settingsLinkRow("Open delete data")
+                }
+                .accessibilityIdentifier("settings.delete")
             }
         }
     }
@@ -196,12 +293,15 @@ struct SettingsView: View {
                 sectionHeading("Reading")
                 Stepper("Text size: \(reader.preferences.sizeStep + 1)", value: preference(\.sizeStep), in: 0...8)
                     .foregroundStyle(Color(theme.palette.ink))
+                    .controlSize(.large)
                 Picker("Appearance", selection: preference(\.theme)) {
                     Text("System").tag("system")
                     Text("Light").tag("light")
                     Text("Dark").tag("dark")
                 }
                 .pickerStyle(.segmented)
+                .controlSize(.large)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
                 .accessibilityIdentifier("settings.theme")
             }
         }
@@ -248,6 +348,23 @@ struct SettingsView: View {
                     settingsLinkRow("Quiz Me defaults")
                 }
                 .accessibilityIdentifier("settings.quizDefaults")
+            }
+        }
+    }
+
+    private var aboutSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("About")
+                Text("Version, developer, and open-source licenses.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                NavigationLink {
+                    SettingsAboutView()
+                } label: {
+                    settingsLinkRow("About Sophia Scriptura")
+                }
+                .accessibilityIdentifier("settings.about.link")
             }
         }
     }

@@ -87,6 +87,7 @@ final class CollectionsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["notes.newNotes"].waitForExistence(timeout: 10))
         app.buttons["notes.newNotes"].tap()
         app.buttons["notes.new.page"].tap()
+        app.buttons["notes.new.create"].tap()
         let close = app.navigationBars.buttons.element(boundBy: 0)
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         close.tap()

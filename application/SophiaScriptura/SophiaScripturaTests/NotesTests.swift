@@ -134,8 +134,8 @@ final class NotesTests: XCTestCase {
         await editor.save(); XCTAssertFalse(editor.dirty)
         editor.archive(id); await editor.save()
         let reopened = NotesSession(repository: repository); await reopened.load()
-        XCTAssertNotNil(reopened.snapshot.notes.first?.deletedAt)
-        reopened.restoreFromArchive(id); reopened.open(id)
+        XCTAssertTrue(reopened.snapshot.notes.first?.isArchived == true)
+        reopened.unarchive(id); reopened.open(id)
         XCTAssertEqual(reopened.note?.objects.count, 4)
     }
     func testRealInkAndSourceQuoteRoundTrip() async throws {

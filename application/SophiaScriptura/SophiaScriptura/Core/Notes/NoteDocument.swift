@@ -203,20 +203,18 @@ enum NoteContent: Equatable, Sendable, Codable {
 
 struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     enum Paper: String, Codable, CaseIterable, Sendable { case plain, ruled, grid, dotted }
-    enum Color: String, Codable, CaseIterable, Sendable {
-        case neutral, rose, amber, sage, blue, lavender
-
-        var title: String { rawValue.capitalized }
-    }
     static let extent: CGFloat = 12_000
     var id = UUID()
     var title = "Untitled Note"
     var tags: [String] = []
     var createdAt = Date()
     var updatedAt = Date()
+    /// Legacy export mirror of `trashedAt ?? archivedAt` for older builds.
     var deletedAt: Date?
+    var archivedAt: Date?
+    var trashedAt: Date?
     var paper = Paper.plain
-    var color = Color.neutral
+    var color: CollectionAccent = .preset
     var content = NoteContent.canvas(CanvasContent())
     var kind: NoteKind {
         switch content {
@@ -277,14 +275,26 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         case .journal: content = .journal(JournalContent(page: page ?? NotePage(), legacyObjects: objects))
         }
     }
-    private enum CodingKeys: String, CodingKey { case id, title, tags, createdAt, updatedAt, deletedAt, paper, color, content, objects, page }
+    private enum CodingKeys: String, CodingKey {
+        case id, title, tags, createdAt, updatedAt, deletedAt, archivedAt, trashedAt, paper, color, content, objects, page
+    }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
         tags = try c.decode([String].self, forKey: .tags); createdAt = try c.decode(Date.self, forKey: .createdAt)
-        updatedAt = try c.decode(Date.self, forKey: .updatedAt); deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        trashedAt = try c.decodeIfPresent(Date.self, forKey: .trashedAt)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        if archivedAt == nil, trashedAt == nil, let deletedAt { archivedAt = deletedAt }
         paper = try c.decode(Paper.self, forKey: .paper)
-        color = try c.decodeIfPresent(Color.self, forKey: .color) ?? .neutral
+        if let accent = try c.decodeIfPresent(CollectionAccent.self, forKey: .color) {
+            color = accent
+        } else if let legacy = try c.decodeIfPresent(String.self, forKey: .color) {
+            color = CollectionAccent.migrated(fromLegacyNoteColor: legacy)
+        } else {
+            color = .preset
+        }
         if c.contains(.content) {
             guard !c.contains(.objects), !c.contains(.page) else { throw NotesError.invalid }
             content = try c.decode(NoteContent.self, forKey: .content)
@@ -298,7 +308,10 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id); try c.encode(title, forKey: .title); try c.encode(tags, forKey: .tags)
         try c.encode(createdAt, forKey: .createdAt); try c.encode(updatedAt, forKey: .updatedAt)
-        try c.encodeIfPresent(deletedAt, forKey: .deletedAt); try c.encode(paper, forKey: .paper)
+        try c.encodeIfPresent(archivedAt, forKey: .archivedAt)
+        try c.encodeIfPresent(trashedAt, forKey: .trashedAt)
+        try c.encodeIfPresent(trashedAt ?? archivedAt, forKey: .deletedAt)
+        try c.encode(paper, forKey: .paper)
         try c.encode(color, forKey: .color)
         try c.encode(content, forKey: .content)
     }
@@ -307,6 +320,10 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         return CGSize(width: min(Self.extent, max(1200, (objects.map(\.frame.maxX).max() ?? 0) + 240)),
                height: min(Self.extent, max(1400, (objects.map(\.frame.maxY).max() ?? 0) + 240)))
     }
+    var isArchived: Bool { archivedAt != nil && trashedAt == nil }
+    var isTrashed: Bool { trashedAt != nil }
+    var isActiveInLibrary: Bool { archivedAt == nil && trashedAt == nil }
+
     var searchableText: String {
         let prayerText = prayerContent.map { $0.updates.map(\.body).joined(separator: " ") + " " + $0.status.label } ?? ""
         return ([title, page?.body ?? "", prayerText] + tags + allObjects.flatMap { [$0.text, $0.url, $0.quote?.reference ?? "", $0.quote?.source ?? ""] + $0.cells.flatMap { $0 } }).joined(separator: " ")

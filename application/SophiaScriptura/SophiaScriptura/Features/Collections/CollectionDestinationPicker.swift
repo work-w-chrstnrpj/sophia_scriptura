@@ -11,7 +11,7 @@ struct CollectionFolderChooser: View {
 
     @State private var creating = false
     @State private var newName = ""
-    @State private var newAccent: CollectionAccent = .sage
+    @State private var newAccent: CollectionAccent = .preset
     @FocusState private var nameFocused: Bool
 
     var body: some View {
@@ -121,7 +121,7 @@ struct CollectionFolderChooser: View {
     private func resetNew() {
         creating = false
         newName = ""
-        newAccent = .sage
+        newAccent = .preset
         nameFocused = false
     }
 }

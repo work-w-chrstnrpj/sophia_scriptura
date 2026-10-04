@@ -184,6 +184,82 @@ struct StudyCenteredActionOverlay: View {
     }
 }
 
+enum StudyTypedDeletion {
+    static let requiredPhrase = "Confirm Deletion"
+    static let confirmButtonTitle = "Delete Confirmation"
+}
+
+struct StudyTypedDeletionOverlay: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let message: String
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    @State private var typed = ""
+    @FocusState private var focused: Bool
+
+    private var phraseMatches: Bool {
+        typed.trimmingCharacters(in: .whitespacesAndNewlines) == StudyTypedDeletion.requiredPhrase
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(theme.dark ? 0.55 : 0.35)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onCancel)
+                .accessibilityHidden(true)
+            VStack(spacing: 16) {
+                Text(title)
+                    .font(.system(.headline, design: .serif).weight(.semibold))
+                    .foregroundStyle(Color(theme.palette.ink))
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                    .multilineTextAlignment(.center)
+                Text("Type \"\(StudyTypedDeletion.requiredPhrase)\" to continue.")
+                    .font(.caption)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                    .multilineTextAlignment(.center)
+                TextField(StudyTypedDeletion.requiredPhrase, text: $typed)
+                    .textFieldStyle(.roundedBorder)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .focused($focused)
+                    .accessibilityIdentifier("settings.delete.confirmField")
+                Button(role: .destructive, action: onConfirm) {
+                    Text(StudyTypedDeletion.confirmButtonTitle)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .disabled(!phraseMatches)
+                .accessibilityIdentifier("settings.delete.confirmButton")
+                Button("Cancel", action: onCancel)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(Color(theme.palette.ink))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+            }
+            .padding(24)
+            .frame(maxWidth: 360)
+            .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(theme.palette.rule), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.12), radius: 24, y: 8)
+            .accessibilityElement(children: .contain)
+        }
+        .onAppear {
+            typed = ""
+            focused = true
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .zIndex(50)
+    }
+}
+
 enum StudyPreviewText {
     static func truncatedInsight(_ insight: String, limit: Int = 140) -> String {
         let trimmed = insight.trimmingCharacters(in: .whitespacesAndNewlines)

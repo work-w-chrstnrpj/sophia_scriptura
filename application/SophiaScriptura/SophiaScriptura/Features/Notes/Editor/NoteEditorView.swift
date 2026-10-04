@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct NoteEditorView: View {
     @Environment(\.appTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
     @Bindable var session: NotesSession
     var reader: ReaderSession
     @AppStorage("notes.scriptureVisible") private var scriptureVisible = true
@@ -13,6 +14,7 @@ struct NoteEditorView: View {
     @State private var importing = false
     @State private var linkPrompt = false
     @State private var link = "https://"
+    @State private var confirmDelete = false
     var body: some View {
         Group {
             if session.note?.kind == .prayer {
@@ -47,8 +49,24 @@ struct NoteEditorView: View {
                 }
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo).accessibilityIdentifier("notes.undo")
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo).accessibilityIdentifier("notes.redo")
+                Button("Archive", systemImage: "archivebox") {
+                    session.archiveCurrentNote()
+                    dismiss()
+                }
+                    .accessibilityIdentifier("notes.editor.archive")
+                Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    .accessibilityIdentifier("notes.editor.delete")
                 optionsMenu
             }
+        }
+        .alert("Move note to Trash?", isPresented: $confirmDelete) {
+            Button("Move to Trash", role: .destructive) {
+                session.moveCurrentNoteToTrash()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Trash keeps the note for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
         }
         .alert("Rename note", isPresented: $rename) {
             TextField("Title", text: $title).accessibilityIdentifier("notes.rename.field")
@@ -94,14 +112,6 @@ struct NoteEditorView: View {
                         Button { changePaper(paper) } label: {
                             Text(paper.rawValue.capitalized)
                         }
-                    }
-                }
-                Menu("Note Color", systemImage: "paintpalette") {
-                    ForEach(NoteDocument.Color.allCases, id: \.self) { color in
-                        Button { session.setColor(color) } label: {
-                            Label(color.title, systemImage: session.note?.color == color ? "checkmark.circle.fill" : "circle.fill")
-                        }
-                        .accessibilityIdentifier("notes.color.\(color.rawValue)")
                     }
                 }
                 Button("Note details", systemImage: "tag") { showDetails = true }
@@ -206,9 +216,16 @@ private struct NoteDetailsView: View {
             }.appSurface().navigationTitle("Note details")
                 .toolbar {
                     Button("Cancel") { dismiss() }
-                    Button("Save") { session.metadata(title: title, tags: tags, paper: paper); dismiss() }
+                    Button("Save") {
+                        session.metadata(title: title, tags: tags, paper: paper)
+                        dismiss()
+                    }
                 }
-        }.onAppear { title = session.note?.title ?? ""; tags = session.note?.tags.joined(separator: ", ") ?? ""; paper = session.note?.paper ?? .plain }
+        }.onAppear {
+            title = session.note?.title ?? ""
+            tags = session.note?.tags.joined(separator: ", ") ?? ""
+            paper = session.note?.paper ?? .plain
+        }
     }
 }
 

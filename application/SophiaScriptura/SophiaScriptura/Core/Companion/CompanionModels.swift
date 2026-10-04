@@ -455,6 +455,7 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
     var composerDraft: String
     var passageAnchor: CompanionPassageAnchor?
     var chapterAnchor: CompanionChapterAnchor?
+    var trashedAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -471,7 +472,8 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
         branchPointMessageID: UUID? = nil,
         composerDraft: String = "",
         passageAnchor: CompanionPassageAnchor? = nil,
-        chapterAnchor: CompanionChapterAnchor? = nil
+        chapterAnchor: CompanionChapterAnchor? = nil,
+        trashedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -488,7 +490,10 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
         self.composerDraft = composerDraft
         self.passageAnchor = passageAnchor
         self.chapterAnchor = chapterAnchor
+        self.trashedAt = trashedAt
     }
+
+    var isTrashed: Bool { trashedAt != nil }
 }
 
 enum CompanionMessageRole: String, Codable, Sendable {

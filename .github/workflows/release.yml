@@ -1,0 +1,123 @@
+# Publishes a GitHub Release when main receives a merge whose Xcode marketing version
+# is not yet tagged. Requires docs/releases/vX.Y.Z.md for that version.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Build and unit tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build (Simulator)
+        env:
+          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+            -scheme SophiaScriptura \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ci-release/DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Unit tests (SophiaScripturaTests)
+        env:
+          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+        run: |
+          set -euo pipefail
+          DEST=$(xcodebuild -showdestinations \
+            -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+            -scheme SophiaScriptura 2>/dev/null \
+            | grep "platform:iOS Simulator" | grep "name:iPad" | head -1 \
+            | sed -n 's/.*id:\([A-F0-9-]*\).*/\1/p')
+          if [ -z "${DEST:-}" ]; then
+            DEST=$(xcodebuild -showdestinations \
+              -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+              -scheme SophiaScriptura 2>/dev/null \
+              | grep "platform:iOS Simulator" | head -1 \
+              | sed -n 's/.*id:\([A-F0-9-]*\).*/\1/p')
+          fi
+          if [ -z "${DEST:-}" ]; then
+            echo "::error::No iOS Simulator destination found on runner."
+            exit 1
+          fi
+          echo "Using simulator id: $DEST"
+          xcodebuild test \
+            -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+            -scheme SophiaScriptura \
+            -destination "id=$DEST" \
+            -derivedDataPath build/ci-release/DerivedData \
+            -resultBundlePath build/ci-release/results.xcresult \
+            -only-testing:SophiaScripturaTests \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO
+
+  publish:
+    name: Tag and GitHub Release
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read Xcode marketing version
+        id: app_version
+        run: |
+          set -euo pipefail
+          PBX="application/SophiaScriptura/SophiaScriptura.xcodeproj/project.pbxproj"
+          MARKETING=$(grep -m1 'MARKETING_VERSION' "$PBX" | sed -E 's/.*MARKETING_VERSION = ([^;]+);/\1/' | tr -d ' ')
+          BUILD=$(grep -m1 'CURRENT_PROJECT_VERSION' "$PBX" | sed -E 's/.*CURRENT_PROJECT_VERSION = ([^;]+);/\1/' | tr -d ' ')
+          echo "marketing=$MARKETING" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "tag=v${MARKETING}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip when tag already exists
+        id: gate
+        run: |
+          TAG="${{ steps.app_version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists. Bump MARKETING_VERSION and add release notes to publish again."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require release notes
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          TAG="${{ steps.app_version.outputs.tag }}"
+          NOTES="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::Missing ${NOTES}. Add release notes and bump MARKETING_VERSION before merging to main."
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.app_version.outputs.tag }}"
+          MARKETING="${{ steps.app_version.outputs.marketing }}"
+          BUILD="${{ steps.app_version.outputs.build }}"
+          gh release create "$TAG" \
+            --title "Sophia Scriptura ${MARKETING} (build ${BUILD})" \
+            --notes-file "docs/releases/${TAG}.md" \
+            --target "${{ github.sha }}"

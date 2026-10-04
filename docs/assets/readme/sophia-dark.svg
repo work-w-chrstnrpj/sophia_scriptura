@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="380" viewBox="0 0 1200 380" role="img" aria-labelledby="title desc">
+  <title id="title">Sophia Scriptura</title>
+  <desc id="desc">A quiet place to read, reflect, and grow. An open book with muted sage accents.</desc>
+  <rect width="1200" height="380" rx="24" fill="#202823"/>
+  <rect x="18" y="18" width="1164" height="344" rx="14" fill="none" stroke="#414D43"/>
+  <path d="M78 85h480M78 294h1044" stroke="#414D43"/>
+  <text x="78" y="65" font-family="Arial, sans-serif" font-size="14" letter-spacing="5" fill="#AEBFA2">A PERSONAL STUDY COMPANION</text>
+  <text x="74" y="174" font-family="Georgia, serif" font-size="76" fill="#F1EDDF">Sophia Scriptura</text>
+  <text x="78" y="228" font-family="Georgia, serif" font-size="25" fill="#AEBFA2">A quiet place to read, reflect, and grow.</text>
+  <text x="78" y="332" font-family="Arial, sans-serif" font-size="13" letter-spacing="4" fill="#AEBFA2">SCRIPTURE / THOUGHT / PRACTICE</text>
+  <circle cx="1010" cy="174" r="87" fill="#303D32"/>
+  <g fill="none" stroke="#AEBFA2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1010 139q-35-22-65-12v93q34-10 65 10 31-20 65-10v-93q-30-10-65 12v91"/>
+    <path d="M956 150q22-4 41 8m-41 10q22-4 41 8m-41 10q22-4 41 8m26-36q19-12 41-8m-41 26q19-12 41-8m-41 26q19-12 41-8" stroke-width="2"/>
+    <path d="M1010 95v19m-9-9h18"/>
+  </g>
+</svg>

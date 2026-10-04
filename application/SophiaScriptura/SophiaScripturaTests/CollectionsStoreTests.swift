@@ -30,7 +30,7 @@ final class CollectionsStoreTests: XCTestCase {
         let romans = try XCTUnwrap(store.collections.first(where: { $0.name == "Romans" }))
         let artifact = try XCTUnwrap(store.artifacts.first)
 
-        store.deleteCollection(id: assurance.id)
+        store.permanentlyDeleteCollection(id: assurance.id)
 
         XCTAssertNil(store.collection(id: assurance.id))
         XCTAssertEqual(store.collection(id: romans.id)?.parentID, nil)
@@ -80,7 +80,7 @@ final class CollectionsStoreTests: XCTestCase {
         let grandchild = try XCTUnwrap(store.createCollection(name: "Promises", detail: "", parentID: child.id, accent: .sage))
         let verse = try XCTUnwrap(store.artifacts.first)
         store.toggleMembership(artifactID: verse.id, collectionID: grandchild)
-        store.deleteCollection(id: child.id)
+        store.permanentlyDeleteCollection(id: child.id)
         XCTAssertEqual(store.collection(id: grandchild)?.parentID, parent.id)
         XCTAssertTrue(store.contains(verse.id, in: grandchild))
         XCTAssertFalse(store.memberships.contains { $0.collectionID == child.id })
@@ -92,8 +92,8 @@ final class CollectionsStoreTests: XCTestCase {
         let link = try XCTUnwrap(store.artifacts.first { $0.kind == .link })
         let verse = try XCTUnwrap(store.artifacts.first { $0.kind == .scripture })
 
-        store.deleteCollection(id: StudyCollection.unfiledID)
-        store.deleteCollection(id: assurance.id)
+        store.permanentlyDeleteCollection(id: StudyCollection.unfiledID)
+        store.permanentlyDeleteCollection(id: assurance.id)
 
         let unfiled = store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: [])
         XCTAssertNotNil(store.collection(id: StudyCollection.unfiledID))
@@ -165,7 +165,7 @@ final class CollectionsStoreTests: XCTestCase {
 
         store.setMemberships(artifactID: id, collectionIDs: [])
         XCTAssertTrue(store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: []).contains { $0.id == id })
-        XCTAssertEqual(store.accent(for: id), store.collection(id: StudyCollection.unfiledID)?.accent)
+        XCTAssertEqual(store.accent(for: id), .noFolder)
     }
 
     func testOutlineNestsSubfoldersAndEditKeepsNoFolderNameFixed() throws {
@@ -184,9 +184,9 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(store.collection(id: parent)?.accent, .indigo)
         XCTAssertEqual(store.collection(id: parent)?.icon, .bible)
         XCTAssertFalse(store.updateCollection(id: parent, name: "No Folder", detail: "", accent: .indigo))
-        XCTAssertTrue(store.updateCollection(id: StudyCollection.unfiledID, name: "Renamed", detail: "", accent: .rose))
+        XCTAssertFalse(store.updateCollection(id: StudyCollection.unfiledID, name: "Renamed", detail: "", accent: .rose))
         XCTAssertEqual(store.collection(id: StudyCollection.unfiledID)?.name, "No Folder")
-        XCTAssertEqual(store.collection(id: StudyCollection.unfiledID)?.accent, .rose)
+        XCTAssertEqual(store.collection(id: StudyCollection.unfiledID)?.accent, .noFolder)
     }
 
     func testLinkAndPlaceholderConversationStayDistinctFromTheirFolders() async throws {

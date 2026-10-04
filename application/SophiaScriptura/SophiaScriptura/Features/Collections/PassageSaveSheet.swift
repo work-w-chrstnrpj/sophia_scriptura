@@ -74,7 +74,7 @@ struct PassageSaveSheet: View {
 
     private var previewAccent: CollectionAccent {
         let chosen = store.collections.filter { selection.contains($0.id) }
-        return chosen.first?.accent ?? store.collection(id: StudyCollection.unfiledID)?.accent ?? .slate
+        return chosen.first?.accent ?? .noFolder
     }
 
     private func save() {

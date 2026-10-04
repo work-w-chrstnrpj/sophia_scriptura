@@ -50,6 +50,7 @@ struct PassageCardSheet: View {
 
     private func content(_ passage: SavedPassage) -> some View {
         let accent = store.accent(for: passage.id)
+        let tint = accent.resolvedColor(in: theme)
         let isGleaning = passage.kind == .gleaning
         return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -59,7 +60,7 @@ struct PassageCardSheet: View {
                         Text(isGleaning ? "GLEANING" : "BOOKMARK")
                             .font(.caption.weight(.semibold))
                             .tracking(1.4)
-                            .foregroundStyle(accent.color)
+                            .foregroundStyle(tint)
                         Text(passage.referenceLabel)
                             .font(.system(.title2, design: .serif).weight(.semibold))
                             .foregroundStyle(Color(theme.palette.ink))
@@ -70,7 +71,7 @@ struct PassageCardSheet: View {
 
                 HStack(alignment: .top, spacing: 14) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(accent.color)
+                        .fill(tint)
                         .frame(width: 3)
                     Text(passage.passageText)
                         .font(.system(.title3, design: .serif))
@@ -161,7 +162,7 @@ struct PassageCardSheet: View {
             .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(editing ? accent.color.opacity(0.6) : Color(theme.palette.rule), lineWidth: 1)
+                    .stroke(editing ? accent.resolvedColor(in: theme).opacity(0.6) : Color(theme.palette.rule), lineWidth: 1)
             )
         }
     }

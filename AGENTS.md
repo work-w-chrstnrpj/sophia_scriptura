@@ -110,6 +110,7 @@ Update this map whenever the project structure changes.
 
 ## Core Operating Rules
 
+- Consider [docs/guidelines/backward-compatibility.md](docs/guidelines/backward-compatibility.md) before persistence, migration, or delete/archive behavior changes.
 - Prefer project wiki pages as the source of product intent.
 - Prefer exact source files as the source of implementation truth.
 - Use maps, indexes, graphs, and summaries only for discovery.

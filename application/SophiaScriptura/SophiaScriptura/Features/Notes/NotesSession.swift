@@ -52,7 +52,11 @@ import ImageIO
     func load() async {
         guard !loaded else { return }
         do {
-            let result = try await repository.load(); snapshot = result.snapshot; loaded = true
+            let result = try await repository.load()
+            snapshot = result.snapshot
+            migrateLegacyNoteFields()
+            purgeExpiredTrash()
+            loaded = true
             if result.recovered { notice = "Recovered the previous Notes revision. Damaged files are preserved." }
         } catch { report(error) }
     }
@@ -61,11 +65,19 @@ import ImageIO
         flushSurface?(); selectedNoteID = id; selection = []; selectingMultiple = false; mode = .select
         undoStack = []; redoStack = []; surfaceGeneration = UUID(); bodySelection = NSRange(location: 0, length: 0)
     }
-    @discardableResult func create(kind: NoteKind = .page, quote: NoteQuote? = nil) -> UUID? {
+    @discardableResult func create(
+        kind: NoteKind = .page,
+        quote: NoteQuote? = nil,
+        color: CollectionAccent = .preset,
+        title: String = ""
+    ) -> UUID? {
         guard !restoring, loaded, snapshot.notes.count < 200 else { notice = "Notes is unavailable or its 200-note safety limit has been reached."; return nil }
         var note = NoteDocument(kind: kind)
+        note.color = color
         if kind == .prayer { note.title = "Untitled Prayer" }
         if kind == .journal { note.title = "Untitled Journal" }
+        let trimmedTitle = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        if !trimmedTitle.isEmpty, quote == nil { note.title = trimmedTitle }
         if let quote {
             do { try quote.validate() } catch { report(error); return nil }
             note.title = quote.reference
@@ -94,31 +106,110 @@ import ImageIO
         }
     }
     func metadata(title: String, tags: String, paper: NoteDocument.Paper) {
-        guard !restoring, let i = index else { return }
-        snapshot.notes[i].title = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
-        if snapshot.notes[i].title.isEmpty { snapshot.notes[i].title = "Untitled Note" }
-        snapshot.notes[i].tags = Array(Set(tags.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces).prefix(60)) }.filter { !$0.isEmpty })).sorted().prefix(30).map { $0 }
-        snapshot.notes[i].paper = paper; snapshot.notes[i].updatedAt = Date(); changed()
+        guard let id = selectedNoteID,
+              let existing = snapshot.notes.first(where: { $0.id == id }) else { return }
+        updateNote(id: id, title: title, tags: tags, paper: paper, color: existing.color)
     }
-    func setColor(_ color: NoteDocument.Color) {
-        guard !restoring, let i = index else { return }
+
+    func updateNote(id: UUID, title: String, tags: String, paper: NoteDocument.Paper, color: CollectionAccent) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        snapshot.notes[i].title = trimmed.isEmpty ? defaultTitle(for: snapshot.notes[i].kind) : trimmed
+        snapshot.notes[i].tags = Array(Set(tags.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces).prefix(60)) }.filter { !$0.isEmpty })).sorted().prefix(30).map { $0 }
+        snapshot.notes[i].paper = paper
         snapshot.notes[i].color = color
         snapshot.notes[i].updatedAt = Date()
         changed()
     }
-    /// Hides the note in the library; restore from Archive.
+
+    private func defaultTitle(for kind: NoteKind) -> String {
+        switch kind {
+        case .prayer: "Untitled Prayer"
+        case .journal: "Untitled Journal"
+        default: "Untitled Note"
+        }
+    }
+    func setColor(_ color: CollectionAccent) {
+        guard let id = selectedNoteID else { return }
+        setColor(color, for: id)
+    }
+
+    func setColor(_ color: CollectionAccent, for id: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        snapshot.notes[i].color = color
+        snapshot.notes[i].updatedAt = Date()
+        changed()
+    }
+    /// Hides the note in the library; unarchive from Settings or Notes archive.
     func archive(_ id: UUID) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
-        snapshot.notes[i].deletedAt = Date()
+        snapshot.notes[i].archivedAt = Date()
+        snapshot.notes[i].trashedAt = nil
+        snapshot.notes[i].deletedAt = snapshot.notes[i].archivedAt
         snapshot.notes[i].updatedAt = Date()
         changed()
         if id == selectedNoteID { selectedNoteID = nil; surfaceGeneration = UUID() }
     }
 
-    func restoreFromArchive(_ id: UUID) {
+    func unarchive(_ id: UUID) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        snapshot.notes[i].archivedAt = nil
         snapshot.notes[i].deletedAt = nil
         snapshot.notes[i].updatedAt = Date()
+        changed()
+    }
+
+    func restoreFromArchive(_ id: UUID) { unarchive(id) }
+
+    func moveToTrash(_ id: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        let now = Date()
+        snapshot.notes[i].trashedAt = now
+        snapshot.notes[i].archivedAt = nil
+        snapshot.notes[i].deletedAt = now
+        snapshot.notes[i].updatedAt = now
+        changed()
+        if id == selectedNoteID { selectedNoteID = nil; surfaceGeneration = UUID() }
+    }
+
+    func restoreFromTrash(_ id: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        snapshot.notes[i].trashedAt = nil
+        snapshot.notes[i].deletedAt = nil
+        snapshot.notes[i].updatedAt = Date()
+        changed()
+    }
+
+    func purgeExpiredTrash(now: Date = Date()) {
+        let expired = snapshot.notes.filter { note in
+            guard let trashedAt = note.trashedAt else { return false }
+            return TrashRetention.isExpired(trashedAt, now: now)
+        }.map(\.id)
+        guard !expired.isEmpty else { return }
+        for id in expired { permanentlyDelete(id) }
+    }
+
+    private func migrateLegacyNoteFields() {
+        for index in snapshot.notes.indices {
+            if snapshot.notes[index].archivedAt == nil,
+               snapshot.notes[index].trashedAt == nil,
+               let legacy = snapshot.notes[index].deletedAt {
+                snapshot.notes[index].archivedAt = legacy
+            }
+            snapshot.notes[index].deletedAt = snapshot.notes[index].trashedAt ?? snapshot.notes[index].archivedAt
+        }
+    }
+
+    /// Permanently removes every note, including archived notes, and closes the editor.
+    func removeAllNotes() {
+        guard !restoring, loaded else { return }
+        snapshot.notes.removeAll()
+        selectedNoteID = nil
+        surfaceGeneration = UUID()
+        flushSurface = nil
+        selection = []
+        undoStack = []
+        redoStack = []
         changed()
     }
 
@@ -519,6 +610,11 @@ import ImageIO
     func archiveCurrentNote() {
         guard let id = note?.id else { return }
         archive(id)
+    }
+
+    func moveCurrentNoteToTrash() {
+        guard let id = note?.id else { return }
+        moveToTrash(id)
     }
 
     func permanentlyDeleteCurrentNote() {

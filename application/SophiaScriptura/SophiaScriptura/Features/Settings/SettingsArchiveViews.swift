@@ -59,11 +59,9 @@ struct StudyArchivedNotesView: View {
     @State private var searchPresented = false
     @State private var sort = "Modified"
     @State private var tag = ""
-    @State private var pendingPermanentDelete: UUID?
-
     private var notes: [NoteDocument] {
         session.snapshot.notes.filter {
-            $0.deletedAt != nil
+            $0.isArchived
                 && (search.isEmpty || $0.searchableText.localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || $0.tags.contains(tag))
         }.sorted {
@@ -76,7 +74,7 @@ struct StudyArchivedNotesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            archiveCommandBar(title: "Archived notes", searchPresented: $searchPresented, search: $search, prompt: "Search archived notes") {
+            studyListCommandBar(title: "Archived notes", searchPresented: $searchPresented, search: $search, prompt: "Search archived notes", searchIdentifier: "archive.search") {
                 Menu {
                     Picker("Sort", selection: $sort) {
                         ForEach(["Modified", "Created", "Title"], id: \.self) { Text($0) }
@@ -96,17 +94,19 @@ struct StudyArchivedNotesView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(note.title).font(.headline)
                         Text(note.kind.displayName).font(.caption).foregroundStyle(.secondary)
-                        Text("Archived \(note.deletedAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
+                        Text("Archived \(note.archivedAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
                             .font(.caption2)
                             .foregroundStyle(Color(theme.palette.secondary))
                     }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button("Restore") { session.restoreFromArchive(note.id) }
-                            .tint(Color(theme.palette.accent))
-                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button("Delete", role: .destructive) { pendingPermanentDelete = note.id }
-                            .tint(.red)
+                        Button(role: .destructive) { session.moveToTrash(note.id) } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(.red)
+                        Button { session.unarchive(note.id) } label: {
+                            Label("Unarchive", systemImage: "arrow.uturn.backward")
+                        }
+                        .tint(Color(theme.palette.accent))
                     }
                 }
                 .listStyle(.plain)
@@ -117,18 +117,6 @@ struct StudyArchivedNotesView: View {
         .navigationTitle("Notes archive")
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
-        .alert("Delete this note permanently?", isPresented: Binding(
-            get: { pendingPermanentDelete != nil },
-            set: { if !$0 { pendingPermanentDelete = nil } }
-        )) {
-            Button("Delete Permanently", role: .destructive) {
-                if let id = pendingPermanentDelete { session.permanentlyDelete(id) }
-                pendingPermanentDelete = nil
-            }
-            Button("Cancel", role: .cancel) { pendingPermanentDelete = nil }
-        } message: {
-            Text("This cannot be undone. Archive keeps a restorable copy; delete removes the note from your library.")
-        }
     }
 }
 
@@ -138,7 +126,6 @@ struct StudyArchivedCollectionsView: View {
     @State private var search = ""
     @State private var searchPresented = false
     @State private var sort = "Modified"
-
     private var collections: [StudyCollection] {
         store.archivedCollections.filter {
             search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.detail.localizedCaseInsensitiveContains(search)
@@ -150,7 +137,7 @@ struct StudyArchivedCollectionsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            archiveCommandBar(title: "Archived collections", searchPresented: $searchPresented, search: $search, prompt: "Search archived collections") {
+            studyListCommandBar(title: "Archived collections", searchPresented: $searchPresented, search: $search, prompt: "Search archived collections", searchIdentifier: "archive.search") {
                 Menu {
                     Picker("Sort", selection: $sort) {
                         Text("Modified").tag("Modified")
@@ -168,9 +155,15 @@ struct StudyArchivedCollectionsView: View {
                         Text(collection.name).font(.headline)
                         Text(collection.detail).font(.caption).foregroundStyle(.secondary)
                     }
-                    .swipeActions {
-                        Button("Restore") { store.unarchiveCollection(id: collection.id) }
-                            .tint(Color(theme.palette.accent))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) { store.moveCollectionToTrash(id: collection.id) } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(.red)
+                        Button { store.unarchiveCollection(id: collection.id) } label: {
+                            Label("Unarchive", systemImage: "arrow.uturn.backward")
+                        }
+                        .tint(Color(theme.palette.accent))
                     }
                 }
                 .listStyle(.plain)
@@ -189,7 +182,6 @@ struct StudyArchivedConversationsView: View {
     @ObservedObject var session: CompanionSession
     @State private var search = ""
     @State private var searchPresented = false
-
     private var conversations: [CompanionConversation] {
         session.archivedConversations.filter {
             search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)
@@ -198,7 +190,7 @@ struct StudyArchivedConversationsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            archiveCommandBar(title: "Archived conversations", searchPresented: $searchPresented, search: $search, prompt: "Search conversations") {
+            studyListCommandBar(title: "Archived conversations", searchPresented: $searchPresented, search: $search, prompt: "Search conversations", searchIdentifier: "archive.search") {
                 EmptyView()
             }
             if conversations.isEmpty {
@@ -211,9 +203,15 @@ struct StudyArchivedConversationsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .swipeActions {
-                        Button("Restore") { session.unarchiveConversation(conversation.id) }
-                            .tint(Color(theme.palette.accent))
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) { session.moveConversationToTrash(conversation.id) } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(.red)
+                        Button { session.unarchiveConversation(conversation.id) } label: {
+                            Label("Unarchive", systemImage: "arrow.uturn.backward")
+                        }
+                        .tint(Color(theme.palette.accent))
                     }
                 }
                 .listStyle(.plain)
@@ -228,18 +226,19 @@ struct StudyArchivedConversationsView: View {
 }
 
 @ViewBuilder
-private func archiveCommandBar<Filter: View>(
+func studyListCommandBar<Filter: View>(
     title: String,
     searchPresented: Binding<Bool>,
     search: Binding<String>,
     prompt: String,
+    searchIdentifier: String,
     @ViewBuilder filter: () -> Filter
 ) -> some View {
     HStack(spacing: 4) {
         Text(title).font(.title2.weight(.semibold))
         Spacer(minLength: 12)
         if searchPresented.wrappedValue {
-            LibrarySearchField(text: search, prompt: prompt, accessibilityIdentifier: "archive.search", dismiss: { searchPresented.wrappedValue = false })
+            LibrarySearchField(text: search, prompt: prompt, accessibilityIdentifier: searchIdentifier, dismiss: { searchPresented.wrappedValue = false })
                 .frame(minWidth: 180, idealWidth: 260, maxWidth: 320)
         } else {
             Button { searchPresented.wrappedValue = true } label: {

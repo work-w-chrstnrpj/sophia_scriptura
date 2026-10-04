@@ -31,7 +31,9 @@ final class PencilShapeUITests: XCTestCase {
 
     func testNotesPencilPaletteKeepsRuler() {
         let app = launch(); showNotes(app)
-        app.buttons["notes.newNotes"].tap(); app.buttons["notes.new.canvas"].tap()
+        app.buttons["notes.newNotes"].tap()
+        app.buttons["notes.new.canvas"].tap()
+        app.buttons["notes.new.create"].tap()
         XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
         let ruler = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'ruler'")).firstMatch
         XCTAssertTrue(ruler.waitForExistence(timeout: 8), "Native ruler should stay in the Notes Pencil palette. \(app.debugDescription)")

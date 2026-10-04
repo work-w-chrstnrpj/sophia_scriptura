@@ -16,16 +16,24 @@ struct NotesView: View {
     @State private var exporting = false
     @State private var pendingRestore: Data?
     @State private var confirmRestore = false
-    @State private var deleting: UUID?
+    @State private var permanentlyDeleting: UUID?
     @State private var archive = NotesArchiveDocument(data: Data())
     @State private var filingNote: NoteDocument?
+    @State private var editingNote: NoteDocument?
     @State private var showingNewNote = false
     @State private var showArchivedNotes = false
+    @State private var selectionMode = false
+    @State private var selectedNoteIDs: Set<UUID> = []
+    @State private var showBulkCollectionPicker = false
+    @State private var confirmBulkDelete = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var notes: [NoteDocument] {
-        session.snapshot.notes.filter {
-            ($0.deletedAt != nil) == deleted && (search.isEmpty || $0.searchableText.localizedCaseInsensitiveContains(search)) && (tag.isEmpty || $0.tags.contains(tag))
+        session.snapshot.notes.filter { note in
+            let visibility = deleted ? note.isArchived : note.isActiveInLibrary
+            return visibility
+                && (search.isEmpty || note.searchableText.localizedCaseInsensitiveContains(search))
+                && (tag.isEmpty || note.tags.contains(tag))
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if sort == "Created", $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
@@ -48,6 +56,15 @@ struct NotesView: View {
                     .frame(width: proxy.size.width, alignment: .leading)
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !selectedNoteIDs.isEmpty {
+                    bulkSelectionBar
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                        .padding(.bottom, 8)
+                        .background(Color(theme.palette.paper).opacity(0.98))
+                }
+            }
             .accessibilityIdentifier("notes.content")
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
@@ -58,6 +75,9 @@ struct NotesView: View {
             .navigationDestination(isPresented: $showArchivedNotes) {
                 StudyArchivedNotesView(session: session)
                     .toolbar(.visible, for: .navigationBar)
+            }
+            .sheet(item: $editingNote) { note in
+                NoteEditorSheet(noteID: note.id, session: session)
             }
             .sheet(item: $filingNote) { note in
                 CollectionDestinationPicker(
@@ -73,33 +93,42 @@ struct NotesView: View {
                     notes: session
                 )
             }
+            .sheet(isPresented: $showBulkCollectionPicker) {
+                NotesBulkCollectionPicker(store: collections, session: session, noteIDs: selectedNoteIDs) {
+                    clearSelection()
+                }
+            }
+        }
+        .onChange(of: selectionMode) { _, active in
+            if !active { selectedNoteIDs.removeAll() }
         }
         .disabled(session.restoring)
         .task { await session.load() }
         .onChange(of: scenePhase) { _, value in if value != .active { session.flushSurface?(); Task { await session.save() } } }
         .alert("Notes", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) { Button("OK") { session.notice = nil } } message: { Text(session.notice ?? "") }
-        .overlay {
-            if showingNewNote {
-                StudyNoteKindPicker(notes: session, onCancel: { showingNewNote = false }) { id in
-                    showingNewNote = false
-                    session.open(id)
-                }
-            }
-            if deleting != nil {
-                StudyCenteredConfirmationOverlay(
-                    title: "Archive this note?",
-                    message: "You can restore it from Archive in Settings or the archive button. Scripture and annotation layers are unchanged.",
-                    confirmLabel: "Archive Note",
-                    onConfirm: {
-                        if let id = deleting { session.archive(id) }
-                        deleting = nil
-                    },
-                    onCancel: { deleting = nil }
-                )
+        .sheet(isPresented: $showingNewNote) {
+            NoteCreatorSheet(notes: session) { id in
+                session.open(id)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: showingNewNote)
-        .animation(.easeOut(duration: 0.18), value: deleting != nil)
+        .alert("Move this note to Trash?", isPresented: Binding(
+            get: { permanentlyDeleting != nil },
+            set: { if !$0 { permanentlyDeleting = nil } }
+        )) {
+            Button("Move to Trash", role: .destructive) {
+                if let id = permanentlyDeleting { session.moveToTrash(id) }
+                permanentlyDeleting = nil
+            }
+            Button("Cancel", role: .cancel) { permanentlyDeleting = nil }
+        } message: {
+            Text("Trash keeps the note for \(TrashRetention.dayCount) days. Restore it from Settings → Trash, or delete it permanently there.")
+        }
+        .alert("Move \(selectedNoteIDs.count) notes to Trash?", isPresented: $confirmBulkDelete) {
+            Button("Move to Trash", role: .destructive) { bulkDeleteSelected() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Trash keeps notes for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
+        }
         .alert("Replace Notes from backup?", isPresented: $confirmRestore) {
             Button("Restore", role: .destructive) { if let data = pendingRestore { Task { await session.restore(data) } }; pendingRestore = nil }
             Button("Cancel", role: .cancel) { pendingRestore = nil }
@@ -121,6 +150,18 @@ struct NotesView: View {
                 .accessibilityIdentifier("notes.title")
 
             Spacer(minLength: 12)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectionMode.toggle()
+                    if !selectionMode { selectedNoteIDs.removeAll() }
+                }
+            } label: {
+                LibraryHeaderIcon(systemImage: selectionMode ? "checkmark.circle.fill" : "checkmark.circle")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(selectionMode ? "Exit note selection" : "Select notes")
+            .accessibilityIdentifier("notes.selectMode")
 
             Button { showArchivedNotes = true } label: {
                 LibraryHeaderIcon(systemImage: "archivebox")
@@ -221,7 +262,7 @@ struct NotesView: View {
             emptyState
         } else if cards {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 240, maximum: 360), spacing: 16, alignment: .top)],
+                columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 16, alignment: .top)],
                 spacing: 16
             ) {
                 ForEach(notes) { note in
@@ -230,38 +271,90 @@ struct NotesView: View {
                 }
             }
         } else {
-            List {
+            LazyVStack(spacing: 8) {
                 ForEach(notes) { note in
                     noteRow(note)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            if !deleted {
-                                Button(role: .destructive) { deleting = note.id } label: {
-                                    Label("Archive", systemImage: "archivebox")
-                                }
-                                .tint(.red)
-                            }
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            if deleted {
-                                Button { session.restoreFromArchive(note.id) } label: {
-                                    Label("Restore", systemImage: "arrow.uturn.backward")
-                                }
-                                .tint(Color(theme.palette.accent))
-                            } else {
-                                Button { filingNote = note } label: {
-                                    Label("Add to Collection", systemImage: "folder.badge.plus")
-                                }
-                                .tint(Color(theme.palette.accent))
-                            }
-                        }
+                        .contextMenu { noteActions(note) }
                 }
             }
-            .listStyle(.plain)
-            .scrollDisabled(true)
-            .frame(height: CGFloat(notes.count) * 88 + 8)
+        }
+    }
+
+    private var bulkSelectionBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("\(selectedNoteIDs.count) selected")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(theme.palette.ink))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    if deleted {
+                        Button {
+                            bulkRestoreSelected()
+                        } label: {
+                            Label("Unarchive", systemImage: "arrow.uturn.backward")
+                        }
+                        .buttonStyle(CollectionSecondaryButtonStyle())
+                    } else {
+                        Button { bulkArchiveSelected() } label: {
+                            Label("Archive", systemImage: "archivebox")
+                        }
+                        .buttonStyle(CollectionSecondaryButtonStyle())
+                        Button { showBulkCollectionPicker = true } label: {
+                            Label("Add to Collection", systemImage: "folder.badge.plus")
+                        }
+                        .buttonStyle(CollectionSecondaryButtonStyle())
+                    }
+                    Button(role: .destructive) { confirmBulkDelete = true } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .buttonStyle(CollectionSecondaryButtonStyle())
+                    Button("Cancel") { clearSelection() }
+                        .buttonStyle(CollectionSecondaryButtonStyle())
+                }
+            }
+        }
+        .accessibilityIdentifier("notes.bulkBar")
+    }
+
+    private func toggleNoteSelection(_ id: UUID) {
+        if selectedNoteIDs.contains(id) {
+            selectedNoteIDs.remove(id)
+        } else {
+            selectedNoteIDs.insert(id)
+        }
+    }
+
+    private func clearSelection() {
+        selectedNoteIDs.removeAll()
+        selectionMode = false
+    }
+
+    private func bulkArchiveSelected() {
+        for id in selectedNoteIDs { session.archive(id) }
+        clearSelection()
+    }
+
+    private func bulkRestoreSelected() {
+        for id in selectedNoteIDs { session.unarchive(id) }
+        clearSelection()
+    }
+
+    private func bulkDeleteSelected() {
+        for id in selectedNoteIDs { session.moveToTrash(id) }
+        clearSelection()
+    }
+
+    @ViewBuilder
+    private func selectionCheckbox(for noteID: UUID) -> some View {
+        if selectionMode {
+            Button { toggleNoteSelection(noteID) } label: {
+                Image(systemName: selectedNoteIDs.contains(noteID) ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(selectedNoteIDs.contains(noteID) ? Color(theme.palette.accent) : Color(theme.palette.rule))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(selectedNoteIDs.contains(noteID) ? "Selected" : "Not selected")
+            .accessibilityIdentifier("notes.select.\(noteID.uuidString)")
         }
     }
 
@@ -296,25 +389,27 @@ struct NotesView: View {
 
     private var emptyTitle: String {
         if !search.isEmpty || !tag.isEmpty { return "No matching notes" }
-        return deleted ? "No deleted notes" : "Your study starts here"
+        return deleted ? "No archived notes" : "Your study starts here"
     }
 
     private var emptyDetail: String {
         if !search.isEmpty || !tag.isEmpty { return "Try a different title, tag, or passage." }
-        if deleted { return "Deleted notes stay here until you restore them." }
+        if deleted { return "Archived notes stay here until you unarchive them." }
         return "Start a Page, Canvas, Prayer, or Journal note for study and reflection."
     }
 
     private func noteCard(_ note: NoteDocument) -> some View {
         let accent = accent(for: note)
+        let tint = accent.resolvedColor(in: theme)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
+                selectionCheckbox(for: note.id)
                 noteGlyph(note, accent: accent, size: 46)
                 Spacer(minLength: 8)
             }
             .padding(.bottom, 14)
 
-            Button { open(note) } label: {
+            Button { activate(note) } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(note.title)
                         .font(.system(.headline, design: .serif).weight(.semibold))
@@ -344,22 +439,22 @@ struct NotesView: View {
                 noteDates(note, accent: accent)
                 Spacer()
                 if deleted {
-                    Button("Restore note") { session.restoreFromArchive(note.id) }
+                    Button("Unarchive") { session.unarchive(note.id) }
                         .buttonStyle(CollectionSecondaryButtonStyle())
                 }
             }
         }
         .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 248, alignment: .topLeading)
         .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(alignment: .top) {
             UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
-                .fill(accent.color)
+                .fill(tint)
                 .frame(height: 4)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(accent.color.opacity(0.22), lineWidth: 1)
+                .stroke(tint.opacity(0.22), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .contextMenu { noteActions(note) }
@@ -367,8 +462,10 @@ struct NotesView: View {
 
     private func noteRow(_ note: NoteDocument) -> some View {
         let accent = accent(for: note)
+        let tint = accent.resolvedColor(in: theme)
         return HStack(alignment: .center, spacing: 14) {
-            Button { open(note) } label: {
+            selectionCheckbox(for: note.id)
+            Button { activate(note) } label: {
                 HStack(alignment: .center, spacing: 14) {
                     noteGlyph(note, accent: accent, size: 42)
                     VStack(alignment: .leading, spacing: 3) {
@@ -388,7 +485,7 @@ struct NotesView: View {
             }
             .buttonStyle(.plain)
             if deleted {
-                Button("Restore note") { session.restoreFromArchive(note.id) }
+                Button("Unarchive") { session.unarchive(note.id) }
                     .buttonStyle(CollectionSecondaryButtonStyle())
             }
         }
@@ -402,12 +499,24 @@ struct NotesView: View {
     @ViewBuilder
     private func noteActions(_ note: NoteDocument) -> some View {
         if deleted {
-            Button("Restore note") { session.restoreFromArchive(note.id) }
+            Button("Unarchive", systemImage: "arrow.uturn.backward") { session.unarchive(note.id) }
+            Button("Delete Note", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
         } else {
             Button("Add to Collection…", systemImage: "folder.badge.plus") { filingNote = note }
                 .accessibilityIdentifier("notes.addToCollection.\(note.title)")
-            Button("Archive note", systemImage: "archivebox", role: .destructive) { deleting = note.id }
+            Button("Edit Note", systemImage: "pencil") { editingNote = note }
+                .accessibilityIdentifier("notes.editNote")
+            Button("Archive note", systemImage: "archivebox") { session.archive(note.id) }
+            Button("Delete Note", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
         }
+    }
+
+    private func activate(_ note: NoteDocument) {
+        if selectionMode {
+            toggleNoteSelection(note.id)
+            return
+        }
+        open(note)
     }
 
     private func open(_ note: NoteDocument) {
@@ -415,19 +524,16 @@ struct NotesView: View {
     }
 
     private func accent(for note: NoteDocument) -> CollectionAccent {
-        switch note.kind {
-        case .page, .journal: .sage
-        case .prayer: .gold
-        case .canvas: .slate
-        }
+        note.color
     }
 
     private func noteGlyph(_ note: NoteDocument, accent: CollectionAccent, size: CGFloat) -> some View {
-        Image(systemName: noteKindSymbol(note.kind))
+        let tint = accent.resolvedColor(in: theme)
+        return Image(systemName: noteKindSymbol(note.kind))
             .font(.system(size: size * 0.42, weight: .medium))
-            .foregroundStyle(accent.color)
+            .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(accent.color.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
             .accessibilityHidden(true)
     }
 
@@ -454,13 +560,76 @@ struct NotesView: View {
                 .accessibilityIdentifier("notes.modifiedDate.\(note.id.uuidString)")
         }
         .font(.caption2.weight(.medium))
-        .foregroundStyle(accent.color)
+        .foregroundStyle(accent.resolvedColor(in: theme))
     }
 
     private func preview(_ note: NoteDocument) -> String {
         (note.page?.body.isEmpty == false ? note.page?.body : nil)
             ?? note.objects.first.map { $0.quote?.source ?? ($0.text.isEmpty ? $0.kind.rawValue.capitalized : $0.text) }
             ?? "Blank note"
+    }
+}
+
+private struct NotesBulkCollectionPicker: View {
+    @Environment(\.appTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var store: CollectionsStore
+    @Bindable var session: NotesSession
+    let noteIDs: Set<UUID>
+    var onComplete: () -> Void
+
+    @State private var selection: Set<UUID> = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("\(noteIDs.count) notes")
+                        .font(.subheadline)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                }
+                .listRowBackground(Color(theme.palette.soft))
+
+                Section {
+                    CollectionFolderChooser(store: store, selection: $selection)
+                } header: {
+                    Text("Collections")
+                } footer: {
+                    Text("Selected notes are added to every collection you choose. Existing memberships are kept.")
+                }
+                .listRowBackground(Color(theme.palette.soft))
+            }
+            .appSurface()
+            .navigationTitle("Add to Collections")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        commit()
+                        onComplete()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .disabled(selection.isEmpty)
+                    .accessibilityIdentifier("notes.bulkCollections.confirm")
+                }
+            }
+        }
+        .onAppear {
+            store.link(notes: session.snapshot.notes)
+        }
+    }
+
+    private func commit() {
+        store.link(notes: session.snapshot.notes)
+        for noteID in noteIDs {
+            for collectionID in selection {
+                store.addMembership(artifactID: noteID, collectionID: collectionID)
+            }
+        }
     }
 }
 

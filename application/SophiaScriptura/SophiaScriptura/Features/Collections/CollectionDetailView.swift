@@ -34,6 +34,10 @@ struct CollectionDetailView: View {
     private var currentCollection: StudyCollection? { store.collection(id: collectionID) }
     private var isUnfiled: Bool { currentCollection?.isUnfiled == true }
 
+    private func displayAccent(for collection: StudyCollection) -> CollectionAccent {
+        collection.isUnfiled ? .noFolder : collection.accent
+    }
+
     private var visibleArtifacts: [CollectionArtifact] {
         let kind = filter.kind
         let filtered = store.presentedArtifacts(
@@ -149,9 +153,7 @@ struct CollectionDetailView: View {
     private func toolbar(_ collection: StudyCollection) -> some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                if collection.isUnfiled {
-                    Button("Change Color", systemImage: "paintpalette") { showingEditor = true }
-                } else {
+                if !collection.isUnfiled {
                     Button("Add Study Material", systemImage: "plus") { showingPicker = true }
                     Button("New Subfolder", systemImage: "folder.badge.plus") { showingSubfolderEditor = true }
                     Button("Edit Collection…", systemImage: "pencil") { showingEditor = true }
@@ -177,23 +179,30 @@ struct CollectionDetailView: View {
         let subfolderCount = store.children(of: collectionID).count
         let detail = collection.isUnfiled ? StudyCollection.unfiled(accent: collection.accent, modifiedAt: .now).detail : collection.detail
 
+        let accent = displayAccent(for: collection)
         return HStack(alignment: .top, spacing: 18) {
-            CollectionFolderGlyph(accent: collection.accent, unfiled: collection.isUnfiled, icon: collection.icon ?? .folder, size: 64)
+            CollectionFolderGlyph(accent: accent, unfiled: collection.isUnfiled, icon: collection.icon ?? .folder, size: 64)
             VStack(alignment: .leading, spacing: 6) {
-                Button {
-                    showingEditor = true
-                } label: {
-                    HStack(spacing: 7) {
+                Group {
+                    if collection.isUnfiled {
                         Text(collection.name)
                             .font(.system(.largeTitle, design: .serif).weight(.semibold))
-                        Image(systemName: collection.isUnfiled ? "paintpalette" : "pencil")
-                            .font(.subheadline)
+                            .foregroundStyle(Color(theme.palette.ink))
+                    } else {
+                        Button { showingEditor = true } label: {
+                            HStack(spacing: 7) {
+                                Text(collection.name)
+                                    .font(.system(.largeTitle, design: .serif).weight(.semibold))
+                                Image(systemName: "pencil")
+                                    .font(.subheadline)
+                            }
+                            .foregroundStyle(Color(theme.palette.ink))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Edit collection \(collection.name)")
+                        .accessibilityIdentifier("collections.editTitle")
                     }
-                    .foregroundStyle(Color(theme.palette.ink))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(collection.isUnfiled ? "Change No Folder color" : "Edit collection \(collection.name)")
-                .accessibilityIdentifier("collections.editTitle")
                 if !detail.isEmpty {
                     Text(detail)
                         .font(.body)
@@ -209,7 +218,7 @@ struct CollectionDetailView: View {
                 }
                 .font(.subheadline.weight(.medium))
                 .monospacedDigit()
-                .foregroundStyle(collection.accent.color)
+                .foregroundStyle(accent.resolvedColor(in: theme))
                 .padding(.top, 2)
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("collections.detail.counts")
@@ -355,7 +364,7 @@ struct CollectionDetailView: View {
         }
         return CollectionArtifactRow(
             artifact: artifact,
-            accent: placement == .subfolder ? store.accent(for: artifact.id) : collection.accent,
+            accent: collection.isUnfiled ? .noFolder : (placement == .subfolder ? store.accent(for: artifact.id) : collection.accent),
             placement: placement,
             open: { open(artifact) },
             move: {
@@ -375,7 +384,7 @@ struct CollectionDetailView: View {
         VStack(spacing: 12) {
             Image(systemName: collection.isUnfiled ? "tray" : "square.stack")
                 .font(.system(size: 30, weight: .light))
-                .foregroundStyle(collection.accent.color)
+                .foregroundStyle(displayAccent(for: collection).resolvedColor(in: theme))
             Text(collection.isUnfiled ? "Everything is filed" : (filter == .all ? "Nothing here yet" : "No \(filter.title.lowercased()) here"))
                 .font(.system(.headline, design: .serif))
                 .foregroundStyle(Color(theme.palette.ink))

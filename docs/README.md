@@ -27,6 +27,7 @@ Start with the [development plan](development-plan/development-plan.md) and
 | [Tests](testing/test-specification.md) | Native test targets, commands, evidence, and gaps |
 | [iPad walkthrough](testing/sp006-ipad-guide.md) | SP-006 physical checks |
 | [Deployment](deployment/deployment.md) | Xcode signing and personal iPad installation |
+| [Release history](releases/README.md) | All published versions, release notes, verification and known limitations |
 
 Confirmed intent, proposed design, implemented behavior, and passing tests are different
 states. The reader data and Scripture integration contracts are maintained; later feature

@@ -15,7 +15,7 @@ struct CompanionSourceInspectorView: View {
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Section("Sources") {
+                Section {
                     ForEach(sources) { source in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(source.title).font(.headline)

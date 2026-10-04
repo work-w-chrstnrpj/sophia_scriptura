@@ -36,6 +36,7 @@ struct RootTabView: View {
     @StateObject private var music = MusicSession()
     @StateObject private var meditationJourney = MeditationJourneyCoordinator()
     @StateObject private var shellPreferences = ShellPreferencesSession()
+    @StateObject private var userProfile = UserProfileSession()
     @State private var selection: Tab = .scripture
     @State private var showMusicLibrary = false
     @State private var shellFABEngagedUntil = Date.distantPast
@@ -93,6 +94,7 @@ struct RootTabView: View {
                         activity: activity,
                         music: music,
                         shellPreferences: shellPreferences,
+                        userProfile: userProfile,
                         showMusicLibrary: $showMusicLibrary
                     )
                         .tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
@@ -102,20 +104,18 @@ struct RootTabView: View {
                 .clipped()
         }
         .ignoresSafeArea(.container, edges: .bottom)
-        .overlay {
-            if showShellNoteKindPicker {
-                StudyNoteKindPicker(notes: notes, onCancel: { showShellNoteKindPicker = false }) { id in
-                    showShellNoteKindPicker = false
-                    selection = .notes
-                    chrome.reveal()
-                    notes.open(id)
-                }
+        .sheet(isPresented: $showShellNoteKindPicker) {
+            NoteCreatorSheet(notes: notes) { id in
+                selection = .notes
+                chrome.reveal()
+                notes.open(id)
             }
+        }
+        .overlay {
             if meditationJourney.isActive {
                 MeditationJourneyView(coordinator: meditationJourney)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: showShellNoteKindPicker)
         .overlay {
             if let draft = activity.draft {
                 ActivityFloatingRecorder(
@@ -159,6 +159,7 @@ struct RootTabView: View {
         .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
         .environment(notes)
+        .environmentObject(userProfile)
         .onAppear {
             companion.onCollectionsSync = { collections.upsertCompanionConversation($0) }
             companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }

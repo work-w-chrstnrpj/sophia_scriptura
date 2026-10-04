@@ -227,6 +227,20 @@ import Combine
         syncReminders(requestPermission: false)
     }
 
+    func removeAllReminders() {
+        guard loaded else { return }
+        snapshot.reminders = []
+        persist()
+        syncReminders(requestPermission: false)
+    }
+
+    func removeAllActivityRecords() {
+        guard loaded else { return }
+        snapshot.records.removeAll()
+        snapshot.draft = nil
+        persist()
+    }
+
     func pruneExpiredReminders(now: Date = Date()) {
         let before = snapshot.reminders?.count ?? 0
         snapshot.reminders?.removeAll { $0.repeatRule == .once && $0.deleteAfterFiring == true && $0.date <= now }

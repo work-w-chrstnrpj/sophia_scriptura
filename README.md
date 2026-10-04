@@ -1,40 +1,141 @@
-# Sophia Scriptura
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/sophia-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/sophia-light.svg">
+    <img src="docs/assets/readme/sophia-light.svg" alt="Sophia Scriptura — A quiet place to read, reflect, and grow." width="100%">
+  </picture>
+</p>
 
-A personal, offline-first iPad Bible study app, built for the owner's iPad with SwiftUI
-and PencilKit. The full product is still being designed and developed.
+<p align="center">
+  A personal, offline-first Bible study workspace for iPad.<br>
+  Scripture, handwritten thought, and thoughtful study — together.
+</p>
 
-## Start here
+<p align="center">
+  <a href="https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/latest">Latest release</a> ·
+  <a href="docs/README.md">Explore the wiki</a> ·
+  <a href="docs/deployment/deployment.md">Run on iPad</a> ·
+  <a href="docs/releases/README.md">Release history</a>
+</p>
 
-1. [Roadmap and current work](docs/development-plan/development-plan.md): milestones M0–M9.
-2. [How you direct development](docs/guidelines/ai-structure-guidelines.md): choose, plan,
-   execute, review, and close bounded tickets.
-3. [Tickets](tickets/README.md): status and scope of each piece of work.
-4. [Product specification](docs/product-specification/product-specification.md): intended behavior.
-5. [Technical design](docs/tdd/tdd.md) and [source structure](docs/project-structure/project-structure.md).
+<p align="center">
+  <a href="https://github.com/work-w-chrstnrpj/sophia_scriptura/actions/workflows/release.yml"><img src="https://github.com/work-w-chrstnrpj/sophia_scriptura/actions/workflows/release.yml/badge.svg?branch=main" alt="Release workflow status on main"></a>
+  <br>
+  <sub>SwiftUI · PencilKit · iPadOS 17+ · Local-first · Bring your own AI key</sub>
+</p>
 
-## Current app
+---
 
-Six-tab scaffold with an isolated expandable-canvas experiment under Notes (SP-006).
-The owner has opened and tried the canvas on iPad. This is not the finished Notes editor:
-the native Pencil tool picker and full study workflow are not implemented.
-SP-006 is closed as a bounded experiment with documented deferred checks. SP-007 adds a
-bounded in-memory Collections prototype. SP-009 / M2 is selected: the offline WEBP reader,
-navigation, selection, settings and reader state are implemented. Physical acceptance and
-remaining checks are tracked in [reader evidence](docs/testing/sp009-reader-evidence.md).
+## A slower, deeper kind of study
 
-[Run on iPad](docs/deployment/deployment.md) · [Tests and evidence](docs/testing/test-specification.md)
-· [Canvas walkthrough](docs/testing/sp006-ipad-guide.md)
+Sophia Scriptura brings the Bible and your study materials into one personal space.
+Read a passage, write in the margins, follow a question, and keep what you discover
+anchored to Scripture. Its study companion is guided by historic orthodox Christian
+conviction, while interpretation and discernment remain the reader’s responsibility.
 
-## AI development structure
+Built for one person’s iPad, not as a hosted service or an App Store product.
 
-- `AGENTS.md`: project rules, owner-controlled execution, and verification entry points.
-- `.agents/`: reusable role instructions, skills, overlays, workflows, and tool policies.
-- `.ai/context-routing.md`: maps the selected task to exact documents and source files.
-- `docs/`: product intent, decisions, roadmap, design, and verification guidance.
-- `tickets/`: requirements → bounded scope → source changes → tests → evidence.
-- `scripts/`: existing adapter generation and validation utilities.
+## Your study, connected
 
-Canonical AI assets are retained. Generated tool adapters are not edited by hand.
-See [AI workflow](docs/guidelines/ai-structure-guidelines.md) for maintenance details.
+| Space | What you can do |
+| :--- | :--- |
+| **Scripture** | Read bundled WEB offline, annotate with Apple Pencil, select text, save passages and open verse or chapter study hubs. |
+| **Collections** | Gather bookmarks, gleanings, links, notes and conversations into personalized, nested folders. |
+| **Notes** | Work in Canvas, Page, Prayer or Journal notes with typed content, ink and study references. |
+| **Companion** | Ask your own verse-linked questions, explore original-language wording, revisit conversations and use Quiz Me. |
+| **Activity** | Record study sessions, follow reading habits, set reminders and enter meditation journeys. |
+| **Settings** | Personalize appearance and your profile, manage providers, and access archives, Trash and data controls. |
 
-MIT — see [LICENSE](LICENSE).
+### From a passage to a personal insight
+
+Read → select a verse → ask or annotate → save an insight → revisit it in context.
+
+Verse Hub brings related study items together. Chapter Hub groups chapter conversations,
+verse conversations and links without sending the entire chapter to an AI provider.
+Original Language Analysis distinguishes a selected word from a phrase or sentence.
+
+## Local first. Online by choice.
+
+- **Offline foundation:** bundled Scripture and local study storage. Licensed editions
+  have separate availability, synchronization and content-rights rules.
+- **Explicit AI requests:** Companion uses your configured provider and key. Sending a
+  question transmits its disclosed, authorized context; it is not offline AI.
+- **Keys stay out of Git:** provider credentials belong in device Keychain, never in
+  repository files, screenshots or release attachments.
+- **Sources need discernment:** links and model-generated references are not proof of
+  retrieval or accuracy. Check quotations, lexical claims and interpretations independently.
+
+## Make it yours
+
+1. Clone this repository and open
+   `application/SophiaScriptura/SophiaScriptura.xcodeproj` in Xcode.
+2. Choose the **SophiaScriptura** scheme and configure your **Personal Team** under
+   Signing & Capabilities.
+3. Select your connected, trusted iPad and run the app.
+4. Configure appearance and, optionally, your AI provider in Settings.
+
+Follow the [full deployment guide](docs/deployment/deployment.md) for signing and device
+setup. Personal free-account signing generally requires weekly redeployment. Releases
+contain source, not an installable IPA. Upgrade in place and keep available backups;
+uninstalling can remove local study data.
+
+<details>
+<summary><strong>Release health & verification</strong></summary>
+
+The [version history](docs/releases/README.md) records each release’s scope and checks.
+The workflow badge above reports **main’s workflow**, not every local test or device check;
+it may show no status until the workflow exists and runs on that branch. Private-repository
+badges are not publicly accessible outside GitHub.
+
+For `v0.1.0`, the simulator app build passed, but the unit suite is blocked by existing
+prayer-fixture compilation errors in `NotesTests.swift`. Earlier full-scheme UI failures
+and live-provider/device acceptance limits are documented. This is not an all-green test claim.
+
+See [release notes](docs/releases/v0.1.0.md) and the
+[test specification](docs/testing/test-specification.md) for evidence and commands.
+Scripture narration is excluded from this release.
+
+</details>
+
+<details>
+<summary><strong>Inside the repository</strong></summary>
+
+```text
+application/   Native SwiftUI app, domain contracts, local stores and XCTest targets
+service/       Local Scripture import and validation tools — no runtime backend
+shared/        Shared seed data
+docs/          Project wiki: intent, design, contracts, testing and releases
+tickets/       Bounded work, acceptance criteria and verification evidence
+.agents/       Canonical AI roles and reusable workflows
+```
+
+[Technical design](docs/tdd/tdd.md) ·
+[Source structure](docs/project-structure/project-structure.md) ·
+[Backward compatibility](docs/guidelines/backward-compatibility.md)
+
+</details>
+
+<details>
+<summary><strong>Development & documentation</strong></summary>
+
+Work is owner-directed: select a ticket, define the visible outcome, implement it, and
+record the evidence. Ready tickets are not automatic permission to start new features.
+
+[Roadmap](docs/development-plan/development-plan.md) ·
+[Tickets](tickets/README.md) ·
+[Product specification](docs/product-specification/product-specification.md) ·
+[Development guidelines](docs/guidelines/ai-structure-guidelines.md)
+
+README artwork lives in `docs/assets/readme/`. GitHub selects the light/dark variant
+automatically; the workflow badge updates from Actions and the latest-release link follows
+the published release. No script, external stats service or secret-bearing image URL is needed.
+
+</details>
+
+---
+
+<p align="center"><em>Read with attention. Study with humility. Return with purpose.</em></p>
+
+Created by Christian Paje. Licensed under [GPL-3.0-or-later](LICENSE).
+Scripture, fonts and other bundled third-party assets retain their respective notices
+and permissions; the app license does not override those rights.

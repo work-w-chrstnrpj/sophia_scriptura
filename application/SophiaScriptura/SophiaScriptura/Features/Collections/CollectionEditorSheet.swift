@@ -10,7 +10,7 @@ struct CollectionEditorSheet: View {
 
     @State private var name = ""
     @State private var detail = ""
-    @State private var accent: CollectionAccent = .sage
+    @State private var accent: CollectionAccent = .preset
     @State private var icon: CollectionIcon = .folder
     @FocusState private var nameFocused: Bool
 
@@ -62,8 +62,12 @@ struct CollectionEditorSheet: View {
                     .listRowBackground(Color(theme.palette.soft))
                 }
 
-                Section("Color") {
+                Section {
                     CollectionColorGrid(selection: $accent)
+                } header: {
+                    Text("Color")
+                } footer: {
+                    Text("Preset accent uses the color from your appearance preset in Settings and updates when you change it.")
                 }
                 .listRowBackground(Color(theme.palette.soft))
             }
@@ -88,7 +92,7 @@ struct CollectionEditorSheet: View {
                 accent = editing.accent
                 icon = editing.icon ?? .folder
             } else {
-                accent = parentID.flatMap(store.collection(id:))?.accent ?? .sage
+                accent = parentID.flatMap(store.collection(id:))?.accent ?? .preset
                 nameFocused = true
             }
         }

@@ -19,11 +19,14 @@ struct CollectionsView: View {
     private var unfiled: StudyCollection? { store.collection(id: StudyCollection.unfiledID) }
 
     private var topics: [StudyCollection] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = store.collections.filter { collection in
             guard !collection.isUnfiled, collection.archivedAt == nil else { return false }
-            guard !searchText.isEmpty else { return collection.parentID == nil }
-            return collection.name.localizedCaseInsensitiveContains(searchText) ||
-                collection.detail.localizedCaseInsensitiveContains(searchText)
+            if !trimmed.isEmpty {
+                return collection.name.localizedCaseInsensitiveContains(trimmed) ||
+                    collection.detail.localizedCaseInsensitiveContains(trimmed)
+            }
+            return collection.parentID == nil
         }
         switch sort {
         case .modified:
@@ -59,13 +62,20 @@ struct CollectionsView: View {
                         if topics.isEmpty {
                             emptyState
                         } else {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 16)], spacing: 16) {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16, alignment: .top)],
+                                spacing: 16
+                            ) {
                                 ForEach(topics) { collection in
                                     folderLink(collection) {
                                         CollectionCard(
                                             collection: collection,
                                             itemCount: store.membershipCount(for: collection.id, includingDescendants: true),
-                                            subfolderCount: store.children(of: collection.id).count
+                                            subfolderCount: store.children(of: collection.id).count,
+                                            kindHints: store.membershipKindHints(
+                                                for: collection.id,
+                                                notes: notes.snapshot.notes
+                                            )
                                         )
                                     }
                                 }
@@ -125,10 +135,10 @@ struct CollectionsView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button(collection.isUnfiled ? "Change Color" : "Edit Collection", systemImage: collection.isUnfiled ? "paintpalette" : "pencil") {
-                editingCollection = collection
-            }
             if !collection.isUnfiled {
+                Button("Edit Collection", systemImage: "pencil") {
+                    editingCollection = collection
+                }
                 Button("Archive Collection", systemImage: "archivebox") {
                     store.archiveCollection(id: collection.id)
                 }
@@ -142,34 +152,20 @@ struct CollectionsView: View {
 
     private func noFolderCard(_ collection: StudyCollection) -> some View {
         let count = store.unfiledCount(notes: notes.snapshot.notes)
-        return HStack(spacing: 16) {
-            CollectionFolderGlyph(accent: collection.accent, unfiled: true, icon: collection.icon ?? .folder, size: 48)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("No Folder")
-                    .font(.system(.headline, design: .serif).weight(.semibold))
-                    .foregroundStyle(Color(theme.palette.ink))
-                Text(count == 0 ? "Everything is filed." : "Notes, bookmarks, and gleanings waiting to be filed.")
-                    .font(.footnote)
-                    .foregroundStyle(Color(theme.palette.secondary))
-            }
-            Spacer(minLength: 12)
-            Text(CollectionCount.items(count))
-                .font(.subheadline.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Color(theme.palette.secondary))
-            Image(systemName: "chevron.right")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color(theme.palette.secondary))
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color(theme.palette.rule), lineWidth: 1)
+        let hints = store.membershipKindHints(for: collection.id, notes: notes.snapshot.notes)
+        let subtitle = count == 0
+            ? "Everything is filed."
+            : "Notes, bookmarks, and gleanings waiting to be filed."
+        return CollectionFolderRow(
+            accent: .noFolder,
+            unfiled: true,
+            icon: collection.icon ?? .folder,
+            title: "No Folder",
+            subtitle: subtitle,
+            itemCount: count,
+            subfolderCount: 0,
+            kindHints: hints
         )
-        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .accessibilityElement(children: .combine)
     }
 
     private var commandBar: some View {

@@ -11,7 +11,6 @@ struct NotePrayerEditorView: View {
     @State private var editingUpdate: PrayerUpdate?
     @State private var editingUpdateBody = ""
     @State private var confirmClear = false
-    @State private var confirmArchive = false
     @State private var confirmDelete = false
     @State private var confirmDeleteUpdate: PrayerUpdate?
     @State private var showWritingPage = false
@@ -22,7 +21,6 @@ struct NotePrayerEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            pencilToolbar
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     mainPrayerPost
@@ -41,6 +39,23 @@ struct NotePrayerEditorView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo)
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo)
+                Menu {
+                    Button {
+                        session.archiveCurrentNote()
+                        dismiss()
+                    } label: {
+                        Label("Archive", systemImage: "archivebox")
+                    }
+                    .accessibilityIdentifier("notes.prayer.archive")
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .accessibilityIdentifier("notes.prayer.delete")
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("More actions")
+                .accessibilityIdentifier("notes.prayer.more")
             }
         }
         .alert("Rename prayer", isPresented: $rename) {
@@ -58,23 +73,14 @@ struct NotePrayerEditorView: View {
         } message: {
             Text("Removes the prayer text and handwriting. Updates are kept.")
         }
-        .alert("Archive prayer?", isPresented: $confirmArchive) {
-            Button("Archive") {
-                session.archiveCurrentNote()
+        .alert("Move prayer to Trash?", isPresented: $confirmDelete) {
+            Button("Move to Trash", role: .destructive) {
+                session.moveCurrentNoteToTrash()
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Moves this prayer to Archive. You can restore it later from Settings or Notes.")
-        }
-        .alert("Delete prayer permanently?", isPresented: $confirmDelete) {
-            Button("Delete Permanently", role: .destructive) {
-                session.permanentlyDeleteCurrentNote()
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the prayer from your library and cannot be undone.")
+            Text("Trash keeps the prayer for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
         }
         .alert("Delete this update?", isPresented: Binding(
             get: { confirmDeleteUpdate != nil },
@@ -145,21 +151,15 @@ struct NotePrayerEditorView: View {
         .accessibilityIdentifier("notes.prayer.rename")
     }
 
-    private var pencilToolbar: some View {
-        HStack(spacing: 20) {
-            Button(session.toolsVisible ? "Hide Pencil tools" : "Pencil tools", systemImage: session.toolsVisible ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle") {
-                session.toolsVisible.toggle()
-                session.toolsRequest = UUID()
-            }
-            .accessibilityIdentifier("notes.prayer.tools")
-            Spacer(minLength: 0)
+    private var prayerPencilToggle: some View {
+        Button(session.toolsVisible ? "Hide Pencil tools" : "Pencil tools", systemImage: session.toolsVisible ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle") {
+            session.toolsVisible.toggle()
+            session.toolsRequest = UUID()
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.plain)
         .font(.system(size: 20))
-        .frame(height: 44)
-        .padding(.horizontal, Self.horizontalMargin)
-        .background(Color(theme.palette.paper))
+        .accessibilityIdentifier("notes.prayer.tools")
     }
 
     private var mainPrayerPost: some View {
@@ -190,15 +190,18 @@ struct NotePrayerEditorView: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(Color(theme.palette.secondary))
                 Spacer(minLength: 8)
-                Button {
-                    session.flushSurface?()
-                    showWritingPage = true
-                } label: {
-                    Label("Maximize", systemImage: "arrow.up.left.and.arrow.down.right")
-                        .font(.subheadline.weight(.semibold))
+                HStack(spacing: 12) {
+                    prayerPencilToggle
+                    Button {
+                        session.flushSurface?()
+                        showWritingPage = true
+                    } label: {
+                        Label("Maximize", systemImage: "arrow.up.left.and.arrow.down.right")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(CollectionSecondaryButtonStyle())
+                    .accessibilityIdentifier("notes.prayer.maximize")
                 }
-                .buttonStyle(CollectionSecondaryButtonStyle())
-                .accessibilityIdentifier("notes.prayer.maximize")
             }
 
             if !showWritingPage {
@@ -267,18 +270,6 @@ struct NotePrayerEditorView: View {
                     }
                     .buttonStyle(CollectionSecondaryButtonStyle())
                     .accessibilityIdentifier("notes.prayer.clear")
-
-                    Button { confirmArchive = true } label: {
-                        Label("Archive", systemImage: "archivebox")
-                    }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
-                    .accessibilityIdentifier("notes.prayer.archive")
-
-                    Button { confirmDelete = true } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
-                    .accessibilityIdentifier("notes.prayer.delete")
                 }
             }
 
@@ -316,17 +307,34 @@ struct NotePrayerEditorView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color(theme.palette.secondary))
             } else {
-                ForEach(prayer?.updates ?? []) { update in
-                    PrayerUpdateRow(
-                        update: update,
-                        theme: theme,
-                        onEdit: {
-                            editingUpdate = update
-                            editingUpdateBody = update.body
-                        },
-                        onDelete: { confirmDeleteUpdate = update }
-                    )
+                let updates = prayer?.updates ?? []
+                List {
+                    ForEach(updates) { update in
+                        PrayerUpdateRow(update: update, theme: theme)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    confirmDeleteUpdate = update
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                .tint(.red)
+                                Button {
+                                    editingUpdate = update
+                                    editingUpdateBody = update.body
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(Color(theme.palette.accent))
+                            }
+                    }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .frame(height: CGFloat(updates.count) * 92 + 8)
             }
         }
     }
@@ -397,50 +405,24 @@ private struct PrayerWritingPage: View {
 private struct PrayerUpdateRow: View {
     let update: PrayerUpdate
     let theme: AppTheme
-    let onEdit: () -> Void
-    let onDelete: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(update.body)
-                    .font(.body)
-                    .foregroundStyle(Color(theme.palette.ink))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(update.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundStyle(Color(theme.palette.secondary))
-            }
-            VStack(spacing: 10) {
-                Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Color(theme.palette.paper), in: Circle())
-                        .overlay(Circle().stroke(Color(theme.palette.rule), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Edit update")
-                .accessibilityIdentifier("notes.prayer.update.edit")
-
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.red)
-                        .frame(width: 36, height: 36)
-                        .background(Color(theme.palette.paper), in: Circle())
-                        .overlay(Circle().stroke(Color(theme.palette.rule), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Delete update")
-                .accessibilityIdentifier("notes.prayer.update.delete")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(update.body)
+                .font(.body)
+                .foregroundStyle(Color(theme.palette.ink))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(update.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                .font(.caption)
+                .foregroundStyle(Color(theme.palette.secondary))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(theme.palette.rule), lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityIdentifier("notes.prayer.update.\(update.id.uuidString)")
     }
 }

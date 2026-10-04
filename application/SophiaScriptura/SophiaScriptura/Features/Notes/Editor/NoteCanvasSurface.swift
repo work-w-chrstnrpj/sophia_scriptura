@@ -275,7 +275,7 @@ private final class NoteInkCanvas: PKCanvasView {
         guard isViewLoaded, let note = session.note, (note.kind == .canvas) == isCanvas else { hideTools(); return }
         let page = note.page ?? NotePage()
         view.backgroundColor = theme.palette.paper; view.tintColor = theme.palette.accent
-        paper.backgroundColor = noteColor(note.color); paper.ruleColor = theme.palette.rule
+        paper.backgroundColor = theme.palette.paper; paper.ruleColor = theme.palette.rule
         palette.backgroundColor = theme.palette.paper; palette.layer.borderWidth = 0.5
         palette.layer.borderColor = theme.palette.rule.cgColor
         bodyText.textColor = theme.palette.ink; bodyText.linkTextAttributes = [.foregroundColor: theme.palette.accent]
@@ -402,16 +402,6 @@ private final class NoteInkCanvas: PKCanvasView {
         }
     }
 
-    private func noteColor(_ color: NoteDocument.Color) -> UIColor {
-        switch color {
-        case .neutral: return theme.palette.paper
-        case .rose: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.22, green: 0.15, blue: 0.16, alpha: 1) : UIColor(red: 0.98, green: 0.91, blue: 0.92, alpha: 1) }
-        case .amber: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.22, green: 0.18, blue: 0.10, alpha: 1) : UIColor(red: 0.98, green: 0.94, blue: 0.82, alpha: 1) }
-        case .sage: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.13, green: 0.20, blue: 0.15, alpha: 1) : UIColor(red: 0.89, green: 0.95, blue: 0.88, alpha: 1) }
-        case .blue: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.12, green: 0.18, blue: 0.23, alpha: 1) : UIColor(red: 0.88, green: 0.94, blue: 0.98, alpha: 1) }
-        case .lavender: return UIColor { $0.userInterfaceStyle == .dark ? UIColor(red: 0.18, green: 0.15, blue: 0.23, alpha: 1) : UIColor(red: 0.94, green: 0.91, blue: 0.98, alpha: 1) }
-        }
-    }
     private func attributedBody(_ page: NotePage) -> NSAttributedString {
         NotePageAttachments.attributed(page, palette: theme.palette)
     }

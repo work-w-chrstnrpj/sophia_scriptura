@@ -35,35 +35,86 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
 
 /// Muted, ink-like folder colors ordered around the color wheel. Raw values are persisted.
 enum CollectionAccent: String, Codable, CaseIterable, Hashable, Identifiable {
+    /// Tracks the active appearance preset accent from Settings (light/dark aware).
+    case preset
     case oxblood
+    case brick
     case rose
+    case blush
     case terracotta
+    case copper
     case gold
+    case honey
     case mustard
+    case wheat
     case olive
+    case moss
     case sage
+    case fern
     case teal
+    case sea
     case slate
+    case navy
     case indigo
     case plum
+    case lavender
+    case orchid
     case umber
+    case sand
+    case taupe
+    case stone
+    case pewter
+    case fog
 
     var id: Self { self }
 
+    /// Fixed gray for the virtual No Folder tray; not user-customizable.
+    static let noFolder: CollectionAccent = .stone
+
     var title: String {
         switch self {
+        case .preset: return "Preset accent"
         case .oxblood: return "Oxblood"
+        case .brick: return "Brick"
         case .rose: return "Rose"
+        case .blush: return "Blush"
         case .terracotta: return "Terracotta"
+        case .copper: return "Copper"
         case .gold: return "Ochre"
+        case .honey: return "Honey"
         case .mustard: return "Mustard"
+        case .wheat: return "Wheat"
         case .olive: return "Olive"
+        case .moss: return "Moss"
         case .sage: return "Sage"
+        case .fern: return "Fern"
         case .teal: return "Teal"
+        case .sea: return "Sea"
         case .slate: return "Slate"
+        case .navy: return "Navy"
         case .indigo: return "Indigo"
         case .plum: return "Plum"
+        case .lavender: return "Lavender"
+        case .orchid: return "Orchid"
         case .umber: return "Umber"
+        case .sand: return "Sand"
+        case .taupe: return "Taupe"
+        case .stone: return "Stone"
+        case .pewter: return "Pewter"
+        case .fog: return "Fog"
+        }
+    }
+
+    /// Maps persisted note colors from before accents were shared with collections.
+    static func migrated(fromLegacyNoteColor raw: String) -> CollectionAccent {
+        switch raw {
+        case "neutral": return .stone
+        case "rose": return .rose
+        case "amber": return .gold
+        case "sage": return .sage
+        case "blue": return .teal
+        case "lavender": return .lavender
+        default: return CollectionAccent(rawValue: raw) ?? .preset
         }
     }
 }
@@ -304,6 +355,11 @@ struct StudyCollection: Codable, Identifiable, Hashable {
     var modifiedAt: Date
     var isUnfiled: Bool = false
     var archivedAt: Date? = nil
+    var trashedAt: Date? = nil
+
+    var isArchived: Bool { archivedAt != nil && trashedAt == nil }
+    var isTrashed: Bool { trashedAt != nil }
+    var isActiveInLibrary: Bool { archivedAt == nil && trashedAt == nil && !isUnfiled }
 
     static func unfiled(accent: CollectionAccent, modifiedAt: Date = .distantPast) -> StudyCollection {
         StudyCollection(
@@ -397,13 +453,13 @@ struct CollectionsSnapshot: Codable, Equatable {
     var links: [SavedLink] = []
     var conversations: [StudyConversation] = []
     var memberships: [CollectionMembership] = []
-    var unfiledAccent: CollectionAccent = .slate
+    var unfiledAccent: CollectionAccent = .stone
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, revision, collections, passages, links, conversations, memberships, unfiledAccent
     }
 
-    init(schemaVersion: Int = 1, revision: Int = 0, collections: [StudyCollection] = [], passages: [SavedPassage] = [], links: [SavedLink] = [], conversations: [StudyConversation] = [], memberships: [CollectionMembership] = [], unfiledAccent: CollectionAccent = .slate) {
+    init(schemaVersion: Int = 1, revision: Int = 0, collections: [StudyCollection] = [], passages: [SavedPassage] = [], links: [SavedLink] = [], conversations: [StudyConversation] = [], memberships: [CollectionMembership] = [], unfiledAccent: CollectionAccent = .stone) {
         self.schemaVersion = schemaVersion
         self.revision = revision
         self.collections = collections
@@ -423,7 +479,7 @@ struct CollectionsSnapshot: Codable, Equatable {
         links = try container.decodeIfPresent([SavedLink].self, forKey: .links) ?? []
         conversations = try container.decodeIfPresent([StudyConversation].self, forKey: .conversations) ?? []
         memberships = try container.decodeIfPresent([CollectionMembership].self, forKey: .memberships) ?? []
-        unfiledAccent = try container.decodeIfPresent(CollectionAccent.self, forKey: .unfiledAccent) ?? .slate
+        unfiledAccent = try container.decodeIfPresent(CollectionAccent.self, forKey: .unfiledAccent) ?? .stone
     }
 }
 

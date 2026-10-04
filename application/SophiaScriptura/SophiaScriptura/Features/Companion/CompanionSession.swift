@@ -90,6 +90,7 @@ final class CompanionSession: ObservableObject {
         do {
             let load = try await repository.load()
             apply(load.snapshot)
+            purgeExpiredTrash()
             if load.recovered { notice = "Recovered the previous Companion revision." }
             scheduleQuizCacheWarmup()
         } catch {
@@ -247,11 +248,15 @@ final class CompanionSession: ObservableObject {
     }
 
     var activeConversations: [CompanionConversation] {
-        conversations.filter { $0.state == .active }.sorted { $0.updatedAt > $1.updatedAt }
+        conversations.filter { $0.state == .active && !$0.isTrashed }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     var archivedConversations: [CompanionConversation] {
-        conversations.filter { $0.state == .archived }.sorted { $0.updatedAt > $1.updatedAt }
+        conversations.filter { $0.state == .archived && !$0.isTrashed }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    var trashedConversations: [CompanionConversation] {
+        conversations.filter(\.isTrashed).sorted { ($0.trashedAt ?? $0.updatedAt) > ($1.trashedAt ?? $1.updatedAt) }
     }
 
     var completedQuizSessions: [QuizSession] {
@@ -291,7 +296,25 @@ final class CompanionSession: ObservableObject {
         scheduleSave()
     }
 
-    func deleteConversation(_ conversationID: UUID) {
+    func moveConversationToTrash(_ conversationID: UUID) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        conversations[index].trashedAt = Date()
+        conversations[index].updatedAt = Date()
+        if selectedConversationID == conversationID {
+            selectedConversationID = activeConversations.first?.id
+            composerText = selectedConversationID.flatMap { id in conversations.first { $0.id == id }?.composerDraft } ?? ""
+        }
+        scheduleSave()
+    }
+
+    func restoreConversationFromTrash(_ conversationID: UUID) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        conversations[index].trashedAt = nil
+        conversations[index].updatedAt = Date()
+        scheduleSave()
+    }
+
+    func permanentlyDeleteConversation(_ conversationID: UUID) {
         conversations.removeAll { $0.id == conversationID }
         messages.removeAll { $0.conversationID == conversationID }
         attachments.removeAll { $0.conversationID == conversationID }
@@ -300,6 +323,28 @@ final class CompanionSession: ObservableObject {
             composerText = selectedConversationID.flatMap { id in conversations.first { $0.id == id }?.composerDraft } ?? ""
         }
         onCollectionsRemove?(conversationID)
+        scheduleSave()
+    }
+
+    func deleteConversation(_ conversationID: UUID) {
+        moveConversationToTrash(conversationID)
+    }
+
+    func purgeExpiredTrash(now: Date = Date()) {
+        let ids = trashedConversations.filter { conversation in
+            guard let trashedAt = conversation.trashedAt else { return false }
+            return TrashRetention.isExpired(trashedAt, now: now)
+        }.map(\.id)
+        guard !ids.isEmpty else { return }
+        for id in ids { permanentlyDeleteConversation(id) }
+    }
+
+    /// Removes every Companion conversation and its messages from local storage.
+    func removeAllConversations() {
+        let ids = conversations.map(\.id)
+        for id in ids { permanentlyDeleteConversation(id) }
+        selectedConversationID = nil
+        composerText = ""
         scheduleSave()
     }
 
@@ -1090,6 +1135,14 @@ final class CompanionSession: ObservableObject {
         for idx in reviewingLinks.indices where reviewingLinks[idx].quizSessionID == sessionID {
             reviewingLinks[idx].sourceDeleted = true
         }
+        scheduleSave()
+    }
+
+    /// Removes every saved Quiz Me session, including archived quizzes and in-progress attempts.
+    func removeAllQuizHistory() {
+        let ids = quizSessions.map(\.id)
+        for id in ids { deleteQuizSession(id) }
+        activeQuizSessionID = nil
         scheduleSave()
     }
 

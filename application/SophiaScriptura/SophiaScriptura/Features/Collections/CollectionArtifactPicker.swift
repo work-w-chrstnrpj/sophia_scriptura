@@ -76,7 +76,7 @@ struct CollectionArtifactPicker: View {
                         Spacer()
                         Image(systemName: included ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
-                            .foregroundStyle(included ? accent.color : Color(theme.palette.rule))
+                            .foregroundStyle(included ? accent.resolvedColor(in: theme) : Color(theme.palette.rule))
                     }
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())

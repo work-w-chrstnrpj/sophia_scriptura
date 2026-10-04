@@ -278,8 +278,8 @@ struct CompanionView: View {
                let conversation = session.conversations.first(where: { $0.id == id }) {
                 StudyCenteredConfirmationOverlay(
                     title: "Delete \(conversation.title)?",
-                    message: "This removes the conversation and its messages from this device.",
-                    confirmLabel: "Delete Conversation",
+                    message: "Moves the conversation to Trash for \(TrashRetention.dayCount) days. You can restore it from Settings until then.",
+                    confirmLabel: "Move to Trash",
                     onConfirm: {
                         session.deleteConversation(id)
                         conversationPendingDelete = nil
@@ -360,6 +360,7 @@ struct CompanionConversationView: View {
     var compact: Bool
     var columnVisibility: Binding<NavigationSplitViewVisibility>?
     @Environment(\.appTheme) private var theme
+    @EnvironmentObject private var userProfile: UserProfileSession
     @State private var routingProviderConfigID = UUID()
     @State private var routingModelID = ""
     @Binding var pendingNoteSave: StudyNoteSaveContent?
@@ -404,7 +405,11 @@ struct CompanionConversationView: View {
                             )
                         }
                         if threadMessages.isEmpty, !session.isSending {
-                            CompanionEmptyConversationPrompts(session: session)
+                            if liveConversation.passageAnchor != nil || liveConversation.chapterAnchor != nil {
+                                CompanionScriptureEmptyGreeting(greeting: userProfile.scriptureGreeting)
+                            } else {
+                                CompanionEmptyConversationPrompts(session: session)
+                            }
                         }
                         ForEach(threadMessages) { message in
                             CompanionMessageBubble(
@@ -574,6 +579,25 @@ private struct CompanionPassageContextCard: View {
         .padding(12)
         .background(Color(palette.rule).opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(palette.rule)))
+    }
+}
+
+private struct CompanionScriptureEmptyGreeting: View {
+    let greeting: String
+    @Environment(\.appTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(greeting)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Color(theme.palette.ink))
+            Text("Type your question below when you are ready.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: 560, alignment: .leading)
+        .padding(.vertical, 8)
+        .accessibilityIdentifier("companion.scriptureGreeting")
     }
 }
 

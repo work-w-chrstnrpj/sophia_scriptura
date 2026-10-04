@@ -32,11 +32,11 @@ final class CollectionsStore: ObservableObject {
         self.repository = repository
         if let existing = collections.first(where: \.isUnfiled) {
             var folders = collections.filter { !$0.isUnfiled && $0.id != StudyCollection.unfiledID }
-            folders.insert(existing, at: 0)
+            folders.insert(.unfiled(accent: .noFolder, modifiedAt: existing.modifiedAt), at: 0)
             self.collections = folders
         } else {
             var folders = collections.filter { $0.id != StudyCollection.unfiledID }
-            folders.insert(.unfiled(accent: .slate), at: 0)
+            folders.insert(.unfiled(accent: .noFolder), at: 0)
             self.collections = folders
         }
     }
@@ -126,11 +126,33 @@ final class CollectionsStore: ObservableObject {
     }
 
     func children(of collectionID: UUID?) -> [StudyCollection] {
-        collections.filter { $0.parentID == collectionID && $0.archivedAt == nil }
+        collections.filter { $0.parentID == collectionID && $0.isActiveInLibrary }
     }
 
     func membershipCount(for collectionID: UUID, includingDescendants: Bool = false) -> Int {
         artifactIDs(for: collectionID, includingDescendants: includingDescendants).count
+    }
+
+    /// Up to `limit` artifact kinds by membership count, for folder preview dots.
+    func membershipKindHints(
+        for collectionID: UUID,
+        notes: [NoteDocument],
+        includingDescendants: Bool = true,
+        limit: Int = 3
+    ) -> [CollectionArtifactKind] {
+        let ids = artifactIDs(for: collectionID, includingDescendants: includingDescendants)
+        guard !ids.isEmpty else { return [] }
+        var counts: [CollectionArtifactKind: Int] = [:]
+        for artifact in presentedArtifacts(notes: notes) where ids.contains(artifact.id) {
+            counts[artifact.kind, default: 0] += 1
+        }
+        return counts
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key.rawValue < rhs.key.rawValue
+            }
+            .prefix(limit)
+            .map(\.key)
     }
 
     func artifactIDs(for collectionID: UUID, includingDescendants: Bool) -> Set<UUID> {
@@ -199,7 +221,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func updateAccent(id: UUID, accent: CollectionAccent) {
-        guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         collections[index].accent = accent
         collections[index].modifiedAt = Date()
         enqueueWrite()
@@ -208,10 +230,7 @@ final class CollectionsStore: ObservableObject {
     @discardableResult
     func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent, icon: CollectionIcon? = nil) -> Bool {
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return false }
-        if collections[index].isUnfiled {
-            updateAccent(id: id, accent: accent)
-            return true
-        }
+        if collections[index].isUnfiled { return false }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.localizedCaseInsensitiveCompare("No Folder") != .orderedSame else { return false }
         collections[index].name = trimmed
@@ -280,13 +299,49 @@ final class CollectionsStore: ObservableObject {
         return result
     }
 
+    /// Indented library tree for Collections; search flattens to matching folders at their stored depth.
+    func libraryOutline(search: String, sort: CollectionLibrarySort) -> [CollectionOutlineEntry] {
+        let trimmed = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return outline().filter { entry in
+                entry.collection.isActiveInLibrary &&
+                    (entry.collection.name.localizedCaseInsensitiveContains(trimmed) ||
+                     entry.collection.detail.localizedCaseInsensitiveContains(trimmed))
+            }
+        }
+
+        let roots = collections.filter { $0.parentID == nil && !$0.isUnfiled && $0.isActiveInLibrary }
+        let orderedRoots: [StudyCollection] = switch sort {
+        case .name:
+            roots.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .modified:
+            roots.sorted { $0.modifiedAt > $1.modifiedAt }
+        case .itemCount:
+            roots.sorted {
+                membershipCount(for: $0.id, includingDescendants: true) >
+                    membershipCount(for: $1.id, includingDescendants: true)
+            }
+        }
+
+        var result: [CollectionOutlineEntry] = []
+        func visit(_ folder: StudyCollection, depth: Int) {
+            result.append(CollectionOutlineEntry(collection: folder, depth: depth))
+            let children = collections
+                .filter { $0.parentID == folder.id && !$0.isUnfiled && $0.isActiveInLibrary }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            for child in children { visit(child, depth: depth + 1) }
+        }
+        for root in orderedRoots { visit(root, depth: 0) }
+        return result
+    }
+
     /// The most recently touched folder holding the item decides its tint; unfiled items use No Folder.
     func accent(for artifactID: UUID) -> CollectionAccent {
         let ids = collectionIDs(containing: artifactID)
         let owner = collections
             .filter { ids.contains($0.id) }
             .max { $0.modifiedAt < $1.modifiedAt }
-        return owner?.accent ?? collection(id: StudyCollection.unfiledID)?.accent ?? .slate
+        return owner?.accent ?? .noFolder
     }
 
     func archiveCollection(id: UUID) {
@@ -305,11 +360,36 @@ final class CollectionsStore: ObservableObject {
 
     var archivedCollections: [StudyCollection] {
         collections
-            .filter { !$0.isUnfiled && $0.archivedAt != nil }
+            .filter { $0.isArchived }
             .sorted { ($0.archivedAt ?? $0.modifiedAt) > ($1.archivedAt ?? $1.modifiedAt) }
     }
 
-    func deleteCollection(id: UUID) {
+    var trashedCollections: [StudyCollection] {
+        collections
+            .filter { !$0.isUnfiled && $0.isTrashed }
+            .sorted { ($0.trashedAt ?? $0.modifiedAt) > ($1.trashedAt ?? $1.modifiedAt) }
+    }
+
+    func moveCollectionToTrash(id: UUID) {
+        guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
+        let promotedParent = collections[index].parentID
+        for childIndex in collections.indices where collections[childIndex].parentID == id {
+            collections[childIndex].parentID = promotedParent
+        }
+        collections[index].trashedAt = Date()
+        collections[index].archivedAt = nil
+        touch(id)
+        enqueueWrite()
+    }
+
+    func restoreCollectionFromTrash(id: UUID) {
+        guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[index].trashedAt = nil
+        touch(id)
+        enqueueWrite()
+    }
+
+    func permanentlyDeleteCollection(id: UUID) {
         guard let removed = collection(id: id), !removed.isUnfiled else { return }
         let promotedParent = removed.parentID
         for index in collections.indices where collections[index].parentID == id {
@@ -319,6 +399,19 @@ final class CollectionsStore: ObservableObject {
         memberships = memberships.filter { $0.collectionID != id }
         if let promotedParent { touch(promotedParent) }
         enqueueWrite()
+    }
+
+    func deleteCollection(id: UUID) {
+        moveCollectionToTrash(id: id)
+    }
+
+    func purgeExpiredTrash(now: Date = Date()) {
+        let expired = trashedCollections.filter { collection in
+            guard let trashedAt = collection.trashedAt else { return false }
+            return TrashRetention.isExpired(trashedAt, now: now)
+        }.map(\.id)
+        guard !expired.isEmpty else { return }
+        for id in expired { permanentlyDeleteCollection(id: id) }
     }
 
     func removeArtifact(_ artifactID: UUID, from collectionID: UUID) {
@@ -356,8 +449,25 @@ final class CollectionsStore: ObservableObject {
         enqueueWrite()
     }
 
+    func removeAllCollections() {
+        let folderIDs = collections.filter { !$0.isUnfiled }.map(\.id)
+        for id in folderIDs { permanentlyDeleteCollection(id: id) }
+        memberships.removeAll()
+        enqueueWrite()
+    }
+
+    func removeAllPassages(kind: SavedPassageKind) {
+        let ids = passages.filter { $0.kind == kind }.map(\.id)
+        for id in ids { deletePassage(id) }
+    }
+
+    func removeAllLinks() {
+        let ids = links.map(\.id)
+        for id in ids { deleteLink(id) }
+    }
+
     func link(notes: [NoteDocument]) {
-        linkedNoteIDs = Set(notes.filter { $0.deletedAt == nil }.map(\.id))
+        linkedNoteIDs = Set(notes.filter(\.isActiveInLibrary).map(\.id))
     }
 
     func load() async {
@@ -365,6 +475,7 @@ final class CollectionsStore: ObservableObject {
         do {
             let result = try await repository.load()
             apply(result.snapshot)
+            purgeExpiredTrash()
             notice = result.recovered ? "Recovered the previous Collections revision." : nil
         } catch {
             notice = error.localizedDescription
@@ -376,7 +487,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func presentedArtifacts(notes: [NoteDocument]) -> [CollectionArtifact] {
-        let noteItems = notes.filter { $0.deletedAt == nil }.map { note in
+        let noteItems = notes.filter(\.isActiveInLibrary).map { note in
             CollectionArtifact(
                 id: note.id,
                 title: note.title,
@@ -513,7 +624,7 @@ final class CollectionsStore: ObservableObject {
         }
         memberships = Set(snapshot.memberships.filter { $0.collectionID != StudyCollection.unfiledID })
         var folders = snapshot.collections.filter { !$0.isUnfiled && $0.id != StudyCollection.unfiledID }
-        folders.insert(.unfiled(accent: snapshot.unfiledAccent), at: 0)
+        folders.insert(.unfiled(accent: .noFolder), at: 0)
         collections = folders
     }
 
@@ -542,7 +653,7 @@ final class CollectionsStore: ObservableObject {
             links: links,
             conversations: conversations,
             memberships: Array(memberships),
-            unfiledAccent: collection(id: StudyCollection.unfiledID)?.accent ?? .slate
+            unfiledAccent: .noFolder
         )
     }
 

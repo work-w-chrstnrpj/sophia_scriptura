@@ -20,6 +20,12 @@ These are personal iPad source releases, not App Store distributions. See
 
 ## Publishing another version
 
+The repository uses two branches: `main` holds the release baseline and `development`
+starts from `main` for future work. On 2026-10-04 the current app was fast-forwarded
+into `main`, `development` was created from it, and superseded branches were removed.
+Their history is recoverable from the local, ignored Git bundle
+`build/branches-before-main-development-20261004.bundle`.
+
 1. Review the intended changes and exclude credentials, private data and generated builds.
 2. Run relevant checks against the release snapshot and record failures and unverified areas.
 3. Add `vX.Y.Z.md` with highlights, compatibility, installation, checks and limitations;

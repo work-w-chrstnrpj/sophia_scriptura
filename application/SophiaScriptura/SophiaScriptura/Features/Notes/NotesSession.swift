@@ -39,7 +39,22 @@ import ImageIO
         var afterOrder: [UUID]
         var beforePage: NotePage?
         var afterPage: NotePage?
-        var bytes: Int { (beforePage?.ink.count ?? 0) + (afterPage?.ink.count ?? 0) + (beforePage?.attachments.reduce(0, { $0 + $1.object.payload.count }) ?? 0) + (afterPage?.attachments.reduce(0, { $0 + $1.object.payload.count }) ?? 0) + (beforePage?.body.utf8.count ?? 0) + (afterPage?.body.utf8.count ?? 0) + (before + after).reduce(0) { $0 + $1.payload.count + $1.text.utf8.count } }
+        var bytes: Int {
+            let beforePageBytes = Self.pageBytes(beforePage)
+            let afterPageBytes = Self.pageBytes(afterPage)
+            let objectBytes = (before + after).reduce(0) { total, object in
+                total + object.payload.count + object.text.utf8.count
+            }
+            return beforePageBytes + afterPageBytes + objectBytes
+        }
+
+        private static func pageBytes(_ page: NotePage?) -> Int {
+            guard let page else { return 0 }
+            let attachmentBytes = page.attachments.reduce(0) { total, attachment in
+                total + attachment.object.payload.count
+            }
+            return page.ink.count + attachmentBytes + page.body.utf8.count
+        }
     }
     private var undoStack: [Edit] = []
     private var redoStack: [Edit] = []

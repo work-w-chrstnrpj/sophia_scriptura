@@ -1,5 +1,15 @@
 # Test specification — Sophia Scriptura
 
+## Release CI repair — 2026-10-04
+
+Run `37206541180` on `main` reproduced an Xcode 16.4 compiler timeout in
+`NotesSession.Edit.bytes`. The equivalent calculation is now split into typed page,
+attachment and object subtotals; no history limits or persistence formats changed.
+The prayer-count test now uses `@MainActor`, async repository loading and public note
+creation rather than an unsupported initializer and private setters. It additionally
+checks that the count and same-day guard survive saving/reopening. Hosted verification
+is pending a run of these changes. Existing `v0.1.0` remains unchanged.
+
 ## M9 integrated closure — 2026-10-04
 
 **Owner verification:** The owner tested the app on a physical iPad and reported **all pass**

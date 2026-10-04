@@ -37,19 +37,22 @@ final class NotesTests: XCTestCase {
         note = NoteDocument(objects: [NoteObject(kind: .link, url: "javascript:alert(1)")])
         XCTAssertThrowsError(try note.validate())
     }
-    func testPrayerNoteTracksDailyPrayerCount() throws {
-        var note = NoteDocument(kind: .prayer)
-        note.content = .prayer(PrayerContent(page: NotePage(body: "Lord, help me trust you today.")))
-        try note.validate()
-        var session = NotesSession(repository: NotesFileRepository(directory: try folder()))
-        let id = note.id
-        session.snapshot.notes = [note]
-        session.loaded = true
+    @MainActor func testPrayerNoteTracksDailyPrayerCount() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        let session = NotesSession(repository: repository)
+        await session.load()
+        let id = try XCTUnwrap(session.create(kind: .prayer))
         session.open(id)
         XCTAssertTrue(session.recordPrayerTap())
         XCTAssertEqual(session.note?.prayerContent?.prayerCount, 1)
         XCTAssertFalse(session.recordPrayerTap())
         XCTAssertEqual(session.note?.prayerContent?.prayerCount, 1)
+        await session.save()
+        let reopened = NotesSession(repository: repository)
+        await reopened.load()
+        reopened.open(id)
+        XCTAssertEqual(reopened.note?.prayerContent?.prayerCount, 1)
+        XCTAssertFalse(reopened.recordPrayerTap())
     }
 
     func testLicensedSourceQuoteCanBeSavedWithAttribution() async throws {

@@ -29,6 +29,7 @@ struct NotesView: View {
     @State private var selectedNoteIDs: Set<UUID> = []
     @State private var showBulkCollectionPicker = false
     @State private var confirmBulkDelete = false
+    @State private var pendingBulkDeleteIDs: Set<UUID> = []
     @State private var confirmResetLibrary = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -133,12 +134,6 @@ struct NotesView: View {
             Button("Cancel", role: .cancel) { permanentlyDeleting = nil }
         } message: {
             Text("Trash keeps the note for \(TrashRetention.dayCount) days. Restore it from Settings → Trash, or delete it permanently there.")
-        }
-        .alert("Move \(selectedNoteIDs.count) notes to Trash?", isPresented: $confirmBulkDelete) {
-            Button("Move to Trash", role: .destructive) { bulkDeleteSelected() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Trash keeps notes for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
         }
         .alert("Reset Notes library?", isPresented: $confirmResetLibrary) {
             Button("Reset Notes", role: .destructive) { Task { await session.resetLibrary() } }
@@ -343,11 +338,20 @@ struct NotesView: View {
                         }
                         .buttonStyle(CollectionSecondaryButtonStyle())
                     }
-                    Button(role: .destructive) { confirmBulkDelete = true } label: {
+                    Button(role: .destructive) {
+                        pendingBulkDeleteIDs = selectedNoteIDs
+                        confirmBulkDelete = !pendingBulkDeleteIDs.isEmpty
+                    } label: {
                         Label("Delete", systemImage: "trash")
                     }
                     .buttonStyle(CollectionSecondaryButtonStyle(destructive: true))
                     .accessibilityIdentifier("notes.bulkDelete")
+                    .alert("Move \(pendingBulkDeleteIDs.count) notes to Trash?", isPresented: $confirmBulkDelete) {
+                        Button("Move to Trash", role: .destructive) { bulkDeleteSelected() }
+                        Button("Cancel", role: .cancel) { pendingBulkDeleteIDs.removeAll() }
+                    } message: {
+                        Text("Trash keeps notes for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
+                    }
                     Button("Cancel") { clearSelection() }
                         .buttonStyle(CollectionSecondaryButtonStyle())
                 }
@@ -380,7 +384,8 @@ struct NotesView: View {
     }
 
     private func bulkDeleteSelected() {
-        for id in selectedNoteIDs { session.moveToTrash(id) }
+        for id in pendingBulkDeleteIDs { session.moveToTrash(id) }
+        pendingBulkDeleteIDs.removeAll()
         clearSelection()
     }
 

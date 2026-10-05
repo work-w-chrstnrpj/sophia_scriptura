@@ -1,5 +1,9 @@
 # Notes Canvas and Page — SP-013 design and implementation plan
 
+Bulk-delete follow-up (2026-10-05): Notes selection captures the chosen note IDs when
+Delete is tapped and presents its confirmation on that button. Cancel preserves the
+selection; Move to Trash hides only those notes, retaining 30-day recovery in Settings.
+
 Status: owner selected implementation on 2026-10-01. Canvas/Page creation, typed storage,
 Page attachments, Canvas ink objects and Scripture visibility are implemented. Verification
 and physical acceptance are recorded in [SP-013](../../tickets/SP-013-freeform-notes.md).

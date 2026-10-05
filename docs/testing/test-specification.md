@@ -1,5 +1,18 @@
 # Test specification — Sophia Scriptura
 
+## Notes bulk-delete confirmation — 2026-10-05
+
+`NotesUITests.testBulkDeleteConfirmsCancelsAndPersistsOnlySelectedNotes` passed on
+iPad (A16) Simulator and the physical `iPad ni Paj`: **1 passed, 0 failures** per run.
+It creates three temporary notes, selects two, cancels the portrait confirmation,
+confirms in landscape, and checks that only the unselected note remains after relaunch.
+Results: `build/notes-bulk-delete/after.xcresult` and `ipad-after.xcresult`.
+The tests use an isolated `SP009_TEST_STORE`, without deleting personal notes.
+The original portrait flow also passed on both devices (`before.xcresult` and
+`ipad-before.xcresult`); the owner's missing-dialog symptom was not reproduced.
+The fix scopes the confirmation to the Delete button and captures IDs at tap time.
+Owner acceptance of the original failing interaction remains pending.
+
 ## v0.2.0 Notes writing — 2026-10-05
 
 Final build 16 release gate: **210 unit tests passed, 0 failures**, including 34 Notes

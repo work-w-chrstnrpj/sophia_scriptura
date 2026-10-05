@@ -1,5 +1,14 @@
 # Personal iPad deployment
 
+## Notes bulk-delete confirmation — 2026-10-05
+
+Signed Debug **0.2.0 (17)** passed strict signature verification, installed in place
+on `iPad ni Paj`, and launched normally without test-store variables. No uninstall
+or personal-data reset was performed. Logs: `build/notes-bulk-delete/device-build.log`,
+`signature.log`, `install.log`, and `launch.log`. The focused UI regression passed on
+simulator and iPad; see the [test specification](../testing/test-specification.md).
+The owner still needs to retry the originally failing Select notes → Delete interaction.
+
 ## v0.2.0 Scripture annotation fix — 2026-10-05
 
 Signed Debug build **0.2.0 (6)** fixes Scripture Draw mode: the minimized palette no longer

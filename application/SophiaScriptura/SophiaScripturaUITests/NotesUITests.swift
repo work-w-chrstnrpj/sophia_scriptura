@@ -33,6 +33,41 @@ final class NotesUITests: XCTestCase {
         XCTAssertTrue(create.waitForExistence(timeout: 5))
         create.tap()
     }
+    func testBulkDeleteConfirmsCancelsAndPersistsOnlySelectedNotes() {
+        let app = launch(); notes(app)
+        for _ in 0..<3 {
+            newNote(app, kind: "page")
+            XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.buttons["notes.selectMode"].waitForExistence(timeout: 5))
+        }
+        app.buttons["notes.selectMode"].tap()
+        let selectors = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.select."))
+        XCTAssertEqual(selectors.count, 3)
+        selectors.element(boundBy: 0).tap()
+        selectors.element(boundBy: 1).tap()
+        app.buttons["notes.bulkDelete"].tap()
+        let confirmation = app.alerts["Move 2 notes to Trash?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5), app.debugDescription)
+        confirmation.buttons["Cancel"].tap()
+        XCTAssertEqual(selectors.count, 3)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 10), .completed)
+        app.buttons["notes.bulkDelete"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.buttons["Move to Trash"].tap()
+        XCTAssertTrue(app.buttons["notes.selectMode"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["notes.selectMode"].label, "Select notes")
+        app.buttons["notes.selectMode"].tap()
+        XCTAssertEqual(selectors.count, 1)
+        app.buttons["notes.selectMode"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30)); notes(app)
+        app.buttons["notes.selectMode"].tap()
+        XCTAssertEqual(selectors.count, 1)
+    }
+
     func testBlankNoteDirectTextMetadataAndRelaunch() {
         let app = launch(); notes(app)
         newNote(app, kind: "page")

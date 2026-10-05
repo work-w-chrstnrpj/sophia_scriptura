@@ -8,6 +8,20 @@
 
 ## Prior owner-selected implementation — 2026-09-29
 
+### Bulk-delete follow-up — 2026-10-05
+
+Owner reported that Select notes → choose records → Delete showed no confirmation on
+the iPad. The same portrait flow passed with isolated test notes on simulator and iPad,
+so the reported presentation failure was not reproduced and its root cause is unconfirmed.
+The focused revision attaches confirmation directly to the bulk Delete button instead
+of sharing the library's alert modifier chain, and snapshots the chosen IDs on tap.
+Cancellation preserves selection; confirmation moves only captured notes to recoverable
+Trash. No repository/schema changes or permanent data deletion are part of this fix.
+Regression: `NotesUITests.testBulkDeleteConfirmsCancelsAndPersistsOnlySelectedNotes`
+covers cancel, portrait/landscape confirmation, unselected-note retention and relaunch.
+Final execution evidence is recorded in the [test specification](../docs/testing/test-specification.md).
+Owner confirmation of the original failing interaction remains pending.
+
 Owner: “Yes, now implement it.” At that point the acceptance contract was the
 [study-page design](../docs/design/notes-screen-specification.md). It supersedes the
 original object-canvas interactions below: centered flowing text, fixed page/column

@@ -1,5 +1,24 @@
 # Test specification — Sophia Scriptura
 
+## v0.2.0 Notes writing — 2026-10-05
+
+Final build 16 release gate: **210 unit tests passed, 0 failures**, including 34 Notes
+tests, on the iPad (A16) simulator below. Result: `build/v020-release/final.xcresult`;
+log: `build/v020-release/final-tests.log`. New compatibility coverage removes the three
+new editor keys from historical object payloads and verifies defaults and round trips.
+The first attempt failed to compile a new sanitization fixture because its initializer
+arguments were out of order; the fixture and assertions were corrected before this pass.
+UI tests and final-build physical Pencil acceptance were not run.
+
+Earlier build 2 evidence:
+
+Focused `SophiaScripturaTests/NotesTests` on iPad (A16) simulator
+`523DDB8A-9EF6-44ED-A4F8-F8059ECB7725`: **29 passed, 0 failed**. Result:
+`build/v020-notes.xcresult`. The signed device build installed in place; see
+[deployment](../deployment/deployment.md). Notes UI cases for the Page/Journal toolbar
+and the Old Paper preset title were updated and not executed in this pass. Physical
+Pencil feel remains an owner check.
+
 ## Release CI repair — 2026-10-04
 
 Run `37206541180` on `main` reproduced an Xcode 16.4 compiler timeout in

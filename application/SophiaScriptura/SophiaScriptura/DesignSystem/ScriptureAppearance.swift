@@ -9,8 +9,8 @@ enum ScriptureAppearance: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .oldPaper: "OldPaper"
-        case .midnightLibrary: "Midnight Library"
+        case .oldPaper: "Old Paper"
+        case .midnightLibrary: "Firmament’s Library"
         case .quietSage: "Quiet Sage"
         case .sepiaNotes: "Sepia Notes"
         case .inkAndLinen: "Royal Ink"

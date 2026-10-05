@@ -63,7 +63,8 @@ struct RootTabView: View {
                 ZStack {
                     ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CollectionsView(store:collections, notes:notes, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    NotesView(session: notes, reader: reader, collections: collections).tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
+                        .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
                         .tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     ActivityView(store: activity, books: reader.books, editionID: reader.edition?.id,
@@ -177,7 +178,15 @@ struct RootTabView: View {
         .onChange(of: companion.panelExpandedToTab) { _, expanded in
             if expanded { selection = .companion; chrome.reveal(); companion.panelExpandedToTab = false }
         }
-        .onChange(of: selection) { _, tab in notes.active = tab == .notes; if tab != .notes { notes.flushSurface?(); Task { await notes.save() } } }
+        .onChange(of: selection) { _, tab in
+            notes.active = tab == .notes
+            if tab != .notes {
+                notes.toolsVisible = false
+                notes.toolsRequest = UUID()
+                notes.flushSurface?()
+                Task { await notes.save() }
+            }
+        }
         .onAppear { chrome.reveal() }
         .onDisappear { chrome.stop() }
         .onChange(of:scenePhase) { _, phase in

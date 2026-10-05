@@ -427,6 +427,134 @@ final class NotesTests: XCTestCase {
         do { _ = try await store.save(invalid, expectedRevision: saved.revision); XCTFail("Invalid thumbnail accepted") } catch {}
     }
 
+    func testLegacyObjectsDecodeWithoutNewEditorFields() throws {
+        for kind in [NoteObject.Kind.text, .ink, .image, .table, .link] {
+            let original = NoteObject(kind: kind, text: "Existing content", payload: Data([1, 2, 3]))
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+            for key in ["monospaced", "positionLocked", "details"] { json.removeValue(forKey: key) }
+            let decoded = try JSONDecoder().decode(NoteObject.self, from: JSONSerialization.data(withJSONObject: json))
+            XCTAssertEqual(decoded, original)
+            var edited = decoded
+            edited.monospaced = true
+            edited.positionLocked = true
+            edited.details = "Saved details"
+            XCTAssertEqual(try JSONDecoder().decode(NoteObject.self, from: JSONEncoder().encode(edited)), edited)
+        }
+    }
+
+    func testPageFormattingSurvivesEditsAndOmitsEmptySpans() throws {
+        var page = NotePage()
+        page.body = "Faith and hope"
+        page.formatting = NoteTextFormatting.changing([], range: NSRange(location: 0, length: 5), change: .bold)
+        XCTAssertEqual(page.formatting, [NoteTextSpan(location: 0, length: 5, bold: true)])
+        page.replace(NSRange(location: 5, length: 0), with: "ful")
+        XCTAssertEqual(page.formatting.first?.length, 8)
+        page.formatting = NoteTextFormatting.changing(page.formatting, range: NSRange(location: 0, length: 8), change: .bold)
+        XCTAssertTrue(page.formatting.isEmpty)
+        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(page)) as? [String: Any]
+        XCTAssertNil(encoded?["formatting"])
+        page.body = "Title"
+        page.formatting = [NoteTextSpan(location: 0, length: 5, level: 1)]
+        let roundTrip = try JSONDecoder().decode(NotePage.self, from: JSONEncoder().encode(page))
+        XCTAssertEqual(roundTrip.formatting, page.formatting)
+        try NoteDocument(kind: .page, page: page).validate()
+    }
+
+    func testSanitizeRepairsInvalidFormattingAndGroups() throws {
+        var page = NotePage()
+        page.body = "Hello"
+        page.formatting = [
+            NoteTextSpan(location: 0, length: 5, bold: true, colorIndex: 99, colorHex: "BAD"),
+            NoteTextSpan(location: 0, length: 5, colorIndex: 3, colorHex: "AABBCC"),
+        ]
+        var note = NoteDocument(kind: .page, page: page)
+        note.objects = [
+            NoteObject(kind: .text, text: "A", fontSize: 200, details: String(repeating: "x", count: 600)),
+            NoteObject(kind: .text, group: UUID(), text: "B"),
+        ]
+        var snapshot = NotesSnapshot(notes: [note])
+        snapshot.sanitize()
+        try snapshot.validate()
+        XCTAssertEqual(snapshot.notes[0].page?.formatting.count, 2)
+        XCTAssertEqual(snapshot.notes[0].page?.formatting.first?.bold, true)
+        XCTAssertNil(snapshot.notes[0].page?.formatting.first?.colorIndex)
+        XCTAssertNil(snapshot.notes[0].page?.formatting.first?.colorHex)
+        XCTAssertEqual(snapshot.notes[0].page?.formatting.last?.colorIndex, 3)
+        XCTAssertNil(snapshot.notes[0].objects[1].group)
+        XCTAssertEqual(snapshot.notes[0].objects[0].fontSize, 72)
+    }
+
+    func testActiveFormattingStateReflectsSelection() {
+        var page = NotePage()
+        page.body = "Bold plain"
+        page.formatting = [NoteTextSpan(location: 0, length: 4, bold: true)]
+        let boldRange = NoteTextFormatting.activeState(formatting: page.formatting, body: page.body, selection: NSRange(location: 0, length: 4))
+        XCTAssertTrue(boldRange.bold)
+        XCTAssertFalse(boldRange.strikethrough)
+        page.formatting[0].strikethrough = true
+        let strike = NoteTextFormatting.activeState(formatting: page.formatting, body: page.body, selection: NSRange(location: 1, length: 1))
+        XCTAssertTrue(strike.bold)
+        XCTAssertTrue(strike.strikethrough)
+        let plain = NoteTextFormatting.activeState(formatting: page.formatting, body: page.body, selection: NSRange(location: 5, length: 5))
+        XCTAssertFalse(plain.bold)
+    }
+
+    func testColorAndBlockQuoteFormatting() throws {
+        var page = NotePage()
+        page.body = "Quoted line"
+        page.formatting = NoteTextFormatting.changing([], range: NSRange(location: 0, length: 7), change: .inkColor(.preset(3)))
+        XCTAssertEqual(page.formatting.first?.colorIndex, 3)
+        page.formatting = NoteTextFormatting.changing(page.formatting, range: NSRange(location: 0, length: 7), change: .inkColor(.hex("112233")))
+        XCTAssertEqual(page.formatting.first?.colorHex, "112233")
+        page.formatting = NoteTextFormatting.changing(page.formatting, range: NSRange(location: 0, length: 7), change: .inkColor(.default))
+        XCTAssertTrue(page.formatting.isEmpty)
+        page.formatting = NoteTextFormatting.changing([], range: NSRange(location: 0, length: 11), change: .blockQuote)
+        XCTAssertEqual(page.formatting.first?.blockQuote, true)
+        page.formatting = NoteTextFormatting.changing(page.formatting, range: NSRange(location: 0, length: 11), change: .blockQuote)
+        XCTAssertTrue(page.formatting.isEmpty)
+        try NoteDocument(kind: .page, page: page).validate()
+    }
+
+    func testListAndIndentEditCurrentLine() {
+        var page = NotePage()
+        page.body = "First\nSecond"
+        let bullet = NoteTextFormatting.listEdit(in: page.body, line: NSRange(location: 0, length: 5), kind: .bullet)!
+        page.replace(bullet.0, with: bullet.1)
+        XCTAssertEqual(page.body, "• First\nSecond")
+        let numbered = NoteTextFormatting.listEdit(in: page.body, line: NSRange(location: 8, length: 6), kind: .numbered)!
+        page.replace(numbered.0, with: numbered.1)
+        XCTAssertEqual(page.body, "• First\n1. Second")
+        let indent = NoteTextFormatting.indentEdit(in: page.body, line: NSRange(location: 8, length: 9), outdent: false)!
+        page.replace(indent.0, with: indent.1)
+        XCTAssertEqual(page.body, "• First\n\t1. Second")
+        let outdent = NoteTextFormatting.indentEdit(in: page.body, line: NSRange(location: 8, length: 10), outdent: true)!
+        page.replace(outdent.0, with: outdent.1)
+        XCTAssertEqual(page.body, "• First\n1. Second")
+    }
+
+    func testCheckboxTogglesTheCurrentLine() {
+        var page = NotePage()
+        page.body = "Remember"
+        let inserted = NoteTextFormatting.checkboxEdit(in: page.body, caret: 3)
+        page.replace(inserted.0, with: inserted.1)
+        XCTAssertEqual(page.body, "☐ Remember")
+        let checked = NoteTextFormatting.checkboxEdit(in: page.body, caret: 4)
+        page.replace(checked.0, with: checked.1)
+        XCTAssertTrue(page.body.hasPrefix("☑ "))
+    }
+
+    @MainActor func testAudioAttachmentRemainsInline() async throws {
+        let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
+        await session.load()
+        session.create(kind: .journal)
+        session.insertAudio(Data("audio".utf8), name: "Prayer")
+        let attachment = try XCTUnwrap(session.note?.page?.attachments.first)
+        XCTAssertEqual(attachment.object.kind, .audio)
+        XCTAssertEqual(attachment.object.text, "Prayer")
+        XCTAssertEqual(session.note?.objects.isEmpty, true)
+        try session.note?.validate()
+    }
+
 }
 
 private actor FailOnceNotesRepository: NotesRepository {
@@ -441,4 +569,5 @@ private actor FailOnceNotesRepository: NotesRepository {
     func exportArchive() async throws -> Data { try await base.exportArchive() }
     func restore(_ data: Data, expectedRevision: Int) async throws -> NotesSnapshot { try await base.restore(data, expectedRevision: expectedRevision) }
     func preRestoreArchive() async throws -> Data { try await base.preRestoreArchive() }
+    func resetStorage() async throws { try await base.resetStorage() }
 }

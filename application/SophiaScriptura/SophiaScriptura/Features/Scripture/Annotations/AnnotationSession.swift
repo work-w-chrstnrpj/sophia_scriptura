@@ -113,6 +113,10 @@ import PencilKit
         if dirty && !failed && !usingTool { await save() }
     }
     func beginStroke() { usingTool = true; toolsVisible = false }
+    func showDrawingTools() {
+        finishStroke()
+        toolsVisible = true
+    }
     func finishStroke() {
         usingTool = false
         let waiting = strokeWaiters; strokeWaiters.removeAll()

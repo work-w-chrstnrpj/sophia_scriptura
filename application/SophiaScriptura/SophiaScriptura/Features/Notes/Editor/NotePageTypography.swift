@@ -16,4 +16,12 @@ import UIKit
             .boundingRect(with: CGSize(width: NotePage.columnWidth, height: .greatestFiniteMagnitude),
                           options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height
     }
+
+    /// Top rule through text (and optional ink) used to size the Prayer card board.
+    static func prayerBoardContentHeight(for page: NotePage, includesInkPadding: Bool) -> CGFloat {
+        let textBlock = height(of: page)
+        var maxY = 64 + max(textBlock, 36) + 32
+        if includesInkPadding, !page.ink.isEmpty { maxY += 96 }
+        return max(maxY, 120)
+    }
 }

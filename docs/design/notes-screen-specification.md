@@ -36,9 +36,13 @@ content and editing rules.
   handwriting recognition can claim it. Beginning a Pencil stroke dismisses typing and restores drawing; no Done typing control is required.
 - Web links are inline, tappable links instead of cards. Scripture quotations have an
   inline reference and preserve source/edition metadata.
-- New floating text boxes, shapes and stickers are Canvas-only. Page images and tables
-  are inline attachments that flow with text. Existing v2 Page floating objects are
+- New floating text boxes, shapes and stickers are Canvas-only. Page images, tables and
+  audio clips are inline attachments that flow with text. Existing v2 Page floating objects are
   preserved at their original positions and remain editable for compatibility.
+- Page and Journal use a fixed 100% scale. Finger input scrolls vertically. Horizontal
+  adjustment is available only while the Scripture pane is open. Pinch zoom remains Canvas-only.
+- The Page and Journal bar is one row: Pencil, text format, checkbox, table, and attach.
+  Attach includes a link, photo, document or text scan, and recorded or imported audio.
 
 ### Shared Scripture pane
 
@@ -142,9 +146,9 @@ measurement.
 ## Implementation boundaries
 
 Canvas supports the listed object types within the existing bounded workspace. Link cards
-fetch available website titles/thumbnails on insertion or explicit refresh and cache them for offline use. Arbitrary video/files, rich body formatting,
+fetch available website titles/thumbnails on insertion or explicit refresh and cache them for offline use. Arbitrary video/files and
 PDF export, direct Companion capture, Collection membership and cross-type conversion are
-not part of this slice. Ink/image payload and realistic Canvas memory still need device
+not part of this slice. Page and Journal text styles are optional spans on the existing body. System sticker integration remains excluded. Ink/image payload and realistic Canvas memory still need device
 profiling. The native palette follows tools supported by the installed iPadOS version. Hide Pencil
 tools dismisses it when it covers the bottom tab controls; Pencil input remains enabled.
 

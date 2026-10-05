@@ -231,6 +231,12 @@ SP-013 workspace refinement: `NoteObjectStyle.swift` adds optional shape/tint va
 ink to theme, and `NoteLinkPreview.swift` fetches explicit link previews. The editor owns
 contextual selection actions; Root overlays the dock while editing to reclaim writing space.
 
+v0.2.0 Notes follow-up: `Core/Notes/NoteTextFormatting.swift` owns body span values and
+formatting operations. `Features/Notes/Editor/` adds `NoteFormatPopover.swift`,
+`NoteInkColorPalette.swift`, `NoteBlockQuoteBarView.swift`, `CanvasObjectPaletteBuilder.swift`,
+and `NoteMediaCapture.swift` for formatting UI, Canvas actions and camera/scan/audio input.
+New object editor fields decode with defaults; see `docs/releases/v0.2.0.md` for release evidence.
+
 ## SP-015 structure update
 
 `Features/Collections/` now persists through `Infrastructure/Collections/CollectionsFileRepository.swift`.

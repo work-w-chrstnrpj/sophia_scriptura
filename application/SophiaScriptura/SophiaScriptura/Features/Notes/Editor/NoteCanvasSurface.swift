@@ -1,5 +1,6 @@
 import SwiftUI
 import PencilKit
+import AVFoundation
 
 struct NoteCanvasSurface: UIViewControllerRepresentable {
     @Environment(\.appTheme) private var theme
@@ -20,11 +21,30 @@ struct NotePageSurface: UIViewControllerRepresentable {
     var session: NotesSession
     var active: Bool
     var stateToken: String
+    var allowsHorizontalPan = false
+    /// When true (Prayer card preview), fits the writing column to the board width with modest margins.
+    var prayerPreviewFitsContent = false
+    var prayerPreviewHorizontalMargin: CGFloat = 16
     var openCitation: (NoteQuote) -> Void
-    func makeUIViewController(context: Context) -> NotePageController { NotePageController(session: session, openCitation: openCitation) }
+    func makeUIViewController(context: Context) -> NotePageController {
+        let controller = NotePageController(session: session, openCitation: openCitation)
+        controller.allowsHorizontalPan = allowsHorizontalPan
+        controller.prayerPreviewFitsContent = prayerPreviewFitsContent
+        controller.prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+        return controller
+    }
     func updateUIViewController(_ controller: NotePageController, context: Context) {
         let theme = theme
-        DispatchQueue.main.async { [weak controller] in controller?.setTheme(theme); controller?.apply() }
+        let allowsHorizontalPan = allowsHorizontalPan
+        let prayerPreviewFitsContent = prayerPreviewFitsContent
+        let prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+        DispatchQueue.main.async { [weak controller] in
+            controller?.allowsHorizontalPan = allowsHorizontalPan
+            controller?.prayerPreviewFitsContent = prayerPreviewFitsContent
+            controller?.prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+            controller?.setTheme(theme)
+            controller?.apply()
+        }
     }
     static func dismantleUIViewController(_ controller: NotePageController, coordinator: ()) { controller.close() }
 }
@@ -56,7 +76,7 @@ private final class NoteInkCanvas: PKCanvasView {
     private var canvasScene: NoteCanvasInk?
     private let session: NotesSession
     private let openCitation: (NoteQuote) -> Void
-    private let scroll = UIScrollView(), paper = NotePaperView(), bodyText = UITextView()
+    private let scroll = UIScrollView(), paper = NotePaperView(), bodyText = UITextView(), quoteBars = NoteBlockQuoteBarView()
     private let ink = NoteInkCanvas()
     private let placeholder = UILabel()
     private let picker: PKToolPicker
@@ -69,6 +89,11 @@ private final class NoteInkCanvas: PKCanvasView {
     private var refinementStatus = "rough"
     private var lastInk = Data()
     private var loadedPageInk: Data?
+    var allowsHorizontalPan = false
+    var prayerPreviewFitsContent = false
+    var prayerPreviewHorizontalMargin: CGFloat = 16
+    private var appliedHorizontalPan: Bool?
+    private var audioPlayer: AVAudioPlayer?
     private let palette = UIStackView()
     private var paletteKey = ""
     private var renderedPage: NotePage?
@@ -93,7 +118,12 @@ private final class NoteInkCanvas: PKCanvasView {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .secondarySystemBackground
-        scroll.delegate = self; scroll.minimumZoomScale = 0.2; scroll.maximumZoomScale = 2
+        scroll.delegate = self
+        scroll.minimumZoomScale = isCanvas ? 0.2 : 1
+        scroll.maximumZoomScale = isCanvas ? 2 : 1
+        scroll.pinchGestureRecognizer?.isEnabled = isCanvas
+        scroll.bouncesZoom = isCanvas
+        scroll.isDirectionalLockEnabled = !isCanvas
         scroll.contentInsetAdjustmentBehavior = .never
         scroll.panGestureRecognizer.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         scroll.pinchGestureRecognizer?.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
@@ -107,7 +137,9 @@ private final class NoteInkCanvas: PKCanvasView {
         bodyText.font = .systemFont(ofSize: 22); bodyText.typingAttributes = NotePageTypography.attributes
         paper.addInteraction(UIScribbleInteraction(delegate: self))
         configureTextInput(bodyText)
+        paper.addSubview(quoteBars)
         paper.addSubview(bodyText)
+        quoteBars.textView = bodyText
         placeholder.text = "Start your study…"; placeholder.font = .systemFont(ofSize: 22)
         placeholder.textColor = .placeholderText; placeholder.isUserInteractionEnabled = false
         paper.addSubview(placeholder)
@@ -153,7 +185,17 @@ private final class NoteInkCanvas: PKCanvasView {
     }
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if scroll.frame != view.bounds { scroll.frame = view.bounds; fitIfNeeded(); centerPage(); updateViewport() }
+        let resized = scroll.frame != view.bounds
+        if resized { scroll.frame = view.bounds }
+        if resized || usesPrayerPreviewFit {
+            if usesPrayerPreviewFit, let page = session.note?.page {
+                layoutPrayerPreviewFit(page: page)
+            } else {
+                fitIfNeeded()
+                centerPage()
+            }
+            updateViewport()
+        }
     }
     override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); apply(); showTools() }
     func viewForZooming(in scrollView: UIScrollView) -> UIView? { paper }
@@ -161,12 +203,30 @@ private final class NoteInkCanvas: PKCanvasView {
         // PKCanvasView is also a UIScrollView. Its synchronized viewport must never
         // drive the document viewport back through this delegate.
         guard scrollView === scroll else { return }
+        guard isCanvas else {
+            if usesPrayerPreviewFit, let page = session.note?.page {
+                layoutFixedPagePaperFrame()
+                scroll.contentOffset.x = prayerPreviewLockedOffsetX(for: page)
+                updateViewport()
+                return
+            }
+            layoutFixedPage(); updateViewport(); return
+        }
         session.zoom = scrollView.zoomScale; centerPage(); updateViewport()
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         // See scrollViewDidZoom(_:). Without this identity check, setting the live
         // ink viewport's contentOffset recurses through UIScrollView callbacks.
         guard scrollView === scroll else { return }
+        if !isCanvas, !allowsHorizontalPan {
+            let locked: CGFloat
+            if usesPrayerPreviewFit, let page = session.note?.page {
+                locked = prayerPreviewLockedOffsetX(for: page)
+            } else {
+                locked = horizontalRestingOffset()
+            }
+            if abs(scroll.contentOffset.x - locked) > 0.5 { scroll.contentOffset.x = locked }
+        }
         updateViewport()
     }
     private func updateViewport() {
@@ -179,6 +239,8 @@ private final class NoteInkCanvas: PKCanvasView {
     private func updateInkViewport() {
         guard scroll.bounds.width > 0, scroll.bounds.height > 0 else { return }
         ink.frame = scroll.frame
+        // v0.1.0 scroll sync. Freeze while the Pencil is down so live ink is not stretched mid-stroke.
+        guard !usingPencil else { return }
         if ink.zoomScale != scroll.zoomScale { ink.setZoomScale(scroll.zoomScale, animated: false) }
         ink.contentSize = scroll.contentSize
         ink.contentInset = scroll.contentInset
@@ -189,17 +251,120 @@ private final class NoteInkCanvas: PKCanvasView {
         }
         #endif
     }
+    private func horizontalRestingOffset() -> CGFloat {
+        let width = paper.bounds.width * max(scroll.zoomScale, 0.01)
+        guard width > scroll.bounds.width else { return 0 }
+        return (width - scroll.bounds.width) / 2
+    }
+    private var usesPrayerPreviewFit: Bool {
+        prayerPreviewFitsContent && session.note?.kind == .prayer
+    }
+
+    private func prayerContentMaxY(on page: NotePage) -> CGFloat {
+        var maxY = NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: false)
+        if !ink.drawing.bounds.isNull {
+            maxY = max(maxY, ink.drawing.bounds.maxY + 32)
+        }
+        return maxY
+    }
+
+    private func prayerPreviewLockedOffsetX(for page: NotePage) -> CGFloat {
+        let columnX = (page.width - NotePage.columnWidth) / 2
+        return columnX * scroll.zoomScale
+    }
+
+    private func layoutPrayerPreviewFit(page: NotePage) {
+        scroll.pinchGestureRecognizer?.isEnabled = false
+        scroll.bouncesZoom = false
+        scroll.isScrollEnabled = true
+        scroll.alwaysBounceVertical = true
+        scroll.alwaysBounceHorizontal = false
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.showsVerticalScrollIndicator = true
+        guard scroll.bounds.width > 0, scroll.bounds.height > 0 else { return }
+        let margin = prayerPreviewHorizontalMargin
+        let scale = max(0.2, (scroll.bounds.width - margin * 2) / NotePage.columnWidth)
+        scroll.minimumZoomScale = scale
+        scroll.maximumZoomScale = scale
+        if abs(scroll.zoomScale - scale) > 0.001 { scroll.setZoomScale(scale, animated: false) }
+        ink.minimumZoomScale = scale
+        ink.maximumZoomScale = scale
+        layoutFixedPagePaperFrame()
+        scroll.contentInset = .zero
+        let lockedX = prayerPreviewLockedOffsetX(for: page)
+        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
+        let lockedY = min(max(scroll.contentOffset.y, 0), maxY)
+        scroll.contentOffset = CGPoint(x: lockedX, y: lockedY)
+        session.zoom = scale
+        scroll.backgroundColor = theme.palette.paper
+        view.backgroundColor = theme.palette.paper
+    }
+
+    private func layoutFixedPagePaperFrame() {
+        let pageWidth = paper.bounds.width
+        let pageHeight = paper.bounds.height
+        paper.frame = CGRect(origin: .zero, size: CGSize(width: pageWidth * scroll.zoomScale, height: pageHeight * scroll.zoomScale))
+        scroll.contentSize = paper.frame.size
+        if usesPrayerPreviewFit {
+            scroll.contentInset.left = 0
+            scroll.contentInset.right = 0
+        } else {
+            scroll.contentInset.left = max(0, (scroll.bounds.width - pageWidth * scroll.zoomScale) / 2)
+        }
+    }
+
+    private func layoutFixedPage() {
+        guard !isCanvas else { return }
+        if usesPrayerPreviewFit, let page = session.note?.page {
+            layoutPrayerPreviewFit(page: page)
+            return
+        }
+        scroll.isScrollEnabled = true
+        scroll.alwaysBounceVertical = true
+        scroll.minimumZoomScale = 1
+        scroll.maximumZoomScale = 1
+        scroll.pinchGestureRecognizer?.isEnabled = false
+        scroll.bouncesZoom = false
+        ink.minimumZoomScale = 1
+        ink.maximumZoomScale = 1
+        if abs(scroll.zoomScale - 1) > 0.001 { scroll.setZoomScale(1, animated: false) }
+        layoutFixedPagePaperFrame()
+        let pageWidth = paper.bounds.width
+        scroll.alwaysBounceHorizontal = false
+        scroll.showsHorizontalScrollIndicator = allowsHorizontalPan && pageWidth > scroll.bounds.width + 1
+        scroll.contentInset.left = max(0, (scroll.bounds.width - pageWidth) / 2)
+        if allowsHorizontalPan {
+            if appliedHorizontalPan != true {
+                appliedHorizontalPan = true
+                scroll.contentOffset.x = max(-scroll.contentInset.left, (pageWidth - scroll.bounds.width) / 2)
+            }
+        } else if appliedHorizontalPan != false {
+            appliedHorizontalPan = false
+            scroll.contentOffset.x = horizontalRestingOffset()
+        }
+        session.zoom = 1
+    }
     private func centerPage() {
-        scroll.contentInset.left = max(0, (scroll.bounds.width - paper.bounds.width * scroll.zoomScale) / 2)
+        if isCanvas {
+            scroll.contentInset.left = max(0, (scroll.bounds.width - paper.bounds.width * scroll.zoomScale) / 2)
+        } else {
+            layoutFixedPage()
+        }
     }
     private func fitIfNeeded() {
-        guard !fitted, scroll.bounds.width > 0, let note = session.note else { return }
+        guard scroll.bounds.width > 0, session.note != nil else { return }
+        if usesPrayerPreviewFit {
+            layoutFixedPage()
+            updateViewport()
+            return
+        }
+        guard !fitted else { return }
         fitted = true
         if isCanvas {
             zoomToContent()
         } else {
-            scroll.setZoomScale(max(0.2, min(1, (scroll.bounds.width - 24) / (NotePage.columnWidth + 32))), animated: false)
-            scroll.contentOffset.x = max(0, (note.page!.width * scroll.zoomScale - scroll.bounds.width) / 2)
+            scroll.setZoomScale(1, animated: false)
+            layoutFixedPage()
         }
         updateViewport()
     }
@@ -232,7 +397,6 @@ private final class NoteInkCanvas: PKCanvasView {
             if bytes != lastInk {
                 if isCanvas, let scene = canvasScene {
                     session.edit { $0.objects = scene.objects(after: ink.drawing, replacing: $0.objects, extending: session.selection.count == 1 ? session.selection.first : nil) }
-                    // Rebuild ownership after every committed gesture, including newly created ink.
                     canvasScene = try? NoteCanvasInk(objects: session.note?.objects ?? [], traits: traitCollection)
                 } else { session.updatePageInk(bytes); loadedPageInk = session.note?.page?.ink }
                 lastInk = bytes
@@ -279,6 +443,7 @@ private final class NoteInkCanvas: PKCanvasView {
         bodyText.typingAttributes = NotePageTypography.attributes(ink: theme.palette.ink)
         applying = true; defer { applying = false }
         bodyText.isHidden = isCanvas
+        quoteBars.isHidden = isCanvas
         placeholder.isHidden = isCanvas || note.kind == .prayer || !page.body.isEmpty
         let restoringSurface = noteID != note.id || generation != session.surfaceGeneration
         if restoringSurface {
@@ -291,13 +456,13 @@ private final class NoteInkCanvas: PKCanvasView {
         }
         session.flushSurface = { [weak self] in self?.flush() }
         session.setZoom = { [weak self] scale in
-            guard let self else { return }
+            guard let self, self.isCanvas else { return }
             if let scale { self.scroll.setZoomScale(scale, animated: false) } else { self.zoomToContent() }
             self.updateViewport()
         }
         session.endTyping = { [weak self] in self?.view.endEditing(true); self?.showTools() }
         paper.paper = note.paper
-        if renderedPage?.body != page.body || renderedPage?.citations != page.citations || renderedPage?.attachments != page.attachments {
+        if renderedPage?.body != page.body || renderedPage?.citations != page.citations || renderedPage?.attachments != page.attachments || renderedPage?.formatting != page.formatting {
             let attributed = attributedBody(page)
             if bodyText.text == page.body {
                 // Keep UIKit's cursor, marked text and text-editing state while typing.
@@ -305,6 +470,11 @@ private final class NoteInkCanvas: PKCanvasView {
                 bodyText.textStorage.beginEditing()
                 bodyText.textStorage.removeAttribute(.link, range: range)
                 bodyText.textStorage.removeAttribute(.attachment, range: range)
+                bodyText.textStorage.removeAttribute(.font, range: range)
+                bodyText.textStorage.removeAttribute(.underlineStyle, range: range)
+                bodyText.textStorage.removeAttribute(.strikethroughStyle, range: range)
+                bodyText.textStorage.removeAttribute(.foregroundColor, range: range)
+                bodyText.textStorage.removeAttribute(.paragraphStyle, range: range)
                 attributed.enumerateAttributes(in: range) { attributes, range, _ in
                     bodyText.textStorage.addAttributes(attributes, range: range)
                 }
@@ -320,6 +490,10 @@ private final class NoteInkCanvas: PKCanvasView {
         let columnX = (page.width - NotePage.columnWidth) / 2
         let textHeight = max(600, bodyText.sizeThatFits(CGSize(width: NotePage.columnWidth, height: .greatestFiniteMagnitude)).height + 80)
         bodyText.frame = CGRect(x: columnX, y: 64, width: NotePage.columnWidth, height: min(NoteDocument.extent - 64, textHeight))
+        quoteBars.frame = bodyText.frame
+        quoteBars.barColor = theme.palette.rule
+        quoteBars.spans = page.formatting
+        quoteBars.setNeedsDisplay()
         placeholder.frame = CGRect(x: columnX, y: 64, width: NotePage.columnWidth, height: 36)
         let needed = max(textHeight + 304, max(ink.drawing.bounds.isNull ? 0 : ink.drawing.bounds.maxY + 400, (note.objects.map(\.frame.maxY).max() ?? 0) + 400))
         if !isCanvas, needed > page.height { session.growPage(to: needed) }
@@ -363,15 +537,35 @@ private final class NoteInkCanvas: PKCanvasView {
                 text.isSelectable = text.isEditable; text.isUserInteractionEnabled = text.isEditable
                 text.textColor = theme.palette.ink
                 text.backgroundColor = object.tint?.color.withAlphaComponent(0.25) ?? .clear
-                text.font = .systemFont(ofSize: object.fontSize)
+                text.font = object.monospaced
+                    ? UIFont.monospacedSystemFont(ofSize: object.fontSize, weight: .regular)
+                    : .systemFont(ofSize: object.fontSize)
                 if !text.isFirstResponder, text.text != object.text { text.text = object.text }
             } else if represented[object.id] != object { render(object, in: item) }
             item.viewWithTag(701)?.removeFromSuperview()
-            if selected, object.group == nil {
+            if selected, object.group == nil, !object.positionLocked {
                 let size = min(min(item.bounds.width, item.bounds.height), max(10, 12 / scroll.zoomScale))
                 let handle = UIView(frame: CGRect(x: item.bounds.width - size, y: item.bounds.height - size, width: size, height: size))
                 handle.tag = 701; handle.backgroundColor = .systemBlue; handle.layer.cornerRadius = size / 2
                 handle.isUserInteractionEnabled = false; item.addSubview(handle)
+            }
+            item.viewWithTag(702)?.removeFromSuperview()
+            if object.positionLocked {
+                let lock = UIImageView(image: UIImage(systemName: "lock.fill"))
+                lock.tag = 702; lock.tintColor = .secondaryLabel; lock.frame = CGRect(x: 6, y: 6, width: 16, height: 16)
+                lock.isUserInteractionEnabled = false; item.addSubview(lock)
+            }
+            item.viewWithTag(703)?.removeFromSuperview()
+            if !object.details.isEmpty {
+                let caption = UILabel()
+                caption.tag = 703
+                caption.text = object.details
+                caption.font = .systemFont(ofSize: 12)
+                caption.textColor = theme.palette.secondary
+                caption.numberOfLines = 2
+                caption.frame = CGRect(x: 0, y: item.bounds.height + 2, width: item.bounds.width, height: 28)
+                caption.autoresizingMask = [.flexibleWidth]
+                item.addSubview(caption)
             }
             represented[object.id] = object; paper.bringSubviewToFront(item)
         }
@@ -458,53 +652,71 @@ private final class NoteInkCanvas: PKCanvasView {
         }
     }
     private func updatePalette() {
-        guard let note = session.note, let id = session.selection.first, let object = note.objects.first(where: { $0.id == id }) else { palette.isHidden = true; paletteKey = ""; return }
-        let key = "\(session.selection.sorted { $0.uuidString < $1.uuidString })|\(session.renderRevision)|\(session.selectingMultiple)"
+        guard let note = session.note, let id = session.selection.first, let object = note.objects.first(where: { $0.id == id }) else {
+            palette.isHidden = true; paletteKey = ""; return
+        }
+        let key = "\(session.selection.sorted { $0.uuidString < $1.uuidString })|\(session.renderRevision)|\(session.selectingMultiple)|\(object.positionLocked)|\(object.details)|\(Int(object.fontSize))|\(object.monospaced)"
         if key != paletteKey {
             paletteKey = key
             palette.arrangedSubviews.forEach { palette.removeArrangedSubview($0); $0.removeFromSuperview() }
             func action(_ title: String, _ symbol: String, _ handler: @escaping () -> Void) -> UIAction {
                 UIAction(title: title, image: UIImage(systemName: symbol)) { [weak self] _ in handler(); self?.paletteKey = ""; self?.apply() }
             }
-            func button(_ title: String, _ symbol: String, _ handler: @escaping () -> Void) {
-                let b = UIButton(type: .system); b.setImage(UIImage(systemName: symbol), for: .normal)
-                b.accessibilityLabel = title; b.accessibilityIdentifier = "notes.action." + title.lowercased()
-                b.addAction(action(title, symbol, handler), for: .touchUpInside)
-                b.widthAnchor.constraint(equalToConstant: 42).isActive = true; b.heightAnchor.constraint(equalToConstant: 40).isActive = true
-                palette.addArrangedSubview(b)
-            }
-            if session.selection.count == 1, object.kind != .ink {
-                button("Edit", "pencil") { [weak self] in
-                    guard let self else { return }
-                    if [.text, .bullets, .numbered].contains(object.kind) { self.session.mode = .text; self.session.focusRequest = UUID() }
-                    else { self.session.editingObjectID = id }
+            func button(_ title: String, _ symbol: String?, _ visibleTitle: String?, _ destructive: Bool, _ handler: (() -> Void)?) -> UIButton {
+                let b = UIButton(type: .system)
+                if let visibleTitle, !visibleTitle.isEmpty {
+                    b.setTitle(visibleTitle, for: .normal)
+                    b.titleLabel?.font = .systemFont(ofSize: 15, weight: .semibold)
+                } else if let symbol {
+                    b.setImage(UIImage(systemName: symbol), for: .normal)
                 }
+                if destructive { b.tintColor = .systemRed }
+                b.accessibilityLabel = title
+                b.accessibilityIdentifier = "notes.action." + title.lowercased().replacingOccurrences(of: " ", with: ".")
+                if let handler, let symbol {
+                    b.addAction(action(title, symbol, handler), for: .touchUpInside)
+                } else if let handler {
+                    b.addAction(UIAction(title: title) { [weak self] _ in handler(); self?.paletteKey = ""; self?.apply() }, for: .touchUpInside)
+                }
+                b.widthAnchor.constraint(equalToConstant: visibleTitle == nil ? 42 : 48).isActive = true
+                b.heightAnchor.constraint(equalToConstant: 40).isActive = true
+                return b
             }
-            button("Duplicate", "plus.square.on.square") { [weak self] in self?.session.duplicateSelection() }
-            button("Delete", "trash") { [weak self] in self?.session.remove() }
-            let more = UIButton(type: .system); more.setImage(UIImage(systemName: "ellipsis"), for: .normal)
-            more.accessibilityLabel = "Object options"; more.accessibilityIdentifier = "notes.action.more"
-            var actions: [UIMenuElement] = []
-            if [.shape, .text, .bullets, .numbered].contains(object.kind) {
-                actions.append(UIMenu(title: "Color", children: NoteTint.allCases.map { tint in action(tint.rawValue.capitalized, "circle.fill") { [weak self] in self?.session.update(id) { $0.tint = tint } } }))
+            func menuButton(_ title: String, _ symbol: String?, _ visibleTitle: String?, _ menu: UIMenu) -> UIButton {
+                let b = button(title, symbol, visibleTitle, false, nil)
+                b.menu = menu
+                b.showsMenuAsPrimaryAction = true
+                return b
             }
-            if object.kind == .shape {
-                actions.append(UIMenu(title: "Change shape", children: NoteShape.allCases.map { shape in action(shape.title, shape.symbol) { [weak self] in self?.session.update(id) { $0.shape = shape } } }))
+            if isCanvas {
+                let context = CanvasObjectPaletteBuilder.Context(
+                    presenter: self,
+                    session: session,
+                    object: object,
+                    note: note,
+                    refresh: { [weak self] in self?.paletteKey = ""; self?.apply() }
+                )
+                CanvasObjectPaletteBuilder.fill(palette, context: context, action: action, button: button, menuButton: menuButton)
+                palette.arrangedSubviews.last?.accessibilityIdentifier = "notes.action.more"
+            } else {
+                if session.selection.count == 1, object.kind != .ink {
+                    palette.addArrangedSubview(button("Edit", "pencil", nil, false) { [weak self] in
+                        guard let self else { return }
+                        if [.text, .bullets, .numbered].contains(object.kind) { self.session.mode = .text; self.session.focusRequest = UUID() }
+                        else { self.session.editingObjectID = id }
+                    })
+                }
+                palette.addArrangedSubview(button("Duplicate", "plus.square.on.square", nil, false) { [weak self] in self?.session.duplicateSelection() })
+                palette.addArrangedSubview(button("Delete", "trash", nil, true) { [weak self] in self?.session.remove() })
+                let more = menuButton("More", "ellipsis", nil, UIMenu(children: [
+                    action("Bring to front", "square.3.layers.3d.top.filled") { [weak self] in self?.session.reorder(id, front: true) },
+                    action("Send to back", "square.3.layers.3d.bottom.filled") { [weak self] in self?.session.reorder(id, front: false) },
+                ]))
+                more.accessibilityIdentifier = "notes.action.more"
+                palette.addArrangedSubview(more)
             }
-            if object.kind == .link {
-                actions.append(action("Open link", "arrow.up.right") { if let url = URL(string: object.url) { UIApplication.shared.open(url) } })
-                actions.append(action("Refresh preview", "arrow.clockwise") { [weak self] in self?.session.refreshLink(id) })
-            }
-            actions += [action("Bring to front", "square.3.layers.3d.top.filled") { [weak self] in self?.session.reorder(id, front: true) },
-                        action("Send to back", "square.3.layers.3d.bottom.filled") { [weak self] in self?.session.reorder(id, front: false) },
-                        action(session.selectingMultiple ? "Finish selecting" : "Select multiple", "checkmark.circle") { [weak self] in self?.session.selectingMultiple.toggle() }]
-            if note.members(session.selection).count > 1 { actions.append(action("Group", "square.on.square") { [weak self] in self?.session.group(); self?.session.selectingMultiple = false }) }
-            if object.group != nil { actions.append(action("Ungroup", "square.dashed") { [weak self] in self?.session.ungroup() }) }
-            more.menu = UIMenu(children: actions); more.showsMenuAsPrimaryAction = true
-            more.widthAnchor.constraint(equalToConstant: 42).isActive = true; more.heightAnchor.constraint(equalToConstant: 40).isActive = true
-            palette.addArrangedSubview(more)
         }
-        palette.isHidden = usingPencil || bodyText.isFirstResponder || objects.values.contains { $0.isFirstResponder } || !session.active
+        palette.isHidden = usingPencil || bodyText.isFirstResponder || objects.values.contains { $0.isFirstResponder } || !session.active || session.selection.isEmpty
         positionPalette()
     }
     private func positionPalette() {
@@ -524,7 +736,9 @@ private final class NoteInkCanvas: PKCanvasView {
         // Resolve the target captured at touch-down, not its shifted final position.
         if let offset = bodyTapOffset {
             if let attachment = session.note?.page?.attachments.first(where: { $0.location == offset }) {
-                view.endEditing(true); session.editingObjectID = attachment.id
+                view.endEditing(true)
+                if attachment.object.kind == .audio { playAudio(attachment.object.payload) }
+                else { session.editingObjectID = attachment.id }
             } else if let citation = session.note?.page?.citations.first(where: { NSLocationInRange(offset, NSRange(location: $0.location, length: $0.length)) }) {
                 view.endEditing(true); openCitation(citation.quote)
             } else if offset < bodyText.textStorage.length,
@@ -569,7 +783,7 @@ private final class NoteInkCanvas: PKCanvasView {
     func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         guard gesture === pan else { return true }
         let point = objectTouchPoint
-        guard let object = hit(point), session.selection.contains(object.id) else { return false }
+        guard let object = hit(point), session.selection.contains(object.id), !object.positionLocked else { return false }
         if let text = objects[object.id] as? UITextView, text.isFirstResponder { return false }
         return true
     }
@@ -581,7 +795,8 @@ private final class NoteInkCanvas: PKCanvasView {
             // A corner drag can leave the object before the pan reaches its threshold.
             // Choose the handle from touch-down rather than the recognition position.
             dragStart = objectTouchPoint
-            if let object = hit(dragStart), object.group == nil, dragStart.x > object.frame.maxX - max(30, 36 / scroll.zoomScale), dragStart.y > object.frame.maxY - max(30, 36 / scroll.zoomScale) {
+            if let object = hit(dragStart), !object.positionLocked, object.group == nil,
+               dragStart.x > object.frame.maxX - max(30, 36 / scroll.zoomScale), dragStart.y > object.frame.maxY - max(30, 36 / scroll.zoomScale) {
                 resizeID = object.id; originalSize = object.frame.size
             } else { resizeID = nil }
         case .changed:
@@ -631,6 +846,7 @@ private final class NoteInkCanvas: PKCanvasView {
     }
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
         strokeRefiner.beginStroke()
+        updateInkViewport()
         acceptsInkChanges = true; usingPencil = true; palette.isHidden = true
         // End text editing without resigning the active PencilKit responder mid-stroke.
         if bodyText.isFirstResponder { bodyText.resignFirstResponder() }
@@ -647,10 +863,13 @@ private final class NoteInkCanvas: PKCanvasView {
             let previous = refinementStatus
             refinementStatus = strokeRefiner.lastKind.map { "refined \($0.label)" } ?? "rough"
             ink.undoManager?.registerUndo(withTarget: self) { target in target.replaceInkDrawing(original, status: previous) }
+            applying = true
             ink.drawing = refined
+            applying = false
         } else if PencilStrokeRefiner.simulatesPencil {
             refinementStatus = "rough"
         }
+        updateInkViewport()
         flush(); apply()
         if session.note?.kind == .prayer || session.toolsVisible { showTools() }
     }
@@ -660,6 +879,16 @@ private final class NoteInkCanvas: PKCanvasView {
         ink.undoManager?.registerUndo(withTarget: self) { target in target.replaceInkDrawing(current, status: previous) }
         refinementStatus = status
         ink.drawing = drawing; flush(); apply()
+    }
+    private func playAudio(_ data: Data) {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+            audioPlayer = try AVAudioPlayer(data: data)
+            audioPlayer?.play()
+        } catch {
+            session.notice = "That audio could not be played."
+        }
     }
     private func publishRefinementAccessibility() {
         let count = "\(ink.drawing.strokes.count) strokes"

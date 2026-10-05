@@ -30,6 +30,11 @@ acceptance pending, 2026-09-29.
 
 ## Proposed application organization
 
+v0.2.0 adds `Core/Notes/NoteTextFormatting.swift` for formatting spans and operations.
+The Notes editor adds `NoteFormatPopover.swift`, `NoteInkColorPalette.swift`,
+`NoteBlockQuoteBarView.swift`, `CanvasObjectPaletteBuilder.swift`, and `NoteMediaCapture.swift`
+for formatting presentation, object actions, and camera/scan/audio integration.
+
 SP-023 adds `Features/Scripture/ChapterHubView.swift` for chapter-index presentation and
 link aggregation. Companion domain/session own distinct chapter anchors and conversation
 queries; infrastructure owns provider-facing context composition. Focused coverage is in

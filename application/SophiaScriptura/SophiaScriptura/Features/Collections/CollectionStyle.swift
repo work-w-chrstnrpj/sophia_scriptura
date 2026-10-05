@@ -147,6 +147,7 @@ struct CollectionProminentButtonStyle: ButtonStyle {
     @Environment(\.appTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     var fullWidth = false
+    var destructive = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -154,7 +155,11 @@ struct CollectionProminentButtonStyle: ButtonStyle {
             .foregroundStyle(Color(theme.palette.paper))
             .padding(.horizontal, 20)
             .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: 48)
-            .background(Capsule().fill(Color(theme.palette.accent)))
+            .background(
+                Capsule().fill(
+                    destructive ? Color(CollectionAccent.oxblood.uiColor) : Color(theme.palette.accent)
+                )
+            )
             .opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.4)
             .contentShape(Capsule())
     }

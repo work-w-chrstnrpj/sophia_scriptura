@@ -113,7 +113,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         text.delegate = nil; text.authorizeQuote = nil; text.externalReveal = nil
     }
     func apply() {
-        guard isViewLoaded, session.reopenGeneration == openedGeneration, !session.usingTool,
+        guard isViewLoaded, session.reopenGeneration == openedGeneration,
               let group = session.group, let layout = session.selectedLayout else { return }
         let hidden = session.mode == .hidden
         viewport.isHidden = hidden
@@ -134,6 +134,10 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         let dark = preferences.theme == "dark" ||
             (preferences.theme == "system" && traitCollection.userInterfaceStyle == .dark)
         let palette = preferences.appearance.palette(dark: dark)
+        if session.usingTool {
+            updateDrawingTools(draw: session.selected != nil && session.mode == .draw && session.active)
+            return
+        }
         if layoutID != layout.signature {
             stop()
             canvases.values.forEach { picker.removeObserver($0); $0.removeFromSuperview() }
@@ -183,21 +187,9 @@ struct AnnotationSurface: UIViewControllerRepresentable {
                 applying = false; drawingTokens[layer.id] = layer.revision
             }
             canvas.isHidden = session.mode == .hidden
-            canvas.isUserInteractionEnabled = draw
             allowSimulatedPencil(canvas)
-            text.isSelectable = !draw; text.isUserInteractionEnabled = !draw
-            let showTools = draw && session.toolsVisible
-            if view.window != nil, pickerActive != draw || pickerVisible != showTools {
-                pickerActive = draw; pickerVisible = showTools
-                if draw {
-                    canvas.becomeFirstResponder()
-                    picker.setVisible(showTools, forFirstResponder: canvas)
-                } else {
-                    picker.setVisible(false, forFirstResponder: canvas)
-                    canvas.resignFirstResponder()
-                }
-            }
         }
+        updateDrawingTools(draw: draw)
         if lastMode == .hidden && session.mode != .hidden, let range = text.map?.range(for: reader.targetVerse) { reveal(range) }
         lastMode = session.mode
         coordinator?.parent.saveToNote = saveToNote
@@ -215,6 +207,23 @@ struct AnnotationSurface: UIViewControllerRepresentable {
                 text.focus(verse: reader.targetVerse)
             } else {
                 text.focus(spans: reader.emphasisSpans, holds: true)
+            }
+        }
+    }
+    private func updateDrawingTools(draw: Bool) {
+        guard let canvas = selectedCanvas else { return }
+        canvas.isUserInteractionEnabled = draw
+        text.isSelectable = !draw; text.isUserInteractionEnabled = !draw
+        let showTools = draw && session.toolsVisible
+        guard view.window != nil else { return }
+        if pickerActive != draw || pickerVisible != showTools {
+            pickerActive = draw; pickerVisible = showTools
+            if draw {
+                canvas.becomeFirstResponder()
+                picker.setVisible(showTools, forFirstResponder: canvas)
+            } else {
+                picker.setVisible(false, forFirstResponder: canvas)
+                canvas.resignFirstResponder()
             }
         }
     }

@@ -40,8 +40,14 @@ payload field; they are decoded and validated like images, count toward all medi
 and are cached/exported offline. Thumbnail imports are downsampled to 1,024 pixels. A
 missing preview retains the domain/URL card. Page links remain text, without preview fetches.
 Optional `shape` and `tint` enums preserve decoding of earlier v3 objects with missing styles.
+Object fields `monospaced`, `positionLocked`, and `details` decode missing values as
+`false`, `false`, and empty text, preserving existing objects across the v0.2.0 upgrade.
+Audio objects require v0.2.0; older builds do not recognize that object kind.
 Dotted paper is an additional paper value. Stickers use editable emoji text; tables retain
-the 20 × 10 bound. Rich body formatting and system sticker integration remain excluded.
+the 20 × 10 bound. Page and Journal bodies may store optional character spans (bold, italic,
+underline, strikethrough, and title/heading/subheading/monospaced). Empty spans are omitted
+from the archive. Older notes decode with plain text. Audio attachments use the same inline
+object path as images; tapping one plays it. System sticker integration remains excluded.
 Neutral black/white ink resolves to the current theme for presentation. Opening or changing
 theme does not rewrite original drawing bytes; unchanged Canvas strokes retain their
 original payloads through scene reconciliation. Subsequent drawing edits may persist a
@@ -76,6 +82,9 @@ See [study-page design](../design/notes-screen-specification.md) and
 [physical acceptance](../testing/sp013-ipad-guide.md). No SP-006 fixture migration occurs.
 
 
-The live ink viewport is screen-sized; native PencilKit zoom/content offset follow the
-outer document viewport. Persisted ink and framed Canvas objects remain in document
-coordinates. This rendering correction introduces no schema change or migration.
+The live PencilKit canvas matches the note scroll view's zoom, content size, inset, and
+offset. While the Pencil is down, that sync is frozen so the in-progress stroke is not
+stretched by scroll updates; sync resumes when the stroke ends. Persisted ink and framed
+Canvas objects remain in document coordinates. Page and Journal stay at 100% scale:
+vertical scrolling remains, horizontal scrolling is available only while the Scripture
+pane is open, and pinch zoom stays on Canvas. No schema change or migration.

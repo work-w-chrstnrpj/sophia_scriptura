@@ -53,15 +53,17 @@ Dynamic Type require validation before implementation.
 
 | Preset | Palette direction | Scripture type / supporting UI type |
 | --- | --- | --- |
-| **OldPaper** | White page, black ink, grayscale support | Georgia / system sans UI |
-| **Midnight Library** | Midnight blue-gray, soft white, silver | Cormorant Garamond / DM Sans |
+| **Old Paper** | White page, black ink, grayscale support | Georgia / system sans UI |
+| **Firmament’s Library** | Midnight blue-gray, soft white, silver | Cormorant Garamond / DM Sans |
 | **Quiet Sage** | Soft blue-green paper, deep teal-gray ink, muted teal | Lora / Manrope |
 | **Sepia Notes** | Yellow-orange cream, dark sepia, warm ochre-brown | Caveat headings, EB Garamond passages / EB Garamond UI |
 | **Royal Ink** | Soft lavender-white, deep plum ink, muted purple | Libre Baskerville / Source Sans 3 |
 | **Tree of Knowledge** | Marginalia’s warm paper, dark umber and oxblood | Playfair Display / Source Sans 3 |
 | **Spring Leaf** | Stillwater’s calm white, deep green and sage | Lora / DM Sans |
 
-Tree of Knowledge renames the Marginalia palette; Spring Leaf renames Stillwater. These
+Tree of Knowledge renames the Marginalia palette; Spring Leaf renames Stillwater. Settings
+shows the first two presets as Old Paper and Firmament’s Library. Stored preset identifiers
+remain `oldPaper` and `midnightLibrary`. These
 names describe appearance presets, not features or separate reader modes. Changing a
 preset changes only color and typography. It does not alter annotation-layer content or
 states, translation-specific ink, reserved margin geometry, passage position, verse links

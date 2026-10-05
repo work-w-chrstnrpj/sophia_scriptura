@@ -6,9 +6,12 @@ struct NotesView: View {
     @Bindable var session: NotesSession
     var reader: ReaderSession
     @ObservedObject var collections: CollectionsStore
+    /// False when another root tab is selected; clears multiselect when the user leaves Notes.
+    var isTabActive = true
     @State private var search = ""
     @State private var searchPresented = false
     @State private var tag = ""
+    @State private var noteKindFilter: NoteKind?
     @State private var sort = "Modified"
     @State private var cards = true
     @State private var deleted = false
@@ -26,6 +29,7 @@ struct NotesView: View {
     @State private var selectedNoteIDs: Set<UUID> = []
     @State private var showBulkCollectionPicker = false
     @State private var confirmBulkDelete = false
+    @State private var confirmResetLibrary = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var notes: [NoteDocument] {
@@ -34,6 +38,7 @@ struct NotesView: View {
             return visibility
                 && (search.isEmpty || note.searchableText.localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || note.tags.contains(tag))
+                && (noteKindFilter == nil || note.kind == noteKindFilter)
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if sort == "Created", $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
@@ -102,6 +107,12 @@ struct NotesView: View {
         .onChange(of: selectionMode) { _, active in
             if !active { selectedNoteIDs.removeAll() }
         }
+        .onChange(of: isTabActive) { _, active in
+            if !active {
+                showBulkCollectionPicker = false
+                clearSelection()
+            }
+        }
         .disabled(session.restoring)
         .task { await session.load() }
         .onChange(of: scenePhase) { _, value in if value != .active { session.flushSurface?(); Task { await session.save() } } }
@@ -128,6 +139,12 @@ struct NotesView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Trash keeps notes for \(TrashRetention.dayCount) days. Restore or delete permanently from Settings → Trash.")
+        }
+        .alert("Reset Notes library?", isPresented: $confirmResetLibrary) {
+            Button("Reset Notes", role: .destructive) { Task { await session.resetLibrary() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes every note and the damaged library on this iPad. Export a backup from Settings first if you still have one elsewhere.")
         }
         .alert("Replace Notes from backup?", isPresented: $confirmRestore) {
             Button("Restore", role: .destructive) { if let data = pendingRestore { Task { await session.restore(data) } }; pendingRestore = nil }
@@ -207,6 +224,13 @@ struct NotesView: View {
                     Text("All tags").tag("")
                     ForEach(Array(Set(session.snapshot.notes.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
                 }
+                Picker("Type", selection: $noteKindFilter) {
+                    Text("All types").tag(NoteKind?.none)
+                    ForEach(NoteKind.allCases, id: \.self) { kind in
+                        Text(kind.displayName).tag(Optional(kind))
+                    }
+                }
+                .accessibilityIdentifier("notes.filter.type")
                 Toggle("Cards", isOn: $cards)
             } label: {
                 LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
@@ -223,7 +247,14 @@ struct NotesView: View {
 
     private var viewLabel: String {
         if deleted { return "Archived" }
-        return tag.isEmpty ? sort : "\(sort) · \(tag)"
+        var parts = [sort]
+        if let noteKindFilter { parts.append(noteKindFilter.displayName) }
+        if !tag.isEmpty { parts.append(tag) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var hasActiveLibraryFilter: Bool {
+        !search.isEmpty || !tag.isEmpty || noteKindFilter != nil
     }
 
     private var backupsMenu: some View {
@@ -254,10 +285,18 @@ struct NotesView: View {
     @ViewBuilder
     private var library: some View {
         if !session.loaded {
-            ContentUnavailableView("Notes unavailable", systemImage: "exclamationmark.triangle", description: Text("Retry or restore a Notes backup."))
+            ContentUnavailableView(
+                "Notes unavailable",
+                systemImage: "exclamationmark.triangle",
+                description: Text(session.notice ?? "Retry or restore a Notes backup.")
+            )
             Button("Retry") { Task { await session.load() } }
                 .buttonStyle(CollectionProminentButtonStyle())
                 .frame(maxWidth: .infinity)
+            Button("Reset Notes library") { confirmResetLibrary = true }
+                .buttonStyle(CollectionProminentButtonStyle(destructive: true))
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("notes.resetLibrary")
         } else if notes.isEmpty {
             emptyState
         } else if cards {
@@ -307,7 +346,8 @@ struct NotesView: View {
                     Button(role: .destructive) { confirmBulkDelete = true } label: {
                         Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
+                    .buttonStyle(CollectionSecondaryButtonStyle(destructive: true))
+                    .accessibilityIdentifier("notes.bulkDelete")
                     Button("Cancel") { clearSelection() }
                         .buttonStyle(CollectionSecondaryButtonStyle())
                 }
@@ -347,20 +387,40 @@ struct NotesView: View {
     @ViewBuilder
     private func selectionCheckbox(for noteID: UUID) -> some View {
         if selectionMode {
-            Button { toggleNoteSelection(noteID) } label: {
-                Image(systemName: selectedNoteIDs.contains(noteID) ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(selectedNoteIDs.contains(noteID) ? Color(theme.palette.accent) : Color(theme.palette.rule))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(selectedNoteIDs.contains(noteID) ? "Selected" : "Not selected")
-            .accessibilityIdentifier("notes.select.\(noteID.uuidString)")
+            selectionMark(for: noteID, size: .title2)
         }
+    }
+
+    private enum SelectionMarkSize { case title2, cardBadge }
+
+    @ViewBuilder
+    private func selectionMark(for noteID: UUID, size: SelectionMarkSize) -> some View {
+        let selected = selectedNoteIDs.contains(noteID)
+        Button { toggleNoteSelection(noteID) } label: {
+            switch size {
+            case .title2:
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(selected ? Color(theme.palette.accent) : Color(theme.palette.rule))
+            case .cardBadge:
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 21, weight: .semibold))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(
+                        selected ? Color.white : Color(theme.palette.ink),
+                        selected ? Color(theme.palette.accent) : Color(theme.palette.paper)
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(selected ? "Selected" : "Not selected")
+        .accessibilityIdentifier("notes.select.\(noteID.uuidString)")
     }
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Image(systemName: search.isEmpty && tag.isEmpty ? (deleted ? "trash" : "square.and.pencil") : "magnifyingglass")
+            Image(systemName: !hasActiveLibraryFilter ? (deleted ? "trash" : "square.and.pencil") : "magnifyingglass")
                 .font(.system(size: 34, weight: .light))
                 .foregroundStyle(Color(theme.palette.secondary))
             Text(emptyTitle)
@@ -371,7 +431,7 @@ struct NotesView: View {
                 .foregroundStyle(Color(theme.palette.secondary))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
-            if search.isEmpty, tag.isEmpty, !deleted {
+            if !hasActiveLibraryFilter, !deleted {
                 Button("New Notes") { showingNewNote = true }
                     .buttonStyle(CollectionProminentButtonStyle())
                     .padding(.top, 4)
@@ -388,12 +448,12 @@ struct NotesView: View {
     }
 
     private var emptyTitle: String {
-        if !search.isEmpty || !tag.isEmpty { return "No matching notes" }
+        if hasActiveLibraryFilter { return "No matching notes" }
         return deleted ? "No archived notes" : "Your study starts here"
     }
 
     private var emptyDetail: String {
-        if !search.isEmpty || !tag.isEmpty { return "Try a different title, tag, or passage." }
+        if hasActiveLibraryFilter { return "Try a different title, tag, type, or passage." }
         if deleted { return "Archived notes stay here until you unarchive them." }
         return "Start a Page, Canvas, Prayer, or Journal note for study and reflection."
     }
@@ -401,9 +461,9 @@ struct NotesView: View {
     private func noteCard(_ note: NoteDocument) -> some View {
         let accent = accent(for: note)
         let tint = accent.resolvedColor(in: theme)
+        let isSelected = selectedNoteIDs.contains(note.id)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
-                selectionCheckbox(for: note.id)
                 noteGlyph(note, accent: accent, size: 46)
                 Spacer(minLength: 8)
             }
@@ -421,9 +481,9 @@ struct NotesView: View {
                         .foregroundStyle(Color(theme.palette.secondary))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                    Text(preview(note))
+                    Text(cardPreview(note))
                         .font(.subheadline)
-                        .foregroundStyle(Color(theme.palette.ink))
+                        .foregroundStyle(cardPreviewColor(note))
                         .lineLimit(4)
                         .multilineTextAlignment(.leading)
                         .padding(.top, 8)
@@ -457,6 +517,14 @@ struct NotesView: View {
                 .stroke(tint.opacity(0.22), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(alignment: .topLeading) {
+            if selectionMode {
+                selectionMark(for: note.id, size: .cardBadge)
+                    .padding(6)
+            }
+        }
+        .opacity(selectionMode && isSelected ? 0.58 : 1)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
         .contextMenu { noteActions(note) }
     }
 
@@ -563,10 +631,56 @@ struct NotesView: View {
         .foregroundStyle(accent.resolvedColor(in: theme))
     }
 
-    private func preview(_ note: NoteDocument) -> String {
+    private func cardPreviewColor(_ note: NoteDocument) -> Color {
+        switch note.kind {
+        case .canvas, .page: Color(theme.palette.ink)
+        case .prayer, .journal: Color(theme.palette.secondary)
+        }
+    }
+
+    private func cardPreview(_ note: NoteDocument) -> String {
+        switch note.kind {
+        case .canvas, .page: bodyPreview(note)
+        case .prayer: prayerCardPreview(note)
+        case .journal: journalCardPreview(note)
+        }
+    }
+
+    /// Canvas and Page library cards show a short excerpt of note content.
+    private func bodyPreview(_ note: NoteDocument) -> String {
         (note.page?.body.isEmpty == false ? note.page?.body : nil)
             ?? note.objects.first.map { $0.quote?.source ?? ($0.text.isEmpty ? $0.kind.rawValue.capitalized : $0.text) }
             ?? "Blank note"
+    }
+
+    /// Prayer cards: status and activity, not the prayer text (keeps cards private at a glance).
+    private func prayerCardPreview(_ note: NoteDocument) -> String {
+        guard let prayer = note.prayerContent else { return "Prayer" }
+        var parts = ["Prayed \(prayer.prayerCount) time\(prayer.prayerCount == 1 ? "" : "s")", prayer.status.label]
+        if prayer.updates.isEmpty {
+            parts.append("No updates yet")
+        } else {
+            parts.append("\(prayer.updates.count) update\(prayer.updates.count == 1 ? "" : "s")")
+        }
+        if note.page?.ink.isEmpty == false { parts.append("Includes handwriting") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Journal cards: entry context and anchors, not the journal body.
+    private func journalCardPreview(_ note: NoteDocument) -> String {
+        let page = note.page ?? NotePage()
+        var parts = ["Journal entry"]
+        if let anchor = page.citations.first?.quote.reference {
+            parts.append(anchor)
+        }
+        if !page.ink.isEmpty { parts.append("Includes handwriting") }
+        if !page.attachments.isEmpty {
+            parts.append("\(page.attachments.count) attachment\(page.attachments.count == 1 ? "" : "s")")
+        }
+        if parts.count == 1, page.body.isEmpty, page.ink.isEmpty, page.attachments.isEmpty, page.citations.isEmpty {
+            return "Open to continue your reflection"
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

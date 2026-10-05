@@ -27,6 +27,7 @@ import ImageIO
     var toolsVisible = true
     var endTyping: (() -> Void)?
     var flushSurface: (() -> Void)?
+    private(set) var canvasClipboard: [NoteObject] = []
     private let repository: any NotesRepository
     private var change = 0
     private var saveTask: Task<Void, Never>?
@@ -68,14 +69,44 @@ import ImageIO
         guard !loaded else { return }
         do {
             let result = try await repository.load()
-            snapshot = result.snapshot
-            migrateLegacyNoteFields()
+            var loadedSnapshot = result.snapshot
+            migrateLegacyNoteFields(on: &loadedSnapshot)
+            loadedSnapshot.sanitize()
+            try loadedSnapshot.validate()
+            snapshot = loadedSnapshot
             purgeExpiredTrash()
             loaded = true
+            notice = nil
             if result.recovered { notice = "Recovered the previous Notes revision. Damaged files are preserved." }
-        } catch { report(error) }
+            if loadedSnapshot != result.snapshot {
+                changed()
+                await save()
+            }
+        } catch {
+            loaded = false
+            report(error)
+        }
     }
     func report(_ error: Error) { notice = error.localizedDescription }
+
+    /// Deletes the on-device Notes store and starts with an empty library.
+    func resetLibrary() async {
+        do {
+            try await repository.resetStorage()
+            snapshot = NotesSnapshot()
+            selectedNoteID = nil
+            selection = []
+            undoStack = []
+            redoStack = []
+            dirty = false
+            loaded = true
+            notice = "Notes library was reset on this iPad."
+            surfaceGeneration = UUID()
+        } catch {
+            loaded = false
+            report(error)
+        }
+    }
     func open(_ id: UUID) {
         flushSurface?(); selectedNoteID = id; selection = []; selectingMultiple = false; mode = .select
         undoStack = []; redoStack = []; surfaceGeneration = UUID(); bodySelection = NSRange(location: 0, length: 0)
@@ -204,7 +235,7 @@ import ImageIO
         for id in expired { permanentlyDelete(id) }
     }
 
-    private func migrateLegacyNoteFields() {
+    private func migrateLegacyNoteFields(on snapshot: inout NotesSnapshot) {
         for index in snapshot.notes.indices {
             if snapshot.notes[index].archivedAt == nil,
                snapshot.notes[index].trashedAt == nil,
@@ -279,7 +310,7 @@ import ImageIO
                 replaceBody(bodySelection, with: url + " "); return
             case .bullets: replaceBody(bodySelection, with: "• "); return
             case .numbered: replaceBody(bodySelection, with: "1. "); return
-            case .image, .table: break
+            case .image, .table, .audio: break
             default: return
             }
         }
@@ -299,6 +330,7 @@ import ImageIO
         case .sticker: object.text = sticker ?? "🌿"; object.frame.size = CGSize(width: 100, height: 100); object.fontSize = 64
         case .bullets: object.text = "• "
         case .numbered: object.text = "1. "
+        case .audio: object.frame.size = CGSize(width: NotePage.columnWidth, height: 72); if object.text.isEmpty { object.text = "Audio" }
         default: break
         }
         object.shape = shape; object.tint = tint
@@ -314,6 +346,108 @@ import ImageIO
         focusRequest = UUID()
         if kind == .link { refreshLink(object.id) }
     }
+    func formatBody(_ change: NoteTextFormatting.Change) {
+        guard let page = note?.page else { return }
+        let range = bodySelection.length > 0 ? bodySelection : NoteTextFormatting.lineRange(in: page.body, utf16: bodySelection.location)
+        guard range.length > 0 else { notice = "Add some text before formatting it."; return }
+        edit { note in
+            guard var page = note.page else { return }
+            page.formatting = NoteTextFormatting.changing(page.formatting, range: range, change: change)
+            note.page = page
+        }
+    }
+
+    func insertCheckbox() {
+        guard let body = note?.page?.body else { return }
+        let edit = NoteTextFormatting.checkboxEdit(in: body, caret: bodySelection.location)
+        replaceBody(edit.0, with: edit.1)
+    }
+
+    func formatBodyList(_ kind: NoteTextFormatting.ListKind) {
+        applyBodyLineEdits(collectingLineEdits { NoteTextFormatting.listEdit(in: $0, line: $1, kind: kind) })
+    }
+
+    func formatBodyIndent(outdent: Bool) {
+        applyBodyLineEdits(collectingLineEdits { NoteTextFormatting.indentEdit(in: $0, line: $1, outdent: outdent) })
+    }
+
+    func formatBodyColor(_ index: Int?) {
+        formatBodyInkColor(index.map { .preset($0) } ?? .default)
+    }
+
+    func formatBodyInkColor(_ spec: NoteTextFormatting.ColorSpec) {
+        formatBody(.inkColor(spec))
+    }
+
+    var bodyFormatState: NoteTextFormatting.ActiveState {
+        guard let page = note?.page else { return .empty }
+        return NoteTextFormatting.activeState(formatting: page.formatting, body: page.body, selection: bodySelection)
+    }
+
+    /// Uniform style level for the current selection or caret (0 body … 4 monospaced).
+    var bodyStyleLevel: Int {
+        let level = bodyFormatState.level
+        return level >= 0 ? level : 0
+    }
+
+    func formatBodyBlockQuote() {
+        guard let body = note?.page?.body else { return }
+        let lines = NoteTextFormatting.lineRanges(in: body, covering: bodyLineSelectionRange(in: body))
+        let ranges = lines.map { NoteTextFormatting.quoteTargetRange(in: body, line: $0) }.filter { $0.length > 0 }
+        guard !ranges.isEmpty else { notice = "Add some text before formatting it."; return }
+        edit { note in
+            guard var page = note.page else { return }
+            for range in ranges {
+                page.formatting = NoteTextFormatting.changing(page.formatting, range: range, change: .blockQuote)
+            }
+            note.page = page
+        }
+    }
+
+    private func bodyLineSelectionRange(in body: String) -> NSRange {
+        bodySelection.length > 0 ? bodySelection : NoteTextFormatting.lineRange(in: body, utf16: bodySelection.location)
+    }
+
+    private func collectingLineEdits(_ edit: (String, NSRange) -> (NSRange, String)?) -> [(NSRange, String)] {
+        guard let body = note?.page?.body else { return [] }
+        let lines = NoteTextFormatting.lineRanges(in: body, covering: bodyLineSelectionRange(in: body))
+        return lines.compactMap { edit(body, $0) }
+    }
+
+    private func applyBodyLineEdits(_ edits: [(NSRange, String)]) {
+        guard !edits.isEmpty else { return }
+        edit { note in
+            guard var page = note.page else { return }
+            var body = page.body
+            var spans = page.formatting
+            for (range, text) in edits.sorted(by: { $0.0.location > $1.0.location }) {
+                let delta = (text as NSString).length - range.length
+                body = (body as NSString).replacingCharacters(in: range, with: text)
+                spans = NoteTextFormatting.adjusting(spans, replacing: range, delta: delta)
+            }
+            page.body = body
+            page.formatting = spans
+            note.page = page
+        }
+    }
+
+    func insertScannedText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { notice = "No text was found in that scan."; return }
+        replaceBody(bodySelection, with: String(trimmed.prefix(20_000)) + "\n")
+    }
+
+    func insertAudio(_ data: Data, name: String = "Audio") {
+        guard !data.isEmpty, data.count <= 16 * 1024 * 1024 else { notice = "That audio could not be added or exceeds 16 MiB."; return }
+        guard let note, note.kind.usesPageBody, note.allObjects.count < 200 else { notice = "This note has reached its object limit."; return }
+        var object = NoteObject(kind: .audio, payload: data)
+        object.text = String(name.prefix(60))
+        object.frame.size = CGSize(width: NotePage.columnWidth, height: 72)
+        edit { $0.page?.insertAttachment(object, at: bodySelection.location) }
+        selection = [object.id]
+        focusRequest = UUID()
+    }
+
     func insertImage(_ data: Data) {
         guard data.count <= 32 * 1024 * 1024, let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 2048, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary),
@@ -321,6 +455,35 @@ import ImageIO
         insert(.image, payload: bytes)
         if let id = selection.first { update(id) { $0.frame.size = CGSize(width: 320, height: max(40, 320 * CGFloat(image.height) / CGFloat(image.width))) } }
     }
+    func copySelection() {
+        guard let note else { return }
+        let ids = note.members(selection)
+        canvasClipboard = note.objects.filter { ids.contains($0.id) }
+    }
+
+    func cutSelection() {
+        copySelection()
+        remove()
+    }
+
+    func togglePositionLock() {
+        edit { note in
+            for index in note.objects.indices where selection.contains(note.objects[index].id) {
+                note.objects[index].positionLocked.toggle()
+            }
+        }
+    }
+
+    func reorderSelection(front: Bool) {
+        edit { note in
+            let ids = note.members(selection)
+            let moving = note.objects.filter { ids.contains($0.id) }
+            guard !moving.isEmpty else { return }
+            note.objects.removeAll { ids.contains($0.id) }
+            if front { note.objects.append(contentsOf: moving) } else { note.objects.insert(contentsOf: moving, at: 0) }
+        }
+    }
+
     func duplicateSelection() {
         guard let note else { return }
         let ids = note.members(selection)

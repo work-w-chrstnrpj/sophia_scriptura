@@ -121,7 +121,7 @@ final class AnnotationUITests: XCTestCase {
         layerItem(app, "Study 1").tap()
         app.buttons["annotation.layers"].tap()
         XCTAssertTrue(layerItem(app, "Study 1").isSelected)
-        XCTAssertTrue((layerItem(app, "Study 1").value as? String)?.contains("OldPaper") == true)
+        XCTAssertTrue((layerItem(app, "Study 1").value as? String)?.contains("Old Paper") == true)
         app.buttons["annotation.layers"].tap()
         showTabs(app); app.buttons["tab.settings"].tap()
         XCTAssertTrue(app.buttons["preset.oldPaper"].isSelected)

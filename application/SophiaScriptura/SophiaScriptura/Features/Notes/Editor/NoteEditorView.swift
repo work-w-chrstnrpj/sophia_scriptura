@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import PhotosUI
 
 struct NoteEditorView: View {
     @Environment(\.appTheme) private var theme
@@ -15,6 +16,13 @@ struct NoteEditorView: View {
     @State private var linkPrompt = false
     @State private var link = "https://"
     @State private var confirmDelete = false
+    @StateObject private var recorder = NoteAudioRecorder()
+    @State private var choosePhoto = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var takePhoto = false
+    @State private var scan: NoteScanMode?
+    @State private var importAudio = false
+    @State private var showFormatPopover = false
     var body: some View {
         Group {
             if session.note?.kind == .prayer {
@@ -145,28 +153,32 @@ struct NoteEditorView: View {
                         .popover(isPresented: galleryBinding("Shapes")) { NoteInsertGallery(session: session, kind: "Shapes") { gallery = nil } }
                     Button("Stickers", systemImage: "face.smiling") { gallery = "Stickers" }.accessibilityIdentifier("notes.stickers")
                         .popover(isPresented: galleryBinding("Stickers")) { NoteInsertGallery(session: session, kind: "Stickers") { gallery = nil } }
-                }
-                Menu("Insert", systemImage: "plus") {
-                    if session.note?.kind == .canvas {
+                    Menu("Insert", systemImage: "plus") {
                         Button("Text box") { session.insert(.text) }
                         Button("Sticky note") { session.insert(.text, tint: .yellow) }
                         Button("Shape") { gallery = "Shapes" }
                         Button("Sticker") { gallery = "Stickers" }
-                    }
-                    Button("Image from Files") { importing = true }
-                    Button("Link") { linkPrompt = true }
-                    Button("Table") { session.insert(.table) }
-                    Button("Bullet list") { session.insert(.bullets) }
-                    Button("Numbered list") { session.insert(.numbered) }
-                }.accessibilityIdentifier("notes.insert")
+                        Button("Image from Files") { importing = true }
+                        Button("Link") { linkPrompt = true }
+                        Button("Table") { session.insert(.table) }
+                        Button("Bullet list") { session.insert(.bullets) }
+                        Button("Numbered list") { session.insert(.numbered) }
+                    }.accessibilityIdentifier("notes.insert")
+                } else if session.note?.kind == .page || session.note?.kind == .journal {
+                    pageJournalToolbar
+                }
                 Spacer(minLength: 0)
-                Menu {
-                    Button("Fit content") { session.setZoom?(nil) }
-                    ForEach([25, 50, 75, 100, 150, 200], id: \.self) { value in
-                        Button("\(value)%") { session.setZoom?(CGFloat(value) / 100) }
-                    }
-                } label: { Text("\(Int(session.zoom * 100))%").font(.caption.monospacedDigit()).frame(minWidth: 40) }
-                .accessibilityLabel("Zoom").accessibilityIdentifier("notes.zoom")
+                if session.note?.kind == .canvas {
+                    Menu {
+                        Button("Fit content") { session.setZoom?(nil) }
+                        ForEach([25, 50, 75, 100, 150, 200], id: \.self) { value in
+                            Button("\(value)%") { session.setZoom?(CGFloat(value) / 100) }
+                        }
+                    } label: { Text("\(Int(session.zoom * 100))%").font(.caption.monospacedDigit()).frame(minWidth: 40) }
+                    .accessibilityLabel("Zoom").accessibilityIdentifier("notes.zoom")
+                } else if recorder.recording {
+                    Text("Recording").font(.caption.weight(.semibold)).foregroundStyle(.red).accessibilityIdentifier("notes.recording")
+                }
             }
             .labelStyle(.iconOnly).buttonStyle(.plain).font(.system(size: 20))
             .frame(height: 44).padding(.horizontal, 16).background(Color(theme.palette.paper))
@@ -174,7 +186,7 @@ struct NoteEditorView: View {
             if session.note?.kind == .canvas {
                 NoteCanvasSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: openCitation)
             } else if session.note?.kind.usesPageBody == true {
-                NotePageSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: openCitation)
+                NotePageSurface(session: session, active: session.active, stateToken: surfaceToken, allowsHorizontalPan: showsScripturePane, openCitation: openCitation)
             }
 
         }
@@ -184,14 +196,94 @@ struct NoteEditorView: View {
             Button("Cancel", role: .cancel) {}
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.image]) { result in
-            do {
-                let url = try result.get(), granted = url.startAccessingSecurityScopedResource()
-                defer { if granted { url.stopAccessingSecurityScopedResource() } }
-                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= 32 * 1024 * 1024 else { throw NotesError.limit }
-                session.insertImage(try Data(contentsOf: url))
-            } catch { session.report(error) }
+            importFile(result, limit: 32 * 1024 * 1024) { session.insertImage($0) }
         }
-        .onDisappear { session.flushSurface?(); Task { await session.save() } }
+        .fileImporter(isPresented: $importAudio, allowedContentTypes: [.audio]) { result in
+            importFile(result, limit: 16 * 1024 * 1024) { session.insertAudio($0, name: "Audio") }
+        }
+        .photosPicker(isPresented: $choosePhoto, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) { session.insertImage(data) }
+                photoItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $takePhoto) {
+            CameraCapture { session.insertImage($0); takePhoto = false }
+        }
+        .fullScreenCover(item: $scan) { mode in
+            DocumentScanner { images in
+                scan = nil
+                switch mode {
+                case .text:
+                    Task { session.insertScannedText(await NoteTextScan.recognize(images)) }
+                case .document:
+                    for image in images {
+                        if let data = image.jpegData(compressionQuality: 0.85) { session.insertImage(data) }
+                    }
+                }
+            }
+        }
+        .onDisappear { recorder.stop(); session.flushSurface?(); Task { await session.save() } }
+    }
+
+    private var pageJournalToolbar: some View {
+        Group {
+            Button("Text format", systemImage: "textformat") { showFormatPopover = true }
+                .accessibilityIdentifier("notes.format")
+                .popover(isPresented: $showFormatPopover, arrowEdge: .top) {
+                    NoteFormatPopover(session: session)
+                }
+            Button("Checkbox", systemImage: "checklist") { session.insertCheckbox() }
+                .accessibilityIdentifier("notes.insert.checkbox")
+            Button("Table", systemImage: "tablecells") { session.insert(.table) }
+                .accessibilityIdentifier("notes.insert.table")
+            Menu("Attach", systemImage: "link") {
+                Button("Link", systemImage: "link") { linkPrompt = true }
+                Button("Take Photo", systemImage: "camera") { beginCamera() }
+                Button("Choose Photo", systemImage: "photo") { choosePhoto = true }
+                Button("Scan Text", systemImage: "text.viewfinder") { beginScan(.text) }
+                Button("Scan Document", systemImage: "doc.viewfinder") { beginScan(.document) }
+                Button(recorder.recording ? "Stop Recording" : "Record Audio", systemImage: recorder.recording ? "stop.circle" : "mic") { toggleRecording() }
+                Button("Attach Audio", systemImage: "waveform") { importAudio = true }
+            }
+            .accessibilityIdentifier("notes.attach")
+        }
+    }
+
+    private func beginCamera() {
+        guard NoteCapture.canTakePhoto else {
+            session.notice = "This iPad has no camera available for taking a photo."
+            return
+        }
+        takePhoto = true
+    }
+
+    private func beginScan(_ mode: NoteScanMode) {
+        guard NoteCapture.canScan else {
+            session.notice = "Document scanning is not available on this iPad."
+            return
+        }
+        scan = mode
+    }
+
+    private func toggleRecording() {
+        if recorder.recording {
+            recorder.onFinish = { data in session.insertAudio(data, name: "Recording") }
+            recorder.stop()
+        } else {
+            do { try recorder.start() } catch { session.notice = "Recording is unavailable. Allow the microphone for Sophia Scriptura in Settings." }
+        }
+    }
+
+    private func importFile(_ result: Result<URL, Error>, limit: Int, insert: (Data) -> Void) {
+        do {
+            let url = try result.get(), granted = url.startAccessingSecurityScopedResource()
+            defer { if granted { url.stopAccessingSecurityScopedResource() } }
+            guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max) <= limit else { throw NotesError.limit }
+            insert(try Data(contentsOf: url))
+        } catch { session.report(error) }
     }
 }
 
@@ -260,7 +352,14 @@ private struct NoteObjectInspector: View {
                     TextField("Width", value: dimension(width: true), format: .number).keyboardType(.decimalPad)
                     if object.kind != .image { TextField("Height", value: dimension(width: false), format: .number).keyboardType(.decimalPad) }
                 }
-                if ![.image, .ink, .shape].contains(object.kind) { Stepper("Text size: \(Int(object.fontSize))", value: $object.fontSize, in: 12...72) }
+                if ![.image, .ink, .shape].contains(object.kind) {
+                    Stepper("Text size: \(Int(object.fontSize))", value: $object.fontSize, in: 12...72)
+                    if [.text, .bullets, .numbered].contains(object.kind) {
+                        Toggle("Monospaced", isOn: $object.monospaced)
+                    }
+                }
+                TextField("Description", text: $object.details)
+                Toggle("Lock position", isOn: $object.positionLocked)
                 if object.kind == .ink { Text("Use Pencil to draw or erase. Select the drawing with your finger to move or resize it.") }
             }.appSurface().navigationTitle(object.kind.rawValue.capitalized)
                 .toolbar {

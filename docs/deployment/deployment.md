@@ -1,5 +1,45 @@
 # Personal iPad deployment
 
+## v0.2.0 Scripture annotation fix — 2026-10-05
+
+Signed Debug build **0.2.0 (6)** fixes Scripture Draw mode: the minimized palette no longer
+blocks Pencil input, Notes releases the shared PencilKit picker when leaving the Notes tab,
+and expanding the palette clears a stuck in-stroke state so the tool picker can appear.
+Installed in place on `iPad ni Paj`. Log: `build/v020-device-annotation`.
+
+## v0.2.0 Notes ink revert — 2026-10-05
+
+Signed Debug build **0.2.0 (5)** restores the v0.1.0 PencilKit scroll sync (document-space
+`ink.drawing`) and freezes that sync while the Pencil is down to reduce mid-stroke stretch.
+Installed in place on `iPad ni Paj`. Log: `build/v020-device-revert`.
+
+## v0.2.0 Notes ink viewport fix — 2026-10-05
+
+Signed Debug build **0.2.0 (4)** replaces the paper/ink affine mapping with explicit scroll
+zoom and offset transforms, merges viewport strokes back into the full document drawing,
+keeps the Pencil layer visible on Canvas, and persists ink even when `didBeginUsingTool`
+was skipped. Installed in place on `iPad ni Paj`. Log: `build/v020-device-fix2`.
+
+## v0.2.0 Notes ink commit fix — 2026-10-05
+
+Signed Debug build **0.2.0 (3)** fixes ink disappearing after a stroke by mapping the live
+Pencil canvas back into document coordinates at stroke begin/end and avoiding stale note
+reloads that cleared in-memory ink. Installed in place on `iPad ni Paj` and launched as
+`com.personal.SophiaScriptura`. Logs: `build/v020-device-fix.log`.
+
+## v0.2.0 Notes writing — 2026-10-05
+
+Signed Debug build **0.2.0 (2)** passed strict signature verification, installed in place
+on `iPad ni Paj`, and launched as `com.personal.SophiaScriptura`. The existing app was not
+uninstalled. Logs: `build/v020-device.log`, `build/v020-device/install.log`, and
+`build/v020-device/launch.log`. The app is
+`build/v020-device/Build/Products/Debug-iphoneos/SophiaScriptura.app`.
+
+`NotesTests` passed **29 tests, 0 failures** on the iPad (A16) simulator. Result:
+`build/v020-notes.xcresult`. Page and Journal stay at 100% scale; horizontal movement is
+available only while the Scripture pane is open. Confirm live Pencil feel, the insert row,
+and the renamed appearance presets on the device.
+
 ## SP-023 response/source follow-up — 2026-10-04
 
 Signed Debug build, strict signature verification, in-place installation and launch on
@@ -102,8 +142,8 @@ Settings shows **Version** from the app bundle. Before each sideload release, bu
 
 | Setting | Xcode UI | `project.pbxproj` key | Shown in app as |
 | --- | --- | --- | --- |
-| Marketing version | General → Identity → **Version** | `MARKETING_VERSION` | `CFBundleShortVersionString` (e.g. `0.1.0`) |
-| Build number | General → Identity → **Build** | `CURRENT_PROJECT_VERSION` | `CFBundleVersion` (e.g. `1`) |
+| Marketing version | General → Identity → **Version** | `MARKETING_VERSION` | `CFBundleShortVersionString` (current: `0.2.0`) |
+| Build number | General → Identity → **Build** | `CURRENT_PROJECT_VERSION` | `CFBundleVersion` (current: `2`) |
 
 Canonical file: `application/SophiaScriptura/SophiaScriptura.xcodeproj/project.pbxproj` (Debug and Release both list the same keys). Runtime reader: `AppShell/AppVersion.swift`. In-app **Settings → About** shows version, developer, GPL v3, and third-party notices. Bundled license files live under `SophiaScriptura/Resources/Legal/`; the repository root `LICENSE` matches the app’s GPL v3 terms.
 

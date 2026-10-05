@@ -33,6 +33,12 @@ acceptance apply throughout delivery, not only in the final milestone.
 
 ## 1. Project Goal
 
+v0.2.0 Notes checkpoint (2026-10-05): Page/Journal text formatting and media input,
+Canvas object controls and Pencil viewport refinements extend the existing Notes slice.
+The archive remains v3; new object editor fields decode with defaults, while audio
+objects require v0.2.0. See the [Notes contract](../data/notes-contract.md) and
+[release notes](../releases/v0.2.0.md) for behavior, compatibility and verification.
+
 Build Sophia Scriptura, a personal, offline-first iPadOS Bible study app for a single
 user that unifies scripture reading, Apple Pencil annotation layers, note taking,
 verse-anchored collections, a guardrailed AI study companion (bring-your-own-key), audio

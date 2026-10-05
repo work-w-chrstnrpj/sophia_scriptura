@@ -39,6 +39,37 @@ struct AnnotationArchiveDocument: FileDocument {
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
 }
 
+private struct AnnotationLayerHintBubble: View {
+    @Environment(\.appTheme) private var theme
+    let message: String
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(Color(theme.palette.ink))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color(theme.palette.rule), lineWidth: 1))
+            Image(systemName: "arrowtriangle.down.fill")
+                .font(.caption2)
+                .foregroundStyle(Color(theme.palette.paper))
+                .overlay(
+                    Image(systemName: "arrowtriangle.down.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color(theme.palette.rule))
+                        .offset(y: 0.6)
+                )
+                .offset(y: -4)
+        }
+        .shadow(color: Color(theme.palette.ink).opacity(0.1), radius: 8, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("annotation.layerHint")
+    }
+}
+
 struct AnnotationControls: View {
     @Environment(\.appTheme) private var theme
     @Bindable var annotations: AnnotationSession
@@ -56,6 +87,15 @@ struct AnnotationControls: View {
     @State private var importing = false
     @State private var replacement: Data?
     @State private var confirmRestore = false
+    private var layerHintMessage: String {
+        "Create a new layer before you can annotate."
+    }
+    private func needsLayerHint(for document: ChapterDocument?) -> Bool {
+        guard annotations.loaded, annotations.mode == .draw else { return false }
+        if annotations.selected == nil { return true }
+        guard let document else { return false }
+        return annotations.layers(for: document).isEmpty
+    }
     var body: some View {
         VStack(spacing: 4) {
             ViewThatFits(in: .horizontal) {
@@ -65,6 +105,11 @@ struct AnnotationControls: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.horizontal, 16)
             .disabled(annotations.usingTool || annotations.saving)
+            if needsLayerHint(for: reader.document) {
+                AnnotationLayerHintBubble(message: layerHintMessage)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 2)
+            }
             if annotations.failed {
                 Button(annotations.loaded ? "Retry save" : "Retry opening") {
                     Task { if annotations.loaded { await annotations.save() } else { await annotations.open(reader.document) } }
@@ -159,6 +204,12 @@ struct AnnotationControls: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Annotation layers").font(.headline).padding(.horizontal, 10)
                 if let document = reader.document {
+                    if needsLayerHint(for: document) {
+                        AnnotationLayerHintBubble(message: layerHintMessage)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 4)
+                            .padding(.bottom, 4)
+                    }
                     ForEach(annotations.layers(for: document)) { choice in
                         let selected = annotations.selected?.id == choice.id
                         Button {

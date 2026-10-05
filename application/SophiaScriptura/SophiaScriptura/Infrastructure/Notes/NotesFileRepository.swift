@@ -29,7 +29,9 @@ actor NotesFileRepository: NotesRepository {
         return try Data(contentsOf: url)
     }
     private func validate(_ snapshot: NotesSnapshot) throws {
-        try snapshot.validate()
+        var copy = snapshot
+        copy.sanitize()
+        try copy.validate()
         var bytes = 0
         func validateInk(_ data: Data) throws {
             if data.isEmpty { return }
@@ -73,7 +75,8 @@ actor NotesFileRepository: NotesRepository {
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
         guard envelope.schemaVersion == 1 else { throw NotesError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw NotesError.invalid }
-        let snapshot = try JSONDecoder().decode(NotesSnapshot.self, from: envelope.payload)
+        var snapshot = try JSONDecoder().decode(NotesSnapshot.self, from: envelope.payload)
+        snapshot.sanitize()
         try validate(snapshot)
         return snapshot
     }
@@ -147,6 +150,14 @@ actor NotesFileRepository: NotesRepository {
         return try encode(value)
     }
     func preRestoreArchive() throws -> Data { try read(url(pointer("pre-restore.json"))) }
+    func resetStorage() async throws {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: directory.path) {
+            try fm.removeItem(at: directory)
+        }
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
     func restore(_ data: Data, expectedRevision: Int) throws -> NotesSnapshot {
         let imported = try decode(data)
         do {

@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 struct NoteObject: Codable, Equatable, Identifiable, Sendable {
-    enum Kind: String, Codable, CaseIterable, Sendable { case text, ink, image, quote, link, table, shape, bullets, numbered, sticker }
+    enum Kind: String, Codable, CaseIterable, Sendable { case text, ink, image, quote, link, table, shape, bullets, numbered, sticker, audio }
     var id = UUID()
     var kind: Kind
     var frame = CGRect(x: 60, y: 60, width: 320, height: 180)
@@ -16,7 +16,37 @@ struct NoteObject: Codable, Equatable, Identifiable, Sendable {
     var inkSize: CGSize? = nil
     var quote: NoteQuote?
     var fontSize: Double = 22
+    var monospaced = false
+    var positionLocked = false
+    var details = ""
     var label: String { text.isEmpty ? kind.rawValue.capitalized : String(text.prefix(60)) }
+}
+
+extension NoteObject {
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, frame, group, text, url, cells, payload, shape, tint, inkSize, quote, fontSize
+        case monospaced, positionLocked, details
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        frame = try container.decode(CGRect.self, forKey: .frame)
+        group = try container.decodeIfPresent(UUID.self, forKey: .group)
+        text = try container.decode(String.self, forKey: .text)
+        url = try container.decode(String.self, forKey: .url)
+        cells = try container.decode([[String]].self, forKey: .cells)
+        payload = try container.decode(Data.self, forKey: .payload)
+        shape = try container.decodeIfPresent(NoteShape.self, forKey: .shape)
+        tint = try container.decodeIfPresent(NoteTint.self, forKey: .tint)
+        inkSize = try container.decodeIfPresent(CGSize.self, forKey: .inkSize)
+        quote = try container.decodeIfPresent(NoteQuote.self, forKey: .quote)
+        fontSize = try container.decode(Double.self, forKey: .fontSize)
+        monospaced = try container.decodeIfPresent(Bool.self, forKey: .monospaced) ?? false
+        positionLocked = try container.decodeIfPresent(Bool.self, forKey: .positionLocked) ?? false
+        details = try container.decodeIfPresent(String.self, forKey: .details) ?? ""
+    }
 }
 
 struct NoteQuote: Codable, Equatable, Sendable {
@@ -68,7 +98,9 @@ struct NotePage: Codable, Equatable, Sendable {
     var height: CGFloat = 1600
     // Older objects may occupy a wider page. Preserve their original positions.
     var width: CGFloat = Self.width
-    private enum CodingKeys: String, CodingKey { case body, citations, ink, height, width, attachments }
+    /// Omitted from archives while empty so existing Page JSON stays unchanged.
+    var formatting: [NoteTextSpan] = []
+    private enum CodingKeys: String, CodingKey { case body, citations, ink, height, width, attachments, formatting }
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -78,6 +110,17 @@ struct NotePage: Codable, Equatable, Sendable {
         height = try c.decode(CGFloat.self, forKey: .height)
         width = try c.decodeIfPresent(CGFloat.self, forKey: .width) ?? Self.width
         attachments = try c.decodeIfPresent([NoteInlineAttachment].self, forKey: .attachments) ?? []
+        formatting = try c.decodeIfPresent([NoteTextSpan].self, forKey: .formatting) ?? []
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(body, forKey: .body)
+        try container.encode(citations, forKey: .citations)
+        try container.encode(ink, forKey: .ink)
+        try container.encode(height, forKey: .height)
+        try container.encode(width, forKey: .width)
+        try container.encode(attachments, forKey: .attachments)
+        if !formatting.isEmpty { try container.encode(formatting, forKey: .formatting) }
     }
     mutating func insertAttachment(_ object: NoteObject, at offset: Int) {
         let point = min(max(0, offset), body.utf16.count)
@@ -100,6 +143,7 @@ struct NotePage: Codable, Equatable, Sendable {
             if range.location >= item.location + item.length { return item }
             return nil // Editing a citation removes the link rather than pointing at unrelated text.
         }
+        formatting = NoteTextFormatting.adjusting(formatting, replacing: range, delta: delta)
         body = (body as NSString).replacingCharacters(in: range, with: text)
     }
     mutating func insert(_ quote: NoteQuote, at offset: Int) {
@@ -341,7 +385,9 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     }
     mutating func move(_ selection: Set<UUID>, by delta: CGSize) {
         guard delta.width.isFinite, delta.height.isFinite else { return }
-        let ids = members(selection), frames = objects.filter { ids.contains($0.id) }.map(\.frame)
+        let ids = members(selection).filter { id in objects.first(where: { $0.id == id })?.positionLocked != true }
+        guard !ids.isEmpty else { return }
+        let frames = objects.filter { ids.contains($0.id) }.map(\.frame)
         guard let first = frames.first else { return }
         let bounds = frames.dropFirst().reduce(first) { $0.union($1) }
         let dx = min(max(delta.width, -bounds.minX), (page?.width ?? Self.extent) - bounds.maxX)
@@ -386,6 +432,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
                   f.maxX <= Self.extent, f.maxY <= Self.extent,
                   object.text.count <= 20_000, object.url.count <= 4096,
                   object.fontSize.isFinite, (12...72).contains(object.fontSize),
+                  object.details.count <= 500,
                   object.payload.count <= 16 * 1024 * 1024,
                   object.cells.count <= 20, object.cells.allSatisfy({ $0.count <= 10 && $0.allSatisfy { $0.count <= 2000 } }) else { throw NotesError.invalid }
             if let size = object.inkSize {
@@ -416,7 +463,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
               page.attachments.count <= 200,
               Set(page.attachments.map(\.location)).count == page.attachments.count else { throw NotesError.invalid }
         for attachment in page.attachments {
-            guard [.image, .table].contains(attachment.object.kind), attachment.object.group == nil,
+            guard [.image, .table, .audio].contains(attachment.object.kind), attachment.object.group == nil,
                   attachment.location >= 0, attachment.location < page.body.utf16.count,
                   (page.body as NSString).substring(with: NSRange(location: attachment.location, length: 1)) == "\u{FFFC}" else { throw NotesError.invalid }
         }
@@ -425,6 +472,12 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
                   citation.length <= page.body.utf16.count - citation.location else { throw NotesError.invalid }
             try citation.quote.validate()
         }
+        for span in page.formatting {
+            guard span.location >= 0, span.length > 0, span.location <= page.body.utf16.count,
+                  span.length <= page.body.utf16.count - span.location, (0...4).contains(span.level),
+                  span.colorIndex == nil || (1...9).contains(span.colorIndex!),
+                  span.colorHex == nil || (span.colorHex!.count == 6 && span.colorHex!.uppercased().allSatisfy(\.isHexDigit)) else { throw NotesError.invalid }
+        }
     }
 }
 
@@ -432,10 +485,54 @@ struct NotesSnapshot: Codable, Equatable, Sendable {
     var schemaVersion = 3
     var revision = 0
     var notes: [NoteDocument] = []
+    mutating func sanitize() {
+        for index in notes.indices { notes[index].sanitize() }
+    }
     func validate() throws {
         guard (1...3).contains(schemaVersion) else { throw NotesError.unsupported }
         guard revision >= 0, notes.count <= 200, Set(notes.map(\.id)).count == notes.count else { throw NotesError.invalid }
         for note in notes { try note.validate() }
+    }
+}
+
+extension NoteDocument {
+    mutating func sanitize() {
+        var items = objects
+        for index in items.indices { NoteDocument.sanitize(&items[index]) }
+        objects = items
+        if var page {
+            page.sanitize()
+            self.page = page
+        }
+        var seenGroups = Set(objects.compactMap(\.group))
+        for group in seenGroups where objects.filter({ $0.group == group }).count < 2 {
+            for index in objects.indices where objects[index].group == group { objects[index].group = nil }
+        }
+    }
+
+    fileprivate static func sanitize(_ object: inout NoteObject) {
+        if !object.fontSize.isFinite { object.fontSize = 22 }
+        object.fontSize = min(72, max(12, object.fontSize))
+        if object.details.count > 500 { object.details = String(object.details.prefix(500)) }
+    }
+}
+
+extension NotePage {
+    mutating func sanitize() {
+        for index in attachments.indices { NoteDocument.sanitize(&attachments[index].object) }
+        let length = body.utf16.count
+        formatting = formatting.compactMap { span in
+            var item = span
+            if let index = item.colorIndex, !(1...9).contains(index) { item.colorIndex = nil }
+            if let hex = item.colorHex?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(), !hex.isEmpty {
+                item.colorHex = hex.count == 6 && hex.allSatisfy(\.isHexDigit) ? hex : nil
+            } else {
+                item.colorHex = nil
+            }
+            guard item.location >= 0, item.length > 0, item.location <= length,
+                  item.length <= length - item.location, (0...4).contains(item.level) else { return nil }
+            return item.isPlain ? nil : item
+        }
     }
 }
 
@@ -446,6 +543,7 @@ protocol NotesRepository: Sendable {
     func exportArchive() async throws -> Data
     func restore(_ data: Data, expectedRevision: Int) async throws -> NotesSnapshot
     func preRestoreArchive() async throws -> Data
+    func resetStorage() async throws
 }
 
 enum NotesError: LocalizedError {

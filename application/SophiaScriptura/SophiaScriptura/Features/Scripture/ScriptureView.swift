@@ -301,9 +301,9 @@ struct ScriptureView: View {
     }
 
     private var minimizedPalette: some View {
-        VStack {
-            HStack {
-                Spacer()
+        Color.clear
+            .allowsHitTesting(false)
+            .overlay(alignment: .topTrailing) {
                 HStack(spacing: 0) {
                     if annotations.paletteCollapsed {
                         Button { annotations.paletteCollapsed = false } label: {
@@ -312,7 +312,7 @@ struct ScriptureView: View {
                         .accessibilityLabel("Restore minimized palette")
                         .accessibilityIdentifier("annotation.paletteCollapsed")
                     } else {
-                        Button { annotations.toolsVisible = true } label: {
+                        Button { annotations.showDrawingTools() } label: {
                             Image(systemName: "pencil.tip")
                                 .font(.system(size: 19, weight: .medium))
                                 .frame(width: 44, height: 44)
@@ -327,10 +327,8 @@ struct ScriptureView: View {
                     }
                 }
                 .background(.regularMaterial, in: Capsule())
+                .padding(12)
             }
-            Spacer()
-        }
-        .padding(12)
     }
 
     private func ordinaryReader(_ document: ChapterDocument) -> some View {

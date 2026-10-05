@@ -131,13 +131,24 @@ struct NotePrayerEditorView: View {
     }
 
     private var surfaceToken: String {
-        "\(session.renderRevision)|\(session.surfaceGeneration)|\(session.active)|\(session.toolsVisible)|\(session.toolsRequest)|\(showWritingPage)"
+        "\(session.renderRevision)|\(session.surfaceGeneration)|\(session.active)|\(session.toolsVisible)|\(session.toolsRequest)|\(showWritingPage)|\(Int(previewWritingHeight))"
+    }
+
+    private static let previewBoardMargin: CGFloat = 16
+    private static let previewMinHeight: CGFloat = 360
+    private static let previewMaxHeight: CGFloat = 960
+    private static let previewExtraVerticalPadding: CGFloat = 96
+
+    private var previewBoardWidth: CGFloat {
+        max(280, UIScreen.main.bounds.width - Self.horizontalMargin * 2 - 36)
     }
 
     private var previewWritingHeight: CGFloat {
-        guard let page = session.note?.page else { return 280 }
-        let textBlock = NotePageTypography.height(of: page)
-        return min(360, max(220, textBlock + 120))
+        guard let page = session.note?.page else { return Self.previewMinHeight }
+        let widthScale = max(0.25, (previewBoardWidth - Self.previewBoardMargin * 2) / NotePage.columnWidth)
+        let content = NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: true)
+        let natural = content * widthScale + Self.previewBoardMargin * 2 + Self.previewExtraVerticalPadding
+        return min(Self.previewMaxHeight, max(Self.previewMinHeight, natural))
     }
 
     private var titleButton: some View {
@@ -205,7 +216,14 @@ struct NotePrayerEditorView: View {
             }
 
             if !showWritingPage {
-                NotePageSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: { _ in })
+                NotePageSurface(
+                    session: session,
+                    active: session.active,
+                    stateToken: surfaceToken,
+                    prayerPreviewFitsContent: true,
+                    prayerPreviewHorizontalMargin: Self.previewBoardMargin,
+                    openCitation: { _ in }
+                )
                     .frame(height: previewWritingHeight)
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {

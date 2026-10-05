@@ -59,11 +59,13 @@ struct StudyArchivedNotesView: View {
     @State private var searchPresented = false
     @State private var sort = "Modified"
     @State private var tag = ""
+    @State private var noteKindFilter: NoteKind?
     private var notes: [NoteDocument] {
         session.snapshot.notes.filter {
             $0.isArchived
                 && (search.isEmpty || $0.searchableText.localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || $0.tags.contains(tag))
+                && (noteKindFilter == nil || $0.kind == noteKindFilter)
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if sort == "Created", $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
@@ -83,12 +85,18 @@ struct StudyArchivedNotesView: View {
                         Text("All tags").tag("")
                         ForEach(Array(Set(session.snapshot.notes.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
                     }
+                    Picker("Type", selection: $noteKindFilter) {
+                        Text("All types").tag(NoteKind?.none)
+                        ForEach(NoteKind.allCases, id: \.self) { kind in
+                            Text(kind.displayName).tag(Optional(kind))
+                        }
+                    }
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
                 }
             }
             if notes.isEmpty {
-                ContentUnavailableView("No archived notes", systemImage: "archivebox", description: Text("Archived notes appear here."))
+                ContentUnavailableView("No archived notes", systemImage: "archivebox", description: Text("No notes match your filters."))
             } else {
                 List(notes) { note in
                     VStack(alignment: .leading, spacing: 4) {

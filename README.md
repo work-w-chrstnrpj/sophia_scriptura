@@ -87,12 +87,14 @@ The workflow badge above reports **main’s workflow**, not every local test or 
 it may show no status until the workflow exists and runs on that branch. Private-repository
 badges are not publicly accessible outside GitHub.
 
-For `v0.1.0`, the simulator app build passed, but the unit suite is blocked by existing
-prayer-fixture compilation errors in `NotesTests.swift`. Earlier full-scheme UI failures
-and live-provider/device acceptance limits are documented. This is not an all-green test claim.
+`v0.2.0` (build 16) is the current app version. Its full unit suite passed (210 tests,
+including 34 Notes tests). Earlier development builds were installed on the paired iPad;
+the final source verification does not cover UI automation or live Pencil feel.
+The earlier `v0.1.0` publication recorded a blocked unit suite;
+later CI repair on `main` is documented separately.
 
-See [release notes](docs/releases/v0.1.0.md) and the
-[test specification](docs/testing/test-specification.md) for evidence and commands.
+See [v0.2.0 notes](docs/releases/v0.2.0.md), [v0.1.0 notes](docs/releases/v0.1.0.md), and the
+[test specification](docs/testing/test-specification.md).
 Scripture narration is excluded from this release.
 
 </details>

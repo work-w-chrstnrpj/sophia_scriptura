@@ -12,6 +12,7 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v0.2.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.0) | 2026-10-05 | Notes formatting/media, fixed Page/Journal scale, Canvas controls, annotation refinements | [Release notes](v0.2.0.md) |
 | [v0.1.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.1.0) | 2026-10-04 | First tagged personal-use release: Scripture, study hubs, Notes, Collections, Companion and Activity | [Release notes](v0.1.0.md) |
 
 These are personal iPad source releases, not App Store distributions. See

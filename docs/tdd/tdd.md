@@ -1004,3 +1004,17 @@ The app target's existing `AppIcon` setting is fulfilled by a universal asset se
 the owner-supplied default, dark and tinted artwork. Clear system treatments are derived by
 iPadOS rather than represented as unsupported asset-catalog roles. See SP-014 for automated
 evidence and the remaining physical Pencil/icon appearance checks. This work does not start M5.
+
+## v0.2.2 draft study-material/Canvas checkpoint — 2026-10-07
+
+SP-024 excludes inactive Notes/Companion material from Collections, provides folder-scoped
+creation actions and refines Canvas sharing, colors and Pencil object selection. Notes
+capacity increases to 1,000 objects while byte limits remain. Bounded stroke batching and
+scene caching address the per-stroke object exhaustion path. Owner authorized v0.2.2 release on 2026-10-07. No schema migration is required. See [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md)
+and the [Notes contract](../data/notes-contract.md).
+
+SP-024 performance follow-up (v0.2.2): UIKit Canvas virtualizes nearby object views,
+retains selected/edited objects, and keeps the existing viewport-sized PencilKit surface.
+A bounded raster cache and serial ImageIO worker reduce repeated main-actor image work.
+Sharing prepares the complete document before export and restores virtualization afterwards.
+Persistence and per-feature safety bounds remain unchanged by these optimizations.

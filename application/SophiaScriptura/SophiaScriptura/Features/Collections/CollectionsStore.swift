@@ -129,8 +129,10 @@ final class CollectionsStore: ObservableObject {
         collections.filter { $0.parentID == collectionID && $0.isActiveInLibrary }
     }
 
-    func membershipCount(for collectionID: UUID, includingDescendants: Bool = false) -> Int {
-        artifactIDs(for: collectionID, includingDescendants: includingDescendants).count
+    func membershipCount(for collectionID: UUID, includingDescendants: Bool = false, notes: [NoteDocument]? = nil) -> Int {
+        let ids = artifactIDs(for: collectionID, includingDescendants: includingDescendants)
+        guard let notes else { return ids.count }
+        return ids.intersection(Set(presentedArtifacts(notes: notes).map(\.id))).count
     }
 
     /// Up to `limit` artifact kinds by membership count, for folder preview dots.
@@ -529,7 +531,7 @@ final class CollectionsStore: ObservableObject {
             .union(passageItems.map(\.id))
             .union(linkItems.map(\.id))
             .union(conversationItems.map(\.id))
-        return artifacts.filter { !covered.contains($0.id) } + noteItems + passageItems + linkItems + conversationItems
+        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems
     }
 
     func presentedArtifacts(for collectionID: UUID, includingDescendants: Bool, notes: [NoteDocument]) -> [CollectionArtifact] {
@@ -606,7 +608,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     private func knownItem(_ id: UUID) -> Bool {
-        artifacts.contains { $0.id == id } || passages.contains { $0.id == id } || links.contains { $0.id == id } || conversations.contains { $0.id == id } || linkedNoteIDs.contains(id)
+        artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation } || passages.contains { $0.id == id } || links.contains { $0.id == id } || conversations.contains { $0.id == id } || linkedNoteIDs.contains(id)
     }
 
     private func touch(_ collectionID: UUID) {

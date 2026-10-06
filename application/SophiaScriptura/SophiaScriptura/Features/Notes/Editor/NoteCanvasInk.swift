@@ -6,16 +6,25 @@ struct NoteCanvasInk {
     var drawing = PKDrawing()
     private var owners: [Date: UUID] = [:]
     private var originals: [UUID: PKDrawing] = [:]
-    init(objects: [NoteObject], traits: UITraitCollection? = nil) throws {
+    private var sourceObjects: [UUID: NoteObject] = [:]
+    private let canonical: Bool
+    init(objects: [NoteObject], traits: UITraitCollection? = nil, previous: NoteCanvasInk? = nil) throws {
+        canonical = traits != nil
         var strokes: [PKStroke] = []
         for object in objects where object.kind == .ink {
-            var local = try PKDrawing(data: object.payload)
-            if traits != nil { local = NoteInkAppearance.canonicalDrawing(local) }
-            // Existing ink has local coordinates. New and resized objects record a reference size.
-            if let size = object.inkSize {
-                local = local.transformed(using: CGAffineTransform(scaleX: object.frame.width / size.width, y: object.frame.height / size.height))
+            let positioned: PKDrawing
+            if previous?.canonical == canonical, previous?.sourceObjects[object.id] == object,
+               let cached = previous?.originals[object.id] {
+                positioned = cached
+            } else {
+                var local = try PKDrawing(data: object.payload)
+                if canonical { local = NoteInkAppearance.canonicalDrawing(local) }
+                if let size = object.inkSize {
+                    local = local.transformed(using: CGAffineTransform(scaleX: object.frame.width / size.width, y: object.frame.height / size.height))
+                }
+                positioned = local.transformed(using: CGAffineTransform(translationX: object.frame.minX, y: object.frame.minY))
             }
-            let positioned = local.transformed(using: CGAffineTransform(translationX: object.frame.minX, y: object.frame.minY))
+            sourceObjects[object.id] = object
             let owned = positioned.strokes.map { value -> PKStroke in
                 var stroke = value
                 var date = stroke.path.creationDate
@@ -30,6 +39,13 @@ struct NoteCanvasInk {
         }
         drawing = PKDrawing(strokes: strokes)
     }
+    static func extensionOwner(in objects: [NoteObject], selection: Set<UUID>) -> UUID? {
+        if selection.count == 1, let selected = objects.first(where: { selection.contains($0.id) && $0.kind == .ink && !$0.positionLocked }) { return selected.id }
+        guard let recent = objects.last(where: { $0.kind == .ink && !$0.positionLocked && $0.group == nil }),
+              let count = try? PKDrawing(data: recent.payload).strokes.count, count < 64 else { return nil }
+        return recent.id
+    }
+
     static func equivalent(_ lhs: PKDrawing, _ rhs: PKDrawing) -> Bool {
         guard lhs.strokes.count == rhs.strokes.count else { return false }
         return zip(lhs.strokes, rhs.strokes).allSatisfy { a, b in

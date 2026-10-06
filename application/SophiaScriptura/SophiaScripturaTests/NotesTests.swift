@@ -4,6 +4,82 @@ import CryptoKit
 @testable import SophiaScriptura
 
 final class NotesTests: XCTestCase {
+    @MainActor func testCanvasCullsViewsAndKeepsSelectedObjectMounted() async throws {
+        let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
+        await session.load(); _ = session.create(kind: .canvas)
+        let near = NoteObject(kind: .shape, frame: CGRect(x: 100, y: 100, width: 80, height: 80))
+        let far = NoteObject(kind: .shape, frame: CGRect(x: 9000, y: 9000, width: 80, height: 80))
+        session.edit { $0.objects = [near, far] }; session.selection = []
+        let controller = NoteCanvasController(session: session, openCitation: { _ in })
+        controller.loadViewIfNeeded(); controller.view.frame = CGRect(x: 0, y: 0, width: 800, height: 1000)
+        controller.viewDidLayoutSubviews(); controller.apply()
+        let scroll = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? UIScrollView }.first { $0.accessibilityIdentifier == "notes.viewport" })
+        scroll.setZoomScale(1, animated: false); scroll.contentOffset = .zero; controller.apply()
+        let paper = try XCTUnwrap(scroll.subviews.first { $0.bounds.width == NoteDocument.extent })
+        XCTAssertEqual(paper.subviews.filter { $0.accessibilityIdentifier == "notes.object.shape" }.count, 1)
+        session.selection = [far.id]; controller.apply()
+        XCTAssertEqual(paper.subviews.filter { $0.accessibilityIdentifier == "notes.object.shape" }.count, 2)
+        session.selection = []; scroll.contentOffset = CGPoint(x: 8800, y: 8800); controller.apply()
+        XCTAssertEqual(paper.subviews.filter { $0.accessibilityIdentifier == "notes.object.shape" }.count, 1)
+        XCTAssertEqual(session.note?.objects.count, 2)
+        controller.close()
+    }
+
+    @MainActor func testImagePreparationDownsamplesAndRejectsInvalidInput() async throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let input = UIGraphicsImageRenderer(size: CGSize(width: 4096, height: 1024), format: format).jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 4096, height: 1024))
+        }
+        let prepared = await NoteImagePreparation.prepare(input)
+        let output = try XCTUnwrap(prepared)
+        XCTAssertEqual(output.size, CGSize(width: 2048, height: 512))
+        XCTAssertNotNil(UIImage(data: output.data))
+        let decoded = await NoteImagePreparation.decode(output.data)
+        XCTAssertEqual(decoded?.image.width, 2048)
+        XCTAssertEqual(decoded?.image.height, 512)
+        let invalid = await NoteImagePreparation.prepare(Data("invalid".utf8))
+        XCTAssertNil(invalid)
+    }
+
+    func testCanvasCapacityAndPencilSelectionPreserveGroups() throws {
+        var note = NoteDocument()
+        note.objects = (0..<1000).map { _ in NoteObject(kind: .text, text: "Content") }
+        try note.validate()
+        note.objects.append(NoteObject(kind: .text))
+        XCTAssertThrowsError(try note.validate())
+        let group = UUID()
+        let first = NoteObject(kind: .text, frame: CGRect(x: 10, y: 10, width: 40, height: 40), group: group, text: "Inside")
+        let second = NoteObject(kind: .shape, frame: CGRect(x: 500, y: 500, width: 40, height: 40), group: group)
+        let outside = NoteObject(kind: .text, frame: CGRect(x: 200, y: 200, width: 40, height: 40))
+        note.objects = [first, second, outside]
+        XCTAssertEqual(note.objectsInside([CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 100), CGPoint(x: 0, y: 100)]), [first.id, second.id])
+        XCTAssertTrue(note.objectsInside([]).isEmpty)
+    }
+
+    func testHundredsOfPencilStrokesUseBoundedObjectsAndReopen() async throws {
+        var objects: [NoteObject] = []
+        let template = try PKDrawing(data: drawing()).strokes[0]
+        var previous: NoteCanvasInk?
+        for index in 0..<300 {
+            let scene = try NoteCanvasInk(objects: objects, previous: previous)
+            previous = scene
+            XCTAssertTrue(NoteCanvasInk.equivalent(scene.drawing, try NoteCanvasInk(objects: objects).drawing))
+            var stroke = template
+            stroke.path = PKStrokePath(controlPoints: template.path, creationDate: Date(timeIntervalSince1970: Double(index + 1)))
+            let edited = PKDrawing(strokes: scene.drawing.strokes + [stroke])
+            objects = scene.objects(after: edited, replacing: objects, extending: NoteCanvasInk.extensionOwner(in: objects, selection: []))
+        }
+        XCTAssertEqual(objects.count, 5)
+        XCTAssertEqual(try NoteCanvasInk(objects: objects).drawing.strokes.count, 300)
+        let store = NotesFileRepository(directory: try folder())
+        var note = NoteDocument()
+        note.objects = objects
+        let saved = try await store.save(NotesSnapshot(notes: [note]), expectedRevision: 0)
+        let reopened = try await store.load()
+        XCTAssertEqual(reopened.snapshot, saved)
+        XCTAssertEqual(try NoteCanvasInk(objects: reopened.snapshot.notes[0].objects).drawing.strokes.count, 300)
+    }
+
     private func folder() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("Notes-tests-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

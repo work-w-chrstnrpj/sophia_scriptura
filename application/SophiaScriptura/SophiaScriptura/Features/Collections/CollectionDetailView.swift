@@ -15,6 +15,7 @@ struct CollectionDetailView: View {
     var openNote: (UUID) -> Void
     var openPassage: (SavedPassage) -> Void
     var openCompanion: () -> Void = {}
+    var createConversation: () -> UUID? = { nil }
 
     @State private var filter: CollectionArtifactFilter = .all
     @State private var sort: CollectionArtifactSort = .modified
@@ -88,7 +89,7 @@ struct CollectionDetailView: View {
     private func collectionSheets(_ collection: StudyCollection) -> some View {
                 collectionContent(collection)
                 .sheet(isPresented: $showingPicker) {
-                    CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes)
+                    CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes, openNote: openNote, openCompanion: openCompanion, createConversation: createConversation)
                 }
                 .sheet(isPresented: $showingEditor) {
                     CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collectionID)
@@ -187,7 +188,7 @@ struct CollectionDetailView: View {
     private func header(_ collection: StudyCollection) -> some View {
         let itemCount = collection.isUnfiled
             ? store.unfiledCount(notes: notes.snapshot.notes)
-            : store.membershipCount(for: collectionID)
+            : store.membershipCount(for: collectionID, notes: notes.snapshot.notes)
         let subfolderCount = store.children(of: collectionID).count
         let detail = collection.isUnfiled ? StudyCollection.unfiled(accent: collection.accent, modifiedAt: .now).detail : collection.detail
 
@@ -294,7 +295,7 @@ struct CollectionDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(1)
-                Text(CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true)))
+                Text(CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes)))
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(Color(theme.palette.secondary))

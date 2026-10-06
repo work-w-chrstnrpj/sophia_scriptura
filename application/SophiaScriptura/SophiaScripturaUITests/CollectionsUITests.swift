@@ -41,6 +41,25 @@ final class CollectionsUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.open.\(prefix)")).firstMatch
     }
 
+    func testAddMaterialCreatesNoteInCollection() {
+        let app = launch()
+        openCollections(app)
+        createCollection("New material", in: app)
+        app.buttons["collections.folder.New material"].tap()
+        app.buttons["collections.addMaterialEmpty"].tap()
+        XCTAssertTrue(app.buttons["collections.newConversation"].waitForExistence(timeout: 5))
+        app.buttons["collections.newNote"].tap()
+        XCTAssertTrue(app.buttons["notes.new.page"].waitForExistence(timeout: 5))
+        let title = app.textFields["notes.new.title"]
+        title.tap(); title.typeText("Created in collection")
+        app.buttons["notes.new.create"].tap()
+        XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
+        back(app)
+        showTab("tab.collections", in: app)
+        if app.buttons["collections.folder.New material"].exists { app.buttons["collections.folder.New material"].tap() }
+        XCTAssertTrue(app.buttons["collections.open.Created in collection"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
     func testFolderColorNestingAndDeletionReturnsItemsToNoFolder() {
         let app = launch()
         openCollections(app)

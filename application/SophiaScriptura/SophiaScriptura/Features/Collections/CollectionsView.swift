@@ -8,6 +8,7 @@ struct CollectionsView: View {
     var openNote: (UUID) -> Void
     var openPassage: (SavedPassage) -> Void
     var openCompanion: () -> Void = {}
+    var createConversation: () -> UUID? = { nil }
     @State private var searchText = ""
     @State private var searchPresented = false
     @State private var sort: CollectionLibrarySort = .modified
@@ -35,8 +36,8 @@ struct CollectionsView: View {
             return candidates.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .itemCount:
             return candidates.sorted {
-                store.membershipCount(for: $0.id, includingDescendants: true) >
-                    store.membershipCount(for: $1.id, includingDescendants: true)
+                store.membershipCount(for: $0.id, includingDescendants: true, notes: notes.snapshot.notes) >
+                    store.membershipCount(for: $1.id, includingDescendants: true, notes: notes.snapshot.notes)
             }
         }
     }
@@ -70,7 +71,7 @@ struct CollectionsView: View {
                                     folderLink(collection) {
                                         CollectionCard(
                                             collection: collection,
-                                            itemCount: store.membershipCount(for: collection.id, includingDescendants: true),
+                                            itemCount: store.membershipCount(for: collection.id, includingDescendants: true, notes: notes.snapshot.notes),
                                             subfolderCount: store.children(of: collection.id).count,
                                             kindHints: store.membershipKindHints(
                                                 for: collection.id,
@@ -127,7 +128,8 @@ struct CollectionsView: View {
                 notes: notes,
                 openNote: openNote,
                 openPassage: openPassage,
-                openCompanion: openCompanion
+                openCompanion: openCompanion,
+                createConversation: createConversation
             )
             .toolbar(.visible, for: .navigationBar)
         } label: {

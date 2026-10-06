@@ -68,6 +68,22 @@ final class NotesUITests: XCTestCase {
         XCTAssertEqual(selectors.count, 1)
     }
 
+    func testCanvasShareAndColorMenu() {
+        let app = launch(); notes(app); newNote(app, kind: "canvas")
+        XCTAssertTrue(app.buttons["notes.editor.share"].waitForExistence(timeout: 10))
+        app.buttons["notes.shapes"].tap()
+        app.buttons["notes.shape.circle"].tap()
+        let color = app.buttons["notes.action.color"]
+        XCTAssertTrue(color.waitForExistence(timeout: 5))
+        color.tap()
+        XCTAssertTrue(app.buttons["Red"].waitForExistence(timeout: 5))
+        let swatches = XCTAttachment(screenshot: app.screenshot())
+        swatches.name = "Canvas color swatches"; swatches.lifetime = .keepAlways; add(swatches)
+        app.buttons["Red"].firstMatch.tap()
+        app.buttons["notes.editor.share"].tap()
+        XCTAssertTrue(app.otherElements["ActivityListView"].waitForExistence(timeout: 10), app.debugDescription)
+    }
+
     func testBlankNoteDirectTextMetadataAndRelaunch() {
         let app = launch(); notes(app)
         newNote(app, kind: "page")

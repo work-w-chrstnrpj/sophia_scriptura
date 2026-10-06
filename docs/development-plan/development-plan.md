@@ -7,6 +7,11 @@ Technical intent: [TDD](../tdd/tdd.md). Full scope:
 
 ## Current position and next step
 
+Owner selected [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md) for
+v0.2.2 on 2026-10-07: Collections visibility/creation and Canvas drawing/selection fixes.
+Implementation and simulator verification passed. Owner authorized release v0.2.2 on
+2026-10-07; physical acceptance remains pending.
+
 **Current position: M0–M9 closed.** The owner verified the app on a physical iPad on
 2026-10-04 and reported **all checks pass** for personal daily use. Automated verification
 uses the full `SophiaScriptura` scheme on iPad (A16) Simulator; the latest run is recorded
@@ -341,3 +346,9 @@ planning. Old P1–P7 scaffold comments are not the active plan.
 2026-09-22 owner feedback: SP-009 now uses continuous chapters, stable compact controls,
 horizontal chapter swipes and no duplicate top location title. Earlier M2 pagination
 requirements are superseded; M3 fixed continuous geometry is accepted through SP-008; SP-012 implementation is under verification.
+
+SP-024 follow-up evidence (2026-10-07): implementation and simulator checks passed
+(216 unit tests, Collection creation and Canvas palette/share UI). Viewport culling,
+bounded raster reuse and background ImageIO preparation are implemented. The installed
+v0.2.1 iPad baseline trace was captured; optimized-build physical acceptance remains open.
+Owner authorized v0.2.2 release after these checks; physical acceptance remains open.

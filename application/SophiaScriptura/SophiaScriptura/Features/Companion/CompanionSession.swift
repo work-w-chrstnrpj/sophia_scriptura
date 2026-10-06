@@ -91,6 +91,7 @@ final class CompanionSession: ObservableObject {
             let load = try await repository.load()
             apply(load.snapshot)
             purgeExpiredTrash()
+            conversations.forEach { syncCollections($0) }
             if load.recovered { notice = "Recovered the previous Companion revision." }
             scheduleQuizCacheWarmup()
         } catch {
@@ -286,6 +287,7 @@ final class CompanionSession: ObservableObject {
         conversations[index].state = .archived
         conversations[index].updatedAt = Date()
         if selectedConversationID == conversationID { selectedConversationID = activeConversations.first?.id }
+        syncCollections(conversations[index])
         scheduleSave()
     }
 
@@ -293,6 +295,7 @@ final class CompanionSession: ObservableObject {
         guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
         conversations[index].state = .active
         conversations[index].updatedAt = Date()
+        syncCollections(conversations[index])
         scheduleSave()
     }
 
@@ -304,6 +307,7 @@ final class CompanionSession: ObservableObject {
             selectedConversationID = activeConversations.first?.id
             composerText = selectedConversationID.flatMap { id in conversations.first { $0.id == id }?.composerDraft } ?? ""
         }
+        syncCollections(conversations[index])
         scheduleSave()
     }
 
@@ -311,6 +315,7 @@ final class CompanionSession: ObservableObject {
         guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
         conversations[index].trashedAt = nil
         conversations[index].updatedAt = Date()
+        syncCollections(conversations[index])
         scheduleSave()
     }
 
@@ -410,6 +415,10 @@ final class CompanionSession: ObservableObject {
     }
 
     func syncCollections(_ conversation: CompanionConversation) {
+        guard conversation.state != .archived, !conversation.isTrashed else {
+            onCollectionsRemove?(conversation.id)
+            return
+        }
         let detail: String
         if let anchor = conversation.passageAnchor {
             detail = "Passage · \(anchor.referenceLabel)"

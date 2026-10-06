@@ -27,10 +27,12 @@ import ImageIO
     var toolsVisible = true
     var endTyping: (() -> Void)?
     var flushSurface: (() -> Void)?
+    var shareCanvas: (() -> Void)?
     private(set) var canvasClipboard: [NoteObject] = []
     private let repository: any NotesRepository
     private var change = 0
     private var saveTask: Task<Void, Never>?
+    private var imageTasks: [UUID: Task<Void, Never>] = [:]
     // Only changed objects are retained, rather than whole document snapshots.
     private struct Edit {
         var noteID: UUID
@@ -302,7 +304,7 @@ import ImageIO
     }
     func insert(_ kind: NoteObject.Kind, payload: Data = Data(), url: String = "", shape: NoteShape? = nil, sticker: String? = nil, tint: NoteTint? = nil) {
         guard kind != .ink else { toolsVisible = true; toolsRequest = UUID(); return }
-        guard let note, note.allObjects.count < 200 else { notice = "This note has reached its object limit."; return }
+        guard let note, note.allObjects.count < NoteDocument.objectLimit else { notice = "This note has reached its object limit."; return }
         if note.kind.usesPageBody {
             switch kind {
             case .link:
@@ -439,7 +441,7 @@ import ImageIO
 
     func insertAudio(_ data: Data, name: String = "Audio") {
         guard !data.isEmpty, data.count <= 16 * 1024 * 1024 else { notice = "That audio could not be added or exceeds 16 MiB."; return }
-        guard let note, note.kind.usesPageBody, note.allObjects.count < 200 else { notice = "This note has reached its object limit."; return }
+        guard let note, note.kind.usesPageBody, note.allObjects.count < NoteDocument.objectLimit else { notice = "This note has reached its object limit."; return }
         var object = NoteObject(kind: .audio, payload: data)
         object.text = String(name.prefix(60))
         object.frame.size = CGSize(width: NotePage.columnWidth, height: 72)
@@ -449,11 +451,23 @@ import ImageIO
     }
 
     func insertImage(_ data: Data) {
-        guard data.count <= 32 * 1024 * 1024, let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 2048, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary),
-              let bytes = UIImage(cgImage: image).jpegData(compressionQuality: 0.85) else { notice = "That image could not be opened or exceeds 32 MiB."; return }
-        insert(.image, payload: bytes)
-        if let id = selection.first { update(id) { $0.frame.size = CGSize(width: 320, height: max(40, 320 * CGFloat(image.height) / CGFloat(image.width))) } }
+        guard let target = selectedNoteID else { return }
+        guard imageTasks.count < 4 else { notice = "Please wait for the current images to finish importing."; return }
+        let generation = surfaceGeneration
+        let request = UUID()
+        imageTasks[request] = Task { [weak self] in
+            let prepared = await NoteImagePreparation.prepare(data)
+            guard let self else { return }
+            defer { self.imageTasks[request] = nil }
+            guard !Task.isCancelled, self.selectedNoteID == target,
+                  self.surfaceGeneration == generation, self.note?.isActiveInLibrary == true else { return }
+            guard let prepared else { self.notice = "That image could not be opened or exceeds 32 MiB."; return }
+            let existing = Set(self.note?.allObjects.map(\.id) ?? [])
+            self.insert(.image, payload: prepared.data)
+            if let id = self.selection.first, !existing.contains(id) {
+                self.update(id) { $0.frame.size = CGSize(width: 320, height: max(40, 320 * prepared.size.height / prepared.size.width)) }
+            }
+        }
     }
     func copySelection() {
         guard let note else { return }

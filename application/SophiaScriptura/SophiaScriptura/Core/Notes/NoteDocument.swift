@@ -246,6 +246,7 @@ enum NoteContent: Equatable, Sendable, Codable {
 }
 
 struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
+    static let objectLimit = 1000
     enum Paper: String, Codable, CaseIterable, Sendable { case plain, ruled, grid, dotted }
     static let extent: CGFloat = 12_000
     var id = UUID()
@@ -383,6 +384,15 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         let groups = Set(objects.filter { (kind == .canvas || $0.kind != .ink) && selected.contains($0.id) }.compactMap(\.group))
         return Set(objects.filter { (kind == .canvas || $0.kind != .ink) && (selected.contains($0.id) || $0.group.map(groups.contains) == true) }.map(\.id))
     }
+    func objectsInside(_ polygon: [CGPoint]) -> Set<UUID> {
+        guard polygon.count >= 3, let first = polygon.first else { return [] }
+        let path = CGMutablePath()
+        path.move(to: first)
+        for point in polygon.dropFirst() { path.addLine(to: point) }
+        path.closeSubpath()
+        let selected = Set(objects.filter { path.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }.map(\.id))
+        return members(selected)
+    }
     mutating func move(_ selection: Set<UUID>, by delta: CGSize) {
         guard delta.width.isFinite, delta.height.isFinite else { return }
         let ids = members(selection).filter { id in objects.first(where: { $0.id == id })?.positionLocked != true }
@@ -424,7 +434,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.count <= 200,
               tags.count <= 30, tags.allSatisfy({ !$0.isEmpty && $0.count <= 60 }),
-              allObjects.count <= 200, Set(allObjects.map(\.id)).count == allObjects.count else { throw NotesError.invalid }
+              allObjects.count <= Self.objectLimit, Set(allObjects.map(\.id)).count == allObjects.count else { throw NotesError.invalid }
         for object in allObjects {
             let f = object.frame
             guard [f.minX, f.minY, f.width, f.height].allSatisfy(\.isFinite),
@@ -460,7 +470,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
               page.ink.count <= 16 * 1024 * 1024, page.citations.count <= 500,
               Set(page.citations.map(\.id)).count == page.citations.count else { throw NotesError.limit }
         guard allowLegacyInkObjects ? !objects.contains(where: { $0.kind == .ink }) : objects.isEmpty,
-              page.attachments.count <= 200,
+              page.attachments.count <= Self.objectLimit,
               Set(page.attachments.map(\.location)).count == page.attachments.count else { throw NotesError.invalid }
         for attachment in page.attachments {
             guard [.image, .table, .audio].contains(attachment.object.kind), attachment.object.group == nil,

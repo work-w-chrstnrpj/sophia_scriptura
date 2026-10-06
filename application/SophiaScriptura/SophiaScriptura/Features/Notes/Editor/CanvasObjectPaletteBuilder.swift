@@ -71,7 +71,14 @@ import UIKit
     private static func colorMenu(_ context: Context, action: @escaping (String, String, @escaping Handler) -> UIAction) -> UIMenu {
         let id = context.object.id
         return UIMenu(title: "Color", children: NoteTint.allCases.map { tint in
-            action(tint.rawValue.capitalized, "circle.fill") { context.session.update(id) { $0.tint = tint } }
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22)).image { renderer in
+                tint.color.setFill()
+                renderer.cgContext.fillEllipse(in: CGRect(x: 2, y: 2, width: 18, height: 18))
+            }.withRenderingMode(.alwaysOriginal)
+            return UIAction(title: tint.rawValue.capitalized, image: image, state: context.object.tint == tint ? .on : .off) { _ in
+                context.session.update(id) { $0.tint = tint }
+                context.refresh()
+            }
         })
     }
 

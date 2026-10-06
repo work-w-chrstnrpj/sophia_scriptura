@@ -13,7 +13,7 @@ New Pages have no floating objects. `PageContent.legacyObjects` preserves positi
 from existing v2 Pages without changing their geometry or silently converting their type.
 Inline attachments use a U+FFFC character and UTF-16 offset; edits before them shift the
 offset and deleting the character removes the attachment. They count toward the same
-200-object limit as legacy items. Images/tables flow with text; Page ink never does.
+1,000-object limit as legacy items. Images/tables flow with text; Page ink never does.
 
 Page body width is fixed at 680 points within a 1,200-point page. Height grows to the existing
 12,000-point bound. Wider legacy pages retain their width. Canvas ink has optional `inkSize`
@@ -71,7 +71,7 @@ validates input first and retains pre-restore data. Failed writes retain dirty s
 Retry. Drawing validation checks decoding, finite bounds and capacity, rather than
 rejecting normal PencilKit stroke bounds for extending outside a former handwriting box.
 
-Safety bounds: 200 notes, 200 combined objects/inline attachments per note, 100,000 body characters, 500 citations,
+Safety bounds: 200 notes, 1,000 combined objects/inline attachments per note, 100,000 body characters, 500 citations,
 20,000 characters/floating text, 16 MiB/asset, 10,000 strokes/drawing, about 42 MiB aggregate
 media and 128 MiB serialized archive. Actual page fit can constrain body length earlier.
 These are explicit limits, not measured physical-device capacity claims.
@@ -88,3 +88,14 @@ stretched by scroll updates; sync resumes when the stroke ends. Persisted ink an
 Canvas objects remain in document coordinates. Page and Journal stay at 100% scale:
 vertical scrolling remains, horizontal scrolling is available only while the Scripture
 pane is open, and pinch zoom stays on Canvas. No schema change or migration.
+
+## v0.2.2 — Canvas capacity and selection
+
+New unselected Canvas strokes reuse the latest unlocked, ungrouped ink object up to 64
+strokes. Explicitly selected ink can be extended. Prior objects retain IDs, payloads and
+geometry. The scene cache is invalidated by ink-object changes, surface restoration or theme
+changes. A rejected edit restores the saved scene to avoid repeat alerts on refresh.
+Pencil selection encloses object centers and includes explicit group members; it selects
+whole ink objects. Page/Journal/Prayer retain one 16 MiB ink payload. Scripture uses its
+separate 32 MiB drawing limit. No storage migration occurs; older builds may reject notes
+exceeding the previous 200-object bound.

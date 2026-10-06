@@ -8,6 +8,7 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-024](SP-024-v022-study-material-and-canvas-fixes.md) | simulator verified; physical acceptance pending; release authorized | v0.2.2 Collections and Canvas fixes |
 | [SP-001](SP-001-product-and-device-decisions.md) | done; owner closed 2026-10-04 | Product scope and delivery sequence closed at M9 |
 | [SP-002](SP-002-free-scripture-access.md) | done | WEBP baseline verified; preferred editions conditional; import plan documented |
 | [SP-003](SP-003-scripture-ink-layout.md) | done | Renderer/layout decision and native validation plan; no implementation |

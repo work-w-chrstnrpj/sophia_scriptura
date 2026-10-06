@@ -50,6 +50,8 @@ struct NotePrayerEditorView: View {
                     Button(role: .destructive) { confirmDelete = true } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .tint(.red)
+                    .foregroundStyle(.red)
                     .accessibilityIdentifier("notes.prayer.delete")
                 } label: {
                     Image(systemName: "ellipsis.circle")

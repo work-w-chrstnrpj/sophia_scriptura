@@ -525,6 +525,24 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(reopened.conversations.first?.id, id)
     }
 
+    @MainActor func testCollectionsVisibilityTracksArchiveAndTrash() throws {
+        let session = CompanionSession(presetCatalog: try PromptPresetCatalog.bundled(), credentials: InMemoryCompanionCredentialsStore(), registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()]))
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        session.onCollectionsSync = { store.upsertCompanionConversation($0) }
+        session.onCollectionsRemove = { store.removeCompanionConversation($0) }
+        try session.saveProviderKey("fixture", adapterID: "mock", accountLabel: "Test")
+        let id = try XCTUnwrap(session.createConversation())
+        XCTAssertNotNil(store.conversation(id: id))
+        session.archiveConversation(id)
+        XCTAssertNil(store.conversation(id: id))
+        session.unarchiveConversation(id)
+        XCTAssertNotNil(store.conversation(id: id))
+        session.moveConversationToTrash(id)
+        XCTAssertNil(store.conversation(id: id))
+        session.restoreConversationFromTrash(id)
+        XCTAssertNotNil(store.conversation(id: id))
+    }
+
     func testScriptureQuizSeedHasMultipleFixturesPerType() throws {
         let seed = try QuizFixtureCatalog.scripture()
         XCTAssertGreaterThanOrEqual(seed.completeVerse.count, 10)

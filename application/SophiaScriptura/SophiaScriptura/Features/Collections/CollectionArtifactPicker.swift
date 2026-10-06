@@ -5,6 +5,10 @@ struct CollectionArtifactPicker: View {
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
     var notes: NotesSession
+    var openNote: (UUID) -> Void = { _ in }
+    var openCompanion: () -> Void = {}
+    var createConversation: () -> UUID? = { nil }
+    @State private var creatingNote = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -27,6 +31,15 @@ struct CollectionArtifactPicker: View {
         NavigationStack {
             List {
                 Section {
+                    Button("New Note", systemImage: "square.and.pencil") { creatingNote = true }
+                        .accessibilityIdentifier("collections.newNote")
+                    Button("New Conversation", systemImage: "bubble.left.and.bubble.right") {
+                        guard let id = createConversation() else { dismiss(); openCompanion(); return }
+                        store.addMembership(artifactID: id, collectionID: collectionID)
+                        dismiss()
+                        openCompanion()
+                    }
+                    .accessibilityIdentifier("collections.newConversation")
                     if addingLink {
                         TextField("Title", text: $linkTitle)
                             .accessibilityIdentifier("collections.newLink.title")
@@ -53,7 +66,7 @@ struct CollectionArtifactPicker: View {
                         .accessibilityIdentifier("collections.newLink")
                     }
                 } footer: {
-                    Text("Notes, bookmarks, gleanings, links, and the sample conversation can all live here.")
+                    Text("Active notes, conversations, bookmarks, gleanings, and links can all live here.")
                 }
                 .listRowBackground(Color(theme.palette.soft))
 
@@ -85,6 +98,14 @@ struct CollectionArtifactPicker: View {
                 .listRowBackground(Color(theme.palette.soft))
                 .accessibilityIdentifier("collections.pick.\(artifact.title)")
                 .accessibilityValue(included ? "Included" : "Not included")
+                }
+            }
+            .sheet(isPresented: $creatingNote) {
+                NoteCreatorSheet(notes: notes) { id in
+                    store.link(notes: notes.snapshot.notes)
+                    store.addMembership(artifactID: id, collectionID: collectionID)
+                    dismiss()
+                    openNote(id)
                 }
             }
             .appSurface()

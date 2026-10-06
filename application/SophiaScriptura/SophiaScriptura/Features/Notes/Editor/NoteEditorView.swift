@@ -57,12 +57,18 @@ struct NoteEditorView: View {
                 }
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo).accessibilityIdentifier("notes.undo")
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo).accessibilityIdentifier("notes.redo")
+                if session.note?.kind == .canvas {
+                    Button("Share", systemImage: "square.and.arrow.up") { session.shareCanvas?() }
+                        .accessibilityIdentifier("notes.editor.share")
+                }
                 Button("Archive", systemImage: "archivebox") {
                     session.archiveCurrentNote()
                     dismiss()
                 }
                     .accessibilityIdentifier("notes.editor.archive")
                 Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    .tint(.red)
+                    .foregroundStyle(.red)
                     .accessibilityIdentifier("notes.editor.delete")
                 optionsMenu
             }

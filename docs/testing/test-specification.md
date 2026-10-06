@@ -801,3 +801,20 @@ iPad (A16), iPadOS 26.5. The signed app was installed and launched on the paired
 iPad, but the Activity UI and device behavior have not been observed yet.
 The physical Activity walkthrough is in [sp020-ipad-guide.md](sp020-ipad-guide.md).
 Background/lock behavior, visual placement and Pencil coexistence require the owner's iPad.
+
+## SP-024 v0.2.2 draft verification — 2026-10-07
+
+`build/v022/cache-final.xcresult` passed 216 unit tests plus the Canvas palette/share UI test.
+`build/v022/acceptance-simulator.xcresult` also passed Collection create/assign/open.
+Coverage includes inactive material exclusion, conversation archive/trash/restore,
+1,000-object boundary, 300-stroke batching/save/reopen and cached-scene equivalence,
+viewport culling/selection pinning/remounting, image downsampling/decoding, and invalid input.
+The retained palette screenshot confirms colored swatches and red editor Delete on simulator.
+
+A 30-second physical v0.2.1 baseline was captured with Time Profiler, all processes,
+device name `iPad ni Paj`. Evidence: `build/v022/ipad-usb-baseline.trace` and exported profile.
+Sophia recorded 10.61 seconds sampled CPU weight, 6.604 seconds on its main thread.
+This establishes baseline activity, not a measured improvement or a confirmed lag cause.
+No draft installation/release was performed. The optimized build still requires physical
+Pencil, erase/undo, selection, pan/zoom, persistence and responsiveness acceptance.
+See [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md).

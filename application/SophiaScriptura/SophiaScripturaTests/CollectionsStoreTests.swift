@@ -3,6 +3,19 @@ import XCTest
 
 @MainActor
 final class CollectionsStoreTests: XCTestCase {
+    func testInactiveNotesCannotLeakThroughCachedArtifacts() {
+        var active = NoteDocument()
+        active.title = "Active"
+        var archived = NoteDocument()
+        archived.archivedAt = Date()
+        var trashed = NoteDocument()
+        trashed.trashedAt = Date()
+        let cached = [active, archived, trashed].map { CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Note", kind: .note, modifiedAt: Date()) }
+        let store = CollectionsStore(collections: [], artifacts: cached, memberships: [])
+        XCTAssertEqual(store.presentedArtifacts(notes: [active, archived, trashed]).map(\.id), [active.id])
+        XCTAssertTrue(store.presentedArtifacts(notes: []).isEmpty)
+    }
+
     func testDemoSupportsSharedArtifactsAndDescendantQueriesWithoutDuplicates() throws {
         let store = CollectionsStore.demo()
         let assurance = try XCTUnwrap(store.collections.first(where: { $0.name == "Assurance" }))

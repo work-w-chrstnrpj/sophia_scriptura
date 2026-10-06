@@ -531,3 +531,19 @@ Keep the live PencilKit surface bounded to the editor viewport; synchronize its 
 scroll/zoom coordinates with the document instead of allocating a document-sized drawable.
 The Notes pen button uses the filled circle variant while tools are active, and hollow
 when hidden, with an accessible state value. Hiding tools does not turn Pencil into text.
+
+## v0.2.2 follow-up
+
+Canvas Share exports an image with its longest side capped at 2,048 pixels. Object color
+menus show actual color swatches and current selection. Delete uses red. The Pencil
+selection tool taps objects or draws a loop around their centers; groups stay together.
+A second tap on selected text enters text editing for character selection. Drawings are
+batched into ink objects; the lasso selects the whole batch. See [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md)
+for safety bounds, compatibility and physical acceptance.
+
+v0.2.2 performance: Canvas keeps only nearby object views mounted, with a 256-point
+margin and selected/edited objects pinned. The complete object model remains available for
+selection and persistence. Whole-Canvas sharing temporarily mounts all content and awaits
+image decoding. A bounded ink/image cache avoids repeated rendering after scrolling;
+ImageIO import and displayed-image decoding use a serial background worker. Physical iPad
+profiling and long drawing sessions remain acceptance gates.

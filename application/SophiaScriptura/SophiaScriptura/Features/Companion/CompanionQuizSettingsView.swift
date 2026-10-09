@@ -14,7 +14,7 @@ struct CompanionQuizSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Quiz Me uses local question fixtures. Provider and model defaults are stored for Reviewing metadata and future AI-generated quizzes.")
+                Text("Quiz Me uses local question fixtures. Provider and model defaults are stored for Studying metadata and future AI-generated quizzes.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

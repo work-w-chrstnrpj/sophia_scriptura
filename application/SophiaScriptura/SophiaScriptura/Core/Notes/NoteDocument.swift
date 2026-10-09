@@ -13,6 +13,8 @@ struct NoteObject: Codable, Equatable, Identifiable, Sendable {
     var payload = Data()
     var shape: NoteShape? = nil
     var tint: NoteTint? = nil
+    /// IDs parallel PKDrawing.strokes; absent in legacy archives.
+    var strokeIDs: [UUID]? = nil
     var inkSize: CGSize? = nil
     var quote: NoteQuote?
     var fontSize: Double = 22
@@ -25,7 +27,7 @@ struct NoteObject: Codable, Equatable, Identifiable, Sendable {
 extension NoteObject {
     private enum CodingKeys: String, CodingKey {
         case id, kind, frame, group, text, url, cells, payload, shape, tint, inkSize, quote, fontSize
-        case monospaced, positionLocked, details
+        case monospaced, positionLocked, details, strokeIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -40,6 +42,7 @@ extension NoteObject {
         payload = try container.decode(Data.self, forKey: .payload)
         shape = try container.decodeIfPresent(NoteShape.self, forKey: .shape)
         tint = try container.decodeIfPresent(NoteTint.self, forKey: .tint)
+        strokeIDs = try container.decodeIfPresent([UUID].self, forKey: .strokeIDs)
         inkSize = try container.decodeIfPresent(CGSize.self, forKey: .inkSize)
         quote = try container.decodeIfPresent(NoteQuote.self, forKey: .quote)
         fontSize = try container.decode(Double.self, forKey: .fontSize)
@@ -205,10 +208,114 @@ struct PageContent: Codable, Equatable, Sendable {
     // Existing v2 floating items are retained at their exact positions; new items flow inline.
     var legacyObjects: [NoteObject] = []
 }
+/// Apple Journal momentary feelings (`HKStateOfMind.Label`), plus Neutral.
+enum JournalEmotionalState: String, Codable, CaseIterable, Sendable {
+    case amazed, amused, angry, anxious, ashamed, brave, calm, content
+    case disappointed, discouraged, disgusted, embarrassed, excited, frustrated
+    case grateful, guilty, happy, hopeless, irritated, jealous, joyful, lonely
+    case passionate, peaceful, proud, relieved, sad, scared, stressed, surprised
+    case worried, annoyed, confident, drained, hopeful, indifferent, overwhelmed
+    case satisfied, neutral
+
+    var label: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+}
+
+/// Optional journal mind-set. Order runs from thriving toward distress, then Challenged.
+enum JournalMentalState: String, Codable, CaseIterable, Sendable {
+    case thriving, confident, content, atEase, evenMinded, neutral
+    case uncertain, doubtful, uneasy, concerned, worried, overthinking
+    case pressured, tense, stressed, anxious, overstimulated, ruminating
+    case overwhelmed, distressed, challenged
+
+    var label: String {
+        switch self {
+        case .thriving: "Thriving"
+        case .confident: "Confident"
+        case .content: "Content"
+        case .atEase: "At ease"
+        case .evenMinded: "Even-minded"
+        case .neutral: "Neutral"
+        case .uncertain: "Uncertain"
+        case .doubtful: "Doubtful"
+        case .uneasy: "Uneasy"
+        case .concerned: "Concerned"
+        case .worried: "Worried"
+        case .overthinking: "Overthinking"
+        case .pressured: "Pressured"
+        case .tense: "Tense"
+        case .stressed: "Stressed"
+        case .anxious: "Anxious"
+        case .overstimulated: "Overstimulated"
+        case .ruminating: "Ruminating"
+        case .overwhelmed: "Overwhelmed"
+        case .distressed: "Distressed"
+        case .challenged: "Challenged"
+        }
+    }
+
+    var meaning: String {
+        switch self {
+        case .thriving: "Feeling energized, positive, and capable."
+        case .confident: "Trusting yourself and your ability to handle things."
+        case .content: "Feeling satisfied with how things are."
+        case .atEase: "Relaxed and comfortable."
+        case .evenMinded: "Calm, balanced, and emotionally steady."
+        case .neutral: "Feeling neither particularly positive nor negative."
+        case .uncertain: "Unsure about something or what to do next."
+        case .doubtful: "Questioning yourself, a decision, or an outcome."
+        case .uneasy: "Feeling unsettled or uncomfortable."
+        case .concerned: "Recognizing a problem and feeling some worry."
+        case .worried: "Thinking about what might go wrong."
+        case .overthinking: "Analyzing something repeatedly without reaching clarity."
+        case .pressured: "Feeling pushed by demands or expectations."
+        case .tense: "Feeling wound up and unable to relax easily."
+        case .stressed: "Finding demands difficult to manage."
+        case .anxious: "Feeling apprehensive, restless, or fearful."
+        case .overstimulated: "Feeling overloaded by noise, activity, sensations, or information."
+        case .ruminating: "Repeatedly dwelling on upsetting thoughts or past events."
+        case .overwhelmed: "Feeling there is more than you can handle."
+        case .distressed: "Feeling deeply upset or emotionally troubled."
+        case .challenged: "Facing something difficult and working through it."
+        }
+    }
+}
+
 struct JournalContent: Codable, Equatable, Sendable {
     var page = NotePage()
     var legacyObjects: [NoteObject] = []
     var scriptureVisible = true
+    var emotionalState: JournalEmotionalState?
+    var mentalState: JournalMentalState?
+
+    init(page: NotePage = NotePage(), legacyObjects: [NoteObject] = [], scriptureVisible: Bool = true, emotionalState: JournalEmotionalState? = nil, mentalState: JournalMentalState? = nil) {
+        self.page = page
+        self.legacyObjects = legacyObjects
+        self.scriptureVisible = scriptureVisible
+        self.emotionalState = emotionalState
+        self.mentalState = mentalState
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case page, legacyObjects, scriptureVisible, emotionalState, mentalState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        page = try container.decode(NotePage.self, forKey: .page)
+        legacyObjects = try container.decode([NoteObject].self, forKey: .legacyObjects)
+        scriptureVisible = try container.decode(Bool.self, forKey: .scriptureVisible)
+        emotionalState = try container.decodeIfPresent(String.self, forKey: .emotionalState).flatMap(JournalEmotionalState.init(rawValue:))
+        mentalState = try container.decodeIfPresent(String.self, forKey: .mentalState).flatMap(JournalMentalState.init(rawValue:))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(page, forKey: .page)
+        try container.encode(legacyObjects, forKey: .legacyObjects)
+        try container.encode(scriptureVisible, forKey: .scriptureVisible)
+        try container.encodeIfPresent(emotionalState?.rawValue, forKey: .emotionalState)
+        try container.encodeIfPresent(mentalState?.rawValue, forKey: .mentalState)
+    }
 }
 enum NoteContent: Equatable, Sendable, Codable {
     case canvas(CanvasContent)
@@ -246,6 +353,7 @@ enum NoteContent: Equatable, Sendable, Codable {
 }
 
 struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
+    var protectionID: UUID? = nil
     static let objectLimit = 1000
     enum Paper: String, Codable, CaseIterable, Sendable { case plain, ruled, grid, dotted }
     static let extent: CGFloat = 12_000
@@ -307,6 +415,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
     }
     var prayerContent: PrayerContent? { if case .prayer(let value) = content { return value }; return nil }
+    var journalContent: JournalContent? { if case .journal(let value) = content { return value }; return nil }
     var journalScriptureVisible: Bool {
         if case .journal(let value) = content { return value.scriptureVisible }
         return false
@@ -321,10 +430,11 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
     }
     private enum CodingKeys: String, CodingKey {
-        case id, title, tags, createdAt, updatedAt, deletedAt, archivedAt, trashedAt, paper, color, content, objects, page
+        case id, title, tags, createdAt, updatedAt, deletedAt, archivedAt, trashedAt, paper, color, content, objects, page, protectionID
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        protectionID = try c.decodeIfPresent(UUID.self, forKey: .protectionID)
         id = try c.decode(UUID.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
         tags = try c.decode([String].self, forKey: .tags); createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
@@ -359,6 +469,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         try c.encode(paper, forKey: .paper)
         try c.encode(color, forKey: .color)
         try c.encode(content, forKey: .content)
+        try c.encodeIfPresent(protectionID, forKey: .protectionID)
     }
     var contentSize: CGSize {
         if let page { return CGSize(width: page.width, height: page.height) }
@@ -371,7 +482,12 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
 
     var searchableText: String {
         let prayerText = prayerContent.map { $0.updates.map(\.body).joined(separator: " ") + " " + $0.status.label } ?? ""
-        var parts = [title, page?.body ?? "", prayerText]
+        let journalText = journalContent.map { journal in
+            [journal.emotionalState?.label, journal.mentalState?.label, journal.mentalState?.meaning]
+                .compactMap { $0 }
+                .joined(separator: " ")
+        } ?? ""
+        var parts = [title, page?.body ?? "", prayerText, journalText]
         parts.append(contentsOf: tags)
         for object in allObjects {
             parts.append(contentsOf: [object.text, object.url,
@@ -445,6 +561,9 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
                   object.details.count <= 500,
                   object.payload.count <= 16 * 1024 * 1024,
                   object.cells.count <= 20, object.cells.allSatisfy({ $0.count <= 10 && $0.allSatisfy { $0.count <= 2000 } }) else { throw NotesError.invalid }
+            if let ids = object.strokeIDs {
+                guard object.kind == .ink, ids.count <= 10_000, Set(ids).count == ids.count else { throw NotesError.invalid }
+            }
             if let size = object.inkSize {
                 guard object.kind == .ink, size.width.isFinite, size.height.isFinite,
                       size.width >= 40, size.height >= 40, size.width <= Self.extent, size.height <= Self.extent else { throw NotesError.invalid }
@@ -499,7 +618,7 @@ struct NotesSnapshot: Codable, Equatable, Sendable {
         for index in notes.indices { notes[index].sanitize() }
     }
     func validate() throws {
-        guard (1...3).contains(schemaVersion) else { throw NotesError.unsupported }
+        guard (1...4).contains(schemaVersion) else { throw NotesError.unsupported }
         guard revision >= 0, notes.count <= 200, Set(notes.map(\.id)).count == notes.count else { throw NotesError.invalid }
         for note in notes { try note.validate() }
     }
@@ -554,6 +673,14 @@ protocol NotesRepository: Sendable {
     func restore(_ data: Data, expectedRevision: Int) async throws -> NotesSnapshot
     func preRestoreArchive() async throws -> Data
     func resetStorage() async throws
+    func retainRejectedInk(_ data: Data, noteID: UUID) async throws
+    func rejectedInk(noteID: UUID) async throws -> Data?
+    func clearRejectedInk(noteID: UUID) async throws
+}
+extension NotesRepository {
+    func retainRejectedInk(_ data: Data, noteID: UUID) async throws { throw NotesError.unsupported }
+    func rejectedInk(noteID: UUID) async throws -> Data? { nil }
+    func clearRejectedInk(noteID: UUID) async throws { }
 }
 
 enum NotesError: LocalizedError {

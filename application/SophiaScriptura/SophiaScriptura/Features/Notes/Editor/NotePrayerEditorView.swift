@@ -5,6 +5,7 @@ struct NotePrayerEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: NotesSession
     var reader: ReaderSession
+    var addToCollection: () -> Void = {}
     @State private var rename = false
     @State private var title = ""
     @State private var newUpdate = ""
@@ -47,6 +48,17 @@ struct NotePrayerEditorView: View {
                         Label("Archive", systemImage: "archivebox")
                     }
                     .accessibilityIdentifier("notes.prayer.archive")
+                    Button("Add to Collection", systemImage: "folder.badge.plus", action: addToCollection)
+                        .accessibilityIdentifier("notes.prayer.addToCollection")
+                    if session.note?.protectionID == nil {
+                        Button("Protect Note", systemImage: "lock") { Task { if let id = session.note?.id { await session.setProtected(id, enabled: true) } } }
+                            .accessibilityIdentifier("notes.prayer.protect")
+                    } else {
+                        Button("Lock Note", systemImage: "lock") { session.protection.lock([.notes]) }
+                            .accessibilityIdentifier("notes.prayer.lock")
+                        Button("Remove Note Protection", systemImage: "lock.slash") { Task { if let id = session.note?.id { await session.setProtected(id, enabled: false) } } }
+                            .accessibilityIdentifier("notes.prayer.removeProtection")
+                    }
                     Button(role: .destructive) { confirmDelete = true } label: {
                         Label("Delete", systemImage: "trash")
                     }

@@ -80,6 +80,7 @@ private final class NoteInkCanvas: PKCanvasView {
     private var pencilSelectionPan: UIPanGestureRecognizer!
     private var pencilSelectionTap: UITapGestureRecognizer!
     private var selectionPoints: [CGPoint] = []
+    private var draggingStrokeSelection = false
     private let selectionOutline = CAShapeLayer()
     private let session: NotesSession
     private let openCitation: (NoteQuote) -> Void
@@ -188,11 +189,11 @@ private final class NoteInkCanvas: PKCanvasView {
         ink.drawingGestureRecognizer.allowedTouchTypes = [NSNumber(value: (ink.testingFinger ? UITouch.TouchType.direct : .pencil).rawValue)]
         picker.addObserver(ink); picker.addObserver(self)
         pencilSelectionPan = UIPanGestureRecognizer(target: self, action: #selector(selectWithPencil(_:)))
-        pencilSelectionPan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        pencilSelectionPan.allowedTouchTypes = [NSNumber(value: (ink.testingFinger ? UITouch.TouchType.direct : .pencil).rawValue)]
         pencilSelectionPan.isEnabled = false
         view.addGestureRecognizer(pencilSelectionPan)
         pencilSelectionTap = UITapGestureRecognizer(target: self, action: #selector(selectObject(_:)))
-        pencilSelectionTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+        pencilSelectionTap.allowedTouchTypes = [NSNumber(value: (ink.testingFinger ? UITouch.TouchType.direct : .pencil).rawValue)]
         pencilSelectionTap.isEnabled = false
         pencilSelectionTap.require(toFail: pencilSelectionPan)
         view.addGestureRecognizer(pencilSelectionTap)
@@ -288,7 +289,9 @@ private final class NoteInkCanvas: PKCanvasView {
         if ink.contentOffset != scroll.contentOffset { ink.contentOffset = scroll.contentOffset }
         #if DEBUG
         if ink.testingFinger && !PencilStrokeRefiner.simulatesPencil {
-            scroll.accessibilityValue = "Ink viewport \(Int(ink.bounds.width)) × \(Int(ink.bounds.height)); \(ink.drawing.strokes.count) strokes"
+            scroll.accessibilityValue = isCanvas
+                ? "\(ink.drawing.strokes.count) strokes; \(session.strokeSelection.count) selected strokes"
+                : "Ink viewport \(Int(ink.bounds.width)) × \(Int(ink.bounds.height)); \(ink.drawing.strokes.count) strokes"
         }
         #endif
     }
@@ -438,9 +441,15 @@ private final class NoteInkCanvas: PKCanvasView {
         if !ink.drawing.strokes.isEmpty || !lastInk.isEmpty {
             if bytes != lastInk {
                 if isCanvas, let scene = canvasScene {
-                    let owner = NoteCanvasInk.extensionOwner(in: session.note?.objects ?? [], selection: session.selection)
+                    let owner = session.startsNewInkRegion ? nil : NoteCanvasInk.extensionOwner(in: session.note?.objects ?? [], selection: session.selection)
                     session.edit { $0.objects = scene.objects(after: ink.drawing, replacing: $0.objects, extending: owner) }
                     let savedObjects = session.note?.objects ?? []
+                    if NoteCanvasInk.equivalent((try? NoteCanvasInk(objects: savedObjects))?.drawing ?? PKDrawing(), ink.drawing) {
+                        session.startsNewInkRegion = false
+                    } else {
+                        session.retainRejectedInk(bytes)
+                        session.notice = "This drawing could not be saved within the note limits. Your saved ink is preserved, and the unsaved drawing is retained for recovery. Use Note options → Recover unsaved drawing."
+                    }
                     canvasScene = try? NoteCanvasInk(objects: savedObjects, traits: traitCollection, previous: scene)
                     representedInkObjects = savedObjects.filter { $0.kind == .ink }
                     // A rejected drawing must not be retried on every SwiftUI refresh.
@@ -460,6 +469,10 @@ private final class NoteInkCanvas: PKCanvasView {
     }
     private func showTools() {
         guard session.active, session.toolsVisible, view.window != nil else { return }
+        if session.startsNewInkRegion, picker.selectedTool is PKLassoTool {
+            picker.selectedTool = PKInkingTool(.pen, color: .black, width: 3)
+            pencilSelecting = false; updateSelectionGestures()
+        }
         view.endEditing(true); ink.becomeFirstResponder()
         picker.setVisible(true, forFirstResponder: ink)
         #if DEBUG
@@ -473,12 +486,20 @@ private final class NoteInkCanvas: PKCanvasView {
         // iPadOS 17's standard palette includes lasso. Ink remains fixed in this editor.
         if !isCanvas, toolPicker.selectedTool is PKLassoTool { ink.tool = PKInkingTool(.pen, color: .label, width: 3) }
         pencilSelecting = isCanvas && toolPicker.selectedTool is PKLassoTool
+        if pencilSelecting { session.editsStrokes = true }
         pencilSelectionPan?.isEnabled = pencilSelecting && session.active
         pencilSelectionTap?.isEnabled = pencilSelecting && session.active
-        ink.drawingGestureRecognizer.isEnabled = session.active && !pencilSelecting
+        updateSelectionGestures()
     }
     @available(iOS 18.0, *)
     func toolPickerSelectedToolItemDidChange(_ toolPicker: PKToolPicker) { toolPickerSelectedToolDidChange(toolPicker) }
+    private func updateSelectionGestures() {
+        let selecting = pencilSelecting || (ink.testingFinger && session.editsStrokes)
+        pencilSelectionPan?.isEnabled = selecting && session.active
+        pencilSelectionTap?.isEnabled = selecting && session.active
+        ink.drawingGestureRecognizer.isEnabled = session.active && !selecting
+        pan?.isEnabled = !(ink.testingFinger && selecting)
+    }
     func scribbleInteraction(_ interaction: UIScribbleInteraction, shouldBeginAt location: CGPoint) -> Bool { false }
     private func configureTextInput(_ text: UITextView) {
         text.addInteraction(UIScribbleInteraction(delegate: self))
@@ -579,12 +600,13 @@ private final class NoteInkCanvas: PKCanvasView {
         updateObjectViews(note)
         view.bringSubviewToFront(ink); view.bringSubviewToFront(palette)
         ink.isUserInteractionEnabled = session.active; bodyText.isEditable = session.active
-        ink.drawingGestureRecognizer.isEnabled = session.active && !pencilSelecting
+        updateSelectionGestures()
         if isCanvas { ink.layer.opacity = usingPencil ? 1 : 0 }
         ink.accessibilityLabel = isCanvas ? "Canvas drawings" : "Page annotations"
         if !session.active { flush(); hideTools(); view.endEditing(true) }
         if session.active && !wasActive { showTools() }; wasActive = session.active
         if toolsRequest != session.toolsRequest { toolsRequest = session.toolsRequest; if session.toolsVisible { showTools() } else { hideTools() } }
+        updateStrokeOutline()
         fitIfNeeded(); centerPage(); updatePalette(); updateViewport(); updateObjectViews(note)
         if focus != session.focusRequest {
             focus = session.focusRequest
@@ -636,7 +658,7 @@ private final class NoteInkCanvas: PKCanvasView {
                     ? UIFont.monospacedSystemFont(ofSize: object.fontSize, weight: .regular)
                     : .systemFont(ofSize: object.fontSize)
                 if !text.isFirstResponder, text.text != object.text { text.text = object.text }
-            } else if represented[object.id] != object { render(object, in: item) }
+            } else if object.kind == .ink || represented[object.id] != object { render(object, in: item) }
             item.viewWithTag(701)?.removeFromSuperview()
             if selected, object.group == nil, !object.positionLocked {
                 let size = min(min(item.bounds.width, item.bounds.height), max(10, 12 / scroll.zoomScale))
@@ -699,24 +721,37 @@ private final class NoteInkCanvas: PKCanvasView {
         return nil
     }
 
-    private func render(_ object: NoteObject, in item: UIView) {
+    private func renderInk(_ object: NoteObject, in item: UIView) {
+        item.backgroundColor = .clear
+        guard let bounds = canvasScene?.localBounds(for: object), !bounds.isNull else {
+            item.subviews.forEach { $0.removeFromSuperview() }; return
+        }
+        let visible = scroll.convert(scroll.bounds, to: paper).insetBy(dx: -128, dy: -128)
+        let x = floor(visible.minX / 256) * 256, y = floor(visible.minY / 256) * 256
+        let crop = CGRect(x: x - object.frame.minX, y: y - object.frame.minY,
+                          width: ceil((visible.maxX - x) / 256) * 256,
+                          height: ceil((visible.maxY - y) / 256) * 256)
+        let rect = preparingShare ? bounds : bounds.intersection(crop)
+        guard !rect.isNull, !rect.isEmpty else { item.subviews.forEach { $0.removeFromSuperview() }; return }
+        let entry: RasterEntry
+        if let cached = rasters.object(forKey: object.id as NSUUID), cached.matches(object), cached.frame == rect {
+            if let image = item.subviews.first as? UIImageView, image.image === cached.image, image.frame == rect { return }
+            entry = cached
+        } else {
+            guard let scaled = canvasScene?.localDrawing(for: object) else { return }
+            let scale = min(2, 2048 / max(1, max(rect.width, rect.height)))
+            let raster = NoteInkAppearance.image(scaled, from: rect, scale: scale, traits: theme.traits)
+            entry = RasterEntry(object, image: raster, frame: rect)
+            let cost = raster.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+            rasters.setObject(entry, forKey: object.id as NSUUID, cost: cost + object.payload.count)
+        }
         item.subviews.forEach { $0.removeFromSuperview() }
-        if object.kind == .ink {
-            item.backgroundColor = .clear
-            if let cached = rasters.object(forKey: object.id as NSUUID), cached.matches(object) {
-                let image = UIImageView(image: cached.image); image.frame = cached.frame; item.addSubview(image)
-            } else if let drawing = try? PKDrawing(data: object.payload), !drawing.strokes.isEmpty {
-                let scaleX = object.frame.width / (object.inkSize?.width ?? object.frame.width)
-                let scaleY = object.frame.height / (object.inkSize?.height ?? object.frame.height)
-                let scaled = drawing.transformed(using: CGAffineTransform(scaleX: scaleX, y: scaleY))
-                let rasterScale = min(2, 2048 / max(1, max(scaled.bounds.width, scaled.bounds.height)))
-                let raster = NoteInkAppearance.image(scaled, from: scaled.bounds, scale: rasterScale, traits: theme.traits)
-                let entry = RasterEntry(object, image: raster, frame: scaled.bounds)
-                let cost = raster.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-                rasters.setObject(entry, forKey: object.id as NSUUID, cost: cost + object.payload.count)
-                let image = UIImageView(image: raster); image.frame = scaled.bounds; item.addSubview(image)
-            }
-        } else if object.kind == .image {
+        let image = UIImageView(image: entry.image); image.frame = entry.frame; item.addSubview(image)
+    }
+    private func render(_ object: NoteObject, in item: UIView) {
+        if object.kind == .ink { renderInk(object, in: item); return }
+        item.subviews.forEach { $0.removeFromSuperview() }
+        if object.kind == .image {
             let image = UIImageView(image: cachedImage(for: object, in: item)); image.contentMode = .scaleAspectFit
             image.frame = item.bounds; image.autoresizingMask = [.flexibleWidth, .flexibleHeight]; item.addSubview(image)
         } else if object.kind == .shape {
@@ -748,6 +783,9 @@ private final class NoteInkCanvas: PKCanvasView {
         }
     }
     private func updatePalette() {
+        if isCanvas, !session.strokeSelection.isEmpty {
+            updateStrokePalette(); return
+        }
         guard let note = session.note, let id = session.selection.first, let object = note.objects.first(where: { $0.id == id }) else {
             palette.isHidden = true; paletteKey = ""; return
         }
@@ -815,9 +853,52 @@ private final class NoteInkCanvas: PKCanvasView {
         palette.isHidden = usingPencil || bodyText.isFirstResponder || objects.values.contains { $0.isFirstResponder } || !session.active || session.selection.isEmpty
         positionPalette()
     }
+    private func updateStrokeOutline(offset: CGSize = .zero) {
+        guard isCanvas, selectionPoints.isEmpty else { return }
+        let bounds = canvasScene?.strokeIndex.bounds(of: session.strokeSelection) ?? .null
+        selectionOutline.path = bounds.isNull ? nil : UIBezierPath(rect: bounds.offsetBy(dx: offset.width, dy: offset.height).insetBy(dx: -4, dy: -4)).cgPath
+        selectionOutline.lineWidth = 1 / max(0.2, scroll.zoomScale)
+    }
+    private func updateStrokePalette() {
+        let key = "strokes|\(session.strokeSelection)|\(session.renderRevision)"
+        if paletteKey != key {
+            paletteKey = key
+            palette.arrangedSubviews.forEach { palette.removeArrangedSubview($0); $0.removeFromSuperview() }
+            func button(_ title: String, _ symbol: String, _ handler: @escaping () -> Void) -> UIButton {
+                let button = UIButton(type: .system)
+                button.setImage(UIImage(systemName: symbol), for: .normal)
+                button.accessibilityLabel = title
+                button.accessibilityIdentifier = "notes.strokes." + title.lowercased().replacingOccurrences(of: " ", with: ".")
+                button.widthAnchor.constraint(equalToConstant: 42).isActive = true
+                button.heightAnchor.constraint(equalToConstant: 40).isActive = true
+                button.addAction(UIAction { [weak self] _ in handler(); self?.paletteKey = ""; self?.apply() }, for: .touchUpInside)
+                return button
+            }
+            let color = button("Color", "paintpalette.fill") {}
+            color.menu = UIMenu(children: NoteTint.allCases.map { tint in
+                UIAction(title: tint.rawValue.capitalized) { [weak self] _ in
+                    self?.session.colorSelectedStrokes(tint.color); self?.paletteKey = ""; self?.apply()
+                }
+            }); color.showsMenuAsPrimaryAction = true
+            palette.addArrangedSubview(color)
+            palette.addArrangedSubview(button("Copy", "doc.on.doc") { [weak self] in self?.session.copySelection() })
+            palette.addArrangedSubview(button("Duplicate", "plus.square.on.square") { [weak self] in self?.session.duplicateSelection() })
+            let delete = button("Delete", "trash") { [weak self] in self?.session.remove() }
+            delete.tintColor = .systemRed; palette.addArrangedSubview(delete)
+            palette.addArrangedSubview(button("Select drawing", "square.dashed") { [weak self] in
+                guard let self else { return }
+                let ids = Set(self.session.strokeSelection.map(\.objectID))
+                self.session.editsStrokes = false; self.session.selection = ids
+            })
+        }
+        palette.isHidden = usingPencil || !session.active || session.strokeSelection.isEmpty
+        positionPalette()
+    }
     private func positionPalette() {
         guard !palette.isHidden, let note = session.note else { return }
-        let rect = note.objects.filter { session.selection.contains($0.id) }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        let rect = session.strokeSelection.isEmpty
+            ? note.objects.filter { session.selection.contains($0.id) }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+            : canvasScene?.strokeIndex.bounds(of: session.strokeSelection) ?? .null
         guard !rect.isNull else { return }
         let target = paper.convert(rect, to: view)
         let size = palette.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
@@ -825,9 +906,27 @@ private final class NoteInkCanvas: PKCanvasView {
         palette.frame = CGRect(x: max(8, min(view.bounds.width - size.width - 8, target.midX - size.width / 2)), y: max(8, min(view.bounds.height - size.height - 100, y)), width: size.width, height: size.height)
     }
     private func objectID(_ view: UIView) -> UUID? { objects.first { $0.value === view }?.key }
-    private func hit(_ point: CGPoint) -> NoteObject? { session.note?.objects.reversed().first { (isCanvas || $0.kind != .ink) && $0.frame.contains(point) } }
+    private func hit(_ point: CGPoint) -> NoteObject? {
+        let strokeHit = isCanvas ? canvasScene?.strokeIndex.hit(at: point, tolerance: 6 / max(0.2, scroll.zoomScale)) : nil
+        return session.note?.objects.reversed().first {
+            guard isCanvas || $0.kind != .ink else { return false }
+            if $0.kind == .ink { return strokeHit?.objectID == $0.id }
+            return $0.frame.contains(point)
+        }
+    }
     @objc private func selectObject(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: paper)
+        if isCanvas, session.editsStrokes, hit(point)?.kind == .ink {
+            view.endEditing(true); session.selection = []
+            if let ref = canvasScene?.strokeIndex.hit(at: point, tolerance: 6 / max(0.2, scroll.zoomScale)) {
+                if session.selectingMultiple {
+                    if session.strokeSelection.contains(ref) { session.strokeSelection.remove(ref) }
+                    else { session.strokeSelection.insert(ref) }
+                } else { session.strokeSelection = [ref] }
+            }
+            session.mode = .select; apply(); return
+        }
+        session.strokeSelection = []
         // The keyboard may scroll the page before this recognizer ends.
         // Resolve the target captured at touch-down, not its shifted final position.
         if let offset = bodyTapOffset {
@@ -866,8 +965,20 @@ private final class NoteInkCanvas: PKCanvasView {
     }
     @objc private func selectWithPencil(_ gesture: UIPanGestureRecognizer) {
         let point = gesture.location(in: paper)
-        if gesture.state == .began { selectionPoints = [point] }
-        else { selectionPoints.append(point) }
+        if gesture.state == .began {
+            dragStart = point
+            let ref = canvasScene?.strokeIndex.hit(at: point, tolerance: 6 / max(0.2, scroll.zoomScale))
+            draggingStrokeSelection = session.editsStrokes && ref.map { session.strokeSelection.contains($0) } == true && hit(point)?.positionLocked == false
+            selectionPoints = draggingStrokeSelection ? [] : [point]
+        }
+        if draggingStrokeSelection {
+            let delta = CGSize(width: point.x - dragStart.x, height: point.y - dragStart.y)
+            if gesture.state == .ended { session.move(delta); draggingStrokeSelection = false; apply() }
+            else if gesture.state == .cancelled || gesture.state == .failed { draggingStrokeSelection = false; apply() }
+            else { palette.isHidden = true; updateStrokeOutline(offset: delta) }
+            return
+        }
+        if gesture.state != .began { selectionPoints.append(point) }
         let path = CGMutablePath()
         if let first = selectionPoints.first {
             path.move(to: first)
@@ -876,7 +987,13 @@ private final class NoteInkCanvas: PKCanvasView {
         }
         selectionOutline.path = path
         if gesture.state == .ended {
-            session.selection = session.note?.objectsInside(selectionPoints) ?? []
+            if session.editsStrokes {
+                session.selection = []
+                session.strokeSelection = canvasScene?.strokeIndex.selected(inside: selectionPoints) ?? []
+            } else {
+                session.strokeSelection = []
+                session.selection = session.note?.objectsInside(selectionPoints) ?? []
+            }
             session.mode = .select
             selectionOutline.path = nil
             selectionPoints = []
@@ -901,6 +1018,11 @@ private final class NoteInkCanvas: PKCanvasView {
     func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
         guard gesture === pan else { return true }
         let point = objectTouchPoint
+        if !session.strokeSelection.isEmpty {
+            guard let ref = canvasScene?.strokeIndex.hit(at: point, tolerance: 6 / max(0.2, scroll.zoomScale)),
+                  session.strokeSelection.contains(ref), let object = hit(point), !object.positionLocked else { return false }
+            return true
+        }
         guard let object = hit(point), session.selection.contains(object.id), !object.positionLocked else { return false }
         if let text = objects[object.id] as? UITextView, text.isFirstResponder { return false }
         return true
@@ -913,12 +1035,14 @@ private final class NoteInkCanvas: PKCanvasView {
             // A corner drag can leave the object before the pan reaches its threshold.
             // Choose the handle from touch-down rather than the recognition position.
             dragStart = objectTouchPoint
-            if let object = hit(dragStart), !object.positionLocked, object.group == nil,
+            if session.strokeSelection.isEmpty, let object = hit(dragStart), !object.positionLocked, object.group == nil,
                dragStart.x > object.frame.maxX - max(30, 36 / scroll.zoomScale), dragStart.y > object.frame.maxY - max(30, 36 / scroll.zoomScale) {
                 resizeID = object.id; originalSize = object.frame.size
             } else { resizeID = nil }
         case .changed:
-            if let id = resizeID, let item = objects[id] {
+            if !session.strokeSelection.isEmpty {
+                updateStrokeOutline(offset: CGSize(width: point.x - dragStart.x, height: point.y - dragStart.y))
+            } else if let id = resizeID, let item = objects[id] {
                 item.frame.size = CGSize(width: max(40, originalSize.width + point.x - dragStart.x), height: max(40, originalSize.height + point.y - dragStart.y))
             } else if var preview = session.note {
                 preview.move(session.selection, by: CGSize(width: point.x - dragStart.x, height: point.y - dragStart.y))
@@ -1023,7 +1147,9 @@ private final class NoteInkCanvas: PKCanvasView {
             renderer.fill(CGRect(origin: .zero, size: CGSize(width: bounds.width * scale, height: bounds.height * scale)))
             renderer.cgContext.scaleBy(x: scale, y: scale)
             renderer.cgContext.translateBy(x: -bounds.minX, y: -bounds.minY)
+            let path = selectionOutline.path; selectionOutline.path = nil
             paper.layer.render(in: renderer.cgContext)
+            selectionOutline.path = path
         }
         let sheet = UIActivityViewController(activityItems: [image], applicationActivities: nil)
         sheet.popoverPresentationController?.sourceView = view
@@ -1052,6 +1178,11 @@ private final class NoteInkCanvas: PKCanvasView {
         }
         #endif
         ink.accessibilityValue = count
+        if isCanvas, ink.testingFinger {
+            ink.isAccessibilityElement = true
+            let value = "\(count); \(session.strokeSelection.count) selected strokes"
+            ink.accessibilityValue = value; scroll.accessibilityValue = value
+        }
     }
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
         guard !applying, !usingPencil else { return }

@@ -333,6 +333,18 @@ struct CollectionOutlineEntry: Identifiable {
     var id: UUID { collection.id }
 }
 
+extension Array where Element == CollectionOutlineEntry {
+    /// Keeps a collapsed folder and hides every nested folder beneath it.
+    func hidingCollapsedSubfolders(_ collapsed: Set<UUID>) -> [CollectionOutlineEntry] {
+        var hiddenBelow: Int?
+        return filter { entry in
+            if let hiddenBelow, entry.depth > hiddenBelow { return false }
+            hiddenBelow = collapsed.contains(entry.id) ? entry.depth : nil
+            return true
+        }
+    }
+}
+
 struct CollectionArtifact: Identifiable, Hashable {
     let id: UUID
     var title: String
@@ -344,6 +356,7 @@ struct CollectionArtifact: Identifiable, Hashable {
 }
 
 struct StudyCollection: Codable, Identifiable, Hashable {
+    var protectionID: UUID? = nil
     static let unfiledID = UUID(uuidString: "00000000-0000-4000-8000-0000000000F1")!
 
     let id: UUID

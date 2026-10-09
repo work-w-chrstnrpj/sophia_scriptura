@@ -108,3 +108,33 @@ Automated finger strokes measure bounded rendering/persistence, not physical Pen
 
 Open a new and an existing Page, draw a short annotation, switch Dark → Light → Dark, then
 leave and reopen it. The Page must open without exiting and retain its text and ink.
+
+## SP-025 physical Canvas acceptance — v0.3.0
+
+Status: Not Run on the owner's iPad. Simulator finger input is not physical Pencil evidence.
+
+1. Back up Notes. Open old single-stroke and 64-stroke-batch Canvas notes: check exact
+   placement, colors, groups and overlaps before editing. Also inspect Page/Journal ink.
+2. In a Canvas note, write beyond 64 and 300 strokes. Normal continuous writing remains
+   one region. Select Strokes or the Pencil lasso: tap one stroke and loop around handwriting
+   in several regions. Nearby unselected ink remains unchanged through move/color/delete.
+3. Drag selected ink using Pencil and finger. Repeat at 25%, 100% and 200% zoom, including
+   thin/overlapping strokes, clipped eraser masks and empty space over images/text. Test palm
+   rejection and endpoint-hold refinement. Loop means fully contained visible centerlines.
+4. Copy a subset, Paste from Note options, duplicate, erase partly, Undo/Redo, save/reopen,
+   then export/restore. Verify independence of copies and preservation of unselected strokes.
+5. Switch to Objects/Select drawing: move/resize a region and an explicit mixed group; lock
+   position and verify movement is blocked. Return to Strokes and check geometry/index freshness.
+6. Use New drawing region; insert text/image between writing sessions and verify layer order.
+   Use a generated near-capacity fixture to cross 10,000 strokes/payload bounds: ink spills
+   to an adjacent region without loss. At the overall note bound, verify rejected ink
+   recovery survives quit/reopen and creates a new note without modifying the source.
+7. Pan across a large note; examine raster sharpness in light/dark themes and complete
+   image sharing. Selection outlines must not appear in shared output.
+8. Compare the same document/device/tool/zoom with baseline using sustained writing,
+   selection, pan/zoom, erase, undo and save. Record stroke/object counts, payload bytes,
+   visible latency/frame stalls, peak memory and save durations. Set acceptance budgets
+   against the device baseline; no measured performance improvement is inferred from tests.
+
+Stop on lost strokes, changed legacy placement/overlaps, stale selection, interrupted
+Pencil input or memory/latency regression. Record owner device results separately from CI.

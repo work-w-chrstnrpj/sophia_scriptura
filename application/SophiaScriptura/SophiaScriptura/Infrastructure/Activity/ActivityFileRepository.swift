@@ -44,6 +44,9 @@ actor ActivityFileRepository {
     }
 
     func save(_ snapshot: ActivitySnapshot) throws {
+        var snapshot = snapshot
+        try validate(snapshot)
+        snapshot.migrateBuiltInModes()
         try validate(snapshot)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let payload = try JSONEncoder().encode(snapshot)
@@ -72,7 +75,9 @@ actor ActivityFileRepository {
         guard data.count <= 8 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
         guard envelope.schemaVersion == 1, envelope.checksum == digest(envelope.payload) else { throw CocoaError(.coderInvalidValue) }
-        let snapshot = try JSONDecoder().decode(ActivitySnapshot.self, from: envelope.payload)
+        var snapshot = try JSONDecoder().decode(ActivitySnapshot.self, from: envelope.payload)
+        try validate(snapshot)
+        snapshot.migrateBuiltInModes()
         try validate(snapshot)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let old = try? exportArchive() {
@@ -87,7 +92,9 @@ actor ActivityFileRepository {
         guard (attributes[.size] as? Int ?? 0) <= 8 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
         let envelope = try JSONDecoder().decode(Envelope.self, from: Data(contentsOf: url))
         guard envelope.schemaVersion == 1, envelope.checksum == digest(envelope.payload) else { throw CocoaError(.coderInvalidValue) }
-        let snapshot = try JSONDecoder().decode(ActivitySnapshot.self, from: envelope.payload)
+        var snapshot = try JSONDecoder().decode(ActivitySnapshot.self, from: envelope.payload)
+        try validate(snapshot)
+        snapshot.migrateBuiltInModes()
         try validate(snapshot)
         return snapshot
     }
@@ -98,7 +105,7 @@ actor ActivityFileRepository {
               (snapshot.reminders?.count ?? 0) <= 100,
               Set(snapshot.records.map(\.id)).count == snapshot.records.count else { throw CocoaError(.coderInvalidValue) }
         if let goals = snapshot.dailyGoalMinutesByMode {
-            let activeModeIDs = Set(ActivityModeID.allCases.map(\.id)
+            let activeModeIDs = Set(ActivityModeID.allCases.map(\.id) + ["reviewing"]
                 + snapshot.customModes.filter { !$0.archived }.map(\.id))
             guard goals.count <= 1_006, goals.allSatisfy({ !$0.key.isEmpty && (0...1440).contains($0.value) }),
                   goals.keys.allSatisfy({ activeModeIDs.contains($0) }),

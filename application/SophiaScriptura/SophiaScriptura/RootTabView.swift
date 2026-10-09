@@ -30,6 +30,7 @@ struct RootTabView: View {
     private var palette: ReaderPalette { theme.palette }
     @State private var annotations = AnnotationSession()
     @State private var notes = NotesSession()
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @StateObject private var collections = CollectionsStore(repository: CollectionsFileRepository(directory: CollectionsFileRepository.defaultDirectory()))
     @StateObject private var companion = CompanionSession.live()
     @StateObject private var activity = ActivityStore()
@@ -62,7 +63,7 @@ struct RootTabView: View {
         GeometryReader { geometry in
                 ZStack {
                     ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    CollectionsView(store:collections, notes:notes, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }, createConversation: { companion.createConversation() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    CollectionsView(store:collections, notes:notes, openNote: { id, collectionID in notes.open(id, from: collectionID); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }, createConversation: { companion.createConversation() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
@@ -156,12 +157,22 @@ struct RootTabView: View {
         }
         .background(Color(palette.paper).ignoresSafeArea())
         .background(ScrollActivityObserver { chrome.reveal() })
+        .background(ProtectionWindowObserver(protection: protection, domain: selection == .notes ? .notes : selection == .collections ? .collections : nil))
+        .sheet(item: Binding(get: { protection.prompt }, set: { _ in })) { prompt in
+            ItemUnlockView(protection: protection, prompt: prompt).id(prompt.id)
+        }
         .tint(Color(palette.accent))
         .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
         .environment(notes)
         .environmentObject(userProfile)
         .onAppear {
+            notes.collections = collections
+            protection.willLock = { domains in
+                if domains.contains(.notes) { notes.concealProtectedNote() }
+                else { notes.flushSurface?(); Task { await notes.save() } }
+                collections.objectWillChange.send()
+            }
             companion.onCollectionsSync = { collections.upsertCompanionConversation($0) }
             companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }
             music.load()
@@ -170,11 +181,11 @@ struct RootTabView: View {
         .task { await notes.load(); await collections.load(); await companion.load();
             let activeIDs = Set(companion.activeConversations.map(\.id))
             for conversation in collections.conversations where !activeIDs.contains(conversation.id) { collections.removeCompanionConversation(conversation.id) }
-            await activity.load(); activity.importReviewingLinks(companion.reviewingLinks) }
-        .onChange(of: companion.reviewingLinks) { _, links in activity.importReviewingLinks(links) }
+            await activity.load(); activity.importQuizStudyLinks(companion.reviewingLinks) }
+        .onChange(of: companion.reviewingLinks) { _, links in activity.importQuizStudyLinks(links) }
         .onChange(of: activity.draft) { _, value in
-            if value == nil { activity.importReviewingLinks(companion.reviewingLinks) }
-            if value?.modeID == ActivityModeID.meditating.id, !music.preferences.showFloatingControl {
+            if value == nil { activity.importQuizStudyLinks(companion.reviewingLinks) }
+            if value?.modeID == ActivityModeID.meditating.id, (value?.guidedWorkflow ?? true), !music.preferences.showFloatingControl {
                 music.setShowFloatingControl(true)
             }
         }
@@ -193,6 +204,7 @@ struct RootTabView: View {
         .onAppear { chrome.reveal() }
         .onDisappear { chrome.stop() }
         .onChange(of:scenePhase) { _, phase in
+            protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && selection == .notes
             if phase == .active { chrome.reveal(); activity.pruneExpiredReminders() }

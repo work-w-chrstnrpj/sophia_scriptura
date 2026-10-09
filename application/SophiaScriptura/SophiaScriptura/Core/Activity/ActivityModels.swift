@@ -1,16 +1,15 @@
 import Foundation
 
 enum ActivityModeID: String, Codable, CaseIterable, Identifiable {
-    case reading, studying, meditating, journaling, memorizing, reviewing
+    case reading, studying, meditating, journaling, memorizing
     var id: String { rawValue }
     var title: String {
         switch self {
         case .reading: "Reading"
         case .studying: "Studying"
-        case .meditating: "Meditating"
+        case .meditating: "Contemplating"
         case .journaling: "Journaling"
         case .memorizing: "Memorizing Verses"
-        case .reviewing: "Reviewing"
         }
     }
 }
@@ -57,6 +56,7 @@ struct ActivityDraft: Codable, Equatable {
     var description: String
     var readingStart: VerseID?
     var editionID: String?
+    var guidedWorkflow: Bool? = nil
 
     func activeSeconds(at now: Date) -> TimeInterval {
         intervals.reduce(0) { $0 + $1.seconds } + (runningSince.map { max(0, now.timeIntervalSince($0)) } ?? 0)
@@ -107,7 +107,36 @@ struct ActivitySnapshot: Codable {
     var suppressedQuizSessionIDs: [UUID]?
     // Optional for existing v1 archives and local generations.
     var reminders: [ActivityReminder]?
+    // Missing values preserve the guided-start behavior of older versions.
+    var automaticReadingWorkflow: Bool?
+    var automaticContemplationWorkflow: Bool?
     var autoDeleteOneTimeReminders: Bool? // Legacy preference, migrated to each reminder on load.
+}
+
+extension ActivitySnapshot {
+    /// Wire IDs for contemplation stay stable; legacy Reviewing time becomes Studying.
+    mutating func migrateBuiltInModes() {
+        func canonical(_ id: String) -> String { id == "reviewing" ? ActivityModeID.studying.id : id }
+        func label(_ id: String, fallback: String) -> String { ActivityModeID(rawValue: canonical(id))?.title ?? fallback }
+        for i in records.indices {
+            records[i].modeLabel = label(records[i].modeID, fallback: records[i].modeLabel)
+            records[i].modeID = canonical(records[i].modeID)
+        }
+        if var value = draft {
+            value.modeLabel = label(value.modeID, fallback: value.modeLabel)
+            value.modeID = canonical(value.modeID); draft = value
+        }
+        if var values = reminders {
+            for i in values.indices {
+                values[i].modeLabel = label(values[i].modeID, fallback: values[i].modeLabel)
+                values[i].modeID = canonical(values[i].modeID)
+            }
+            reminders = values
+        }
+        if let oldGoal = dailyGoalMinutesByMode?.removeValue(forKey: "reviewing") {
+            dailyGoalMinutesByMode?[ActivityModeID.studying.id, default: 0] += oldGoal
+        }
+    }
 }
 
 enum ActivityMetrics {

@@ -4,7 +4,7 @@ Milestone: M8. Selected by owner on 2026-10-03 after deferring M7 (M7 abandoned 
 
 ## Usable outcome
 
-Track one timed study activity across tabs and relaunch, record a continuous Reading range, add manual activities, keep a local history and daily goal, and count completed Quiz Me sessions as Reviewing without copying quiz answers.
+Track one timed study activity across tabs and relaunch, record a continuous Reading range, add manual activities, keep a local history and daily goal, and count completed Quiz Me sessions as Studying without copying quiz answers.
 
 ## Scope and exclusions
 
@@ -16,7 +16,7 @@ Activity owns modes, records, active-time intervals, goals and metrics. `AppShel
 - Timed intervals are split at local midnight for daily metrics. Manual records count on their chosen date.
 - Custom modes count toward the goal and can be archived; historical labels remain on records.
 - Cross-book Reading stores one range and one total duration. No per-book minutes are inferred.
-- Quiz Reviewing links are imported once by quiz-session ID.
+- Quiz Studying links are imported once by quiz-session ID.
 
 ## Acceptance and evidence
 
@@ -27,7 +27,7 @@ Activity owns modes, records, active-time intervals, goals and metrics. `AppShel
 - [x] Manual clock-time entry, overlap rejection, record correction, validated verse picker, calendar-week/month Insights, and Activity-only Files export/restore.
 - [x] Activity UI revision: full-width themed layout; Daily/Weekly/Monthly/Annual analytics with mode-filtered distribution and time charts; Today streak floor of 1; five-record History preview and grouped full history; swipe Edit/Delete and record detail; draggable cross-tab recorder with seconds and finish-sheet routing.
 - [x] Owner follow-up: recorder drag updates in its own view from the first touch; date/range picker and 40%/60% charts; Auxiliary buttons; local recurring reminders and one-time cleanup setting; full-axis selected Analytics PNG export; compact record details and red destructive actions in Activity, Chat and Quiz histories.
-- [x] Completed Quiz Me sessions now record active question time as Reviewing without a separate Activity timer or setup switch. Quiz-history deletion retains its already recorded Activity time; incomplete/abandoned quizzes do not record automatically.
+- [x] Completed Quiz Me sessions now record active question time as Studying without a separate Activity timer or setup switch. Quiz-history deletion retains its already recorded Activity time; incomplete/abandoned quizzes do not record automatically.
 - [x] Owner reminder refinement: separate Reminders section after History with five-item preview and grouped View all; create/edit form closes after save; one-time cleanup is set per reminder; form no longer embeds the reminder list. Reminder and Print Analytics were removed from Auxiliary, with Print Analytics in the Analytics header.
 - [x] Owner goal/distribution refinement: the distribution card keeps its pie and color/type legend, with durations and shares in a detail sheet; Today is a compact total-progress card whose detail sheet shows each type's progress and expands to direct per-mode goal editing. Existing total goals migrate to Reading.
 - [x] Owner manual-entry/correction refinement: Start is required; entering End computes duration, while entering minutes computes and stores End. Editing preloads stored start/end, retains the record ID and replaces its saved interval/duration. Reminders has a dashed Add new reminder row; Start Activity floats at bottom right above the tab dock. Activity list clearance keeps bottom actions tappable.
@@ -43,3 +43,9 @@ Activity owns modes, records, active-time intervals, goals and metrics. `AppShel
 - [x] Manual-entry/correction verification and delivery: `ActivityTests` passed 15/15 in `build/sp020/manual-correction/ActivityTests.xcresult`. The selected reminder and cross-tab recorder UI checks passed in `build/sp020/manual-correction/UITests.xcresult`; the manual-entry detail check initially exposed the tab dock covering Add Manual, then passed after scroll clearance in `build/sp020/manual-correction/RecordUITest-r2.xcresult`. The Debug device build succeeded, strict code-sign verification passed, and `com.personal.SophiaScriptura` installed in place and launched on `iPad ni Paj` (`00008120-0014354C112B601E`). Logs: `build/sp020/manual-correction/device/`. Physical interaction acceptance remains open.
 
 Ticket closed 2026-10-04 at M9 integrated acceptance.
+
+## Owner follow-up — optional workflows and Studying, 2026-10-08
+
+Implemented independent automatic Reading/Scripture Contemplation choices in Settings, both enabled by default for existing installations. Turning either off permits a timer without a passage requirement or guided routing. Settings changes apply to new activities; an active timer retains its launch choice. Scripture Contemplation has its own Start/history section; the activity type is Contemplating. Quiz Me imports as Studying; Reviewing is removed from built-in choices, and legacy records, drafts, reminders and goals migrate without changing time, IDs or quiz linkage. The persisted `meditating` identifier and Companion quiz wire fields remain compatible.
+
+The original M8 owner acceptance above predates this follow-up. Current simulator evidence and remaining physical gates are recorded in [the test specification](../docs/testing/test-specification.md#activity-workflow-choices--2026-10-08).

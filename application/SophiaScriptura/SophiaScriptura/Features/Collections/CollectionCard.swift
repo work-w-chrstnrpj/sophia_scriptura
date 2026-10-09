@@ -3,20 +3,24 @@ import SwiftUI
 /// Color-labeled folder tile (Direction C).
 struct CollectionCard: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     let collection: StudyCollection
     let itemCount: Int
     let subfolderCount: Int
     var kindHints: [CollectionArtifactKind] = []
+    var inheritedLocked = false
 
     private var washOpacity: Double { theme.dark ? 0.20 : 0.15 }
-    private var tint: Color { collection.accent.resolvedColor(in: theme) }
+    private var locked: Bool { inheritedLocked || protection.isLocked(collection.protectionID, in: .collections) }
+    private var tint: Color { (locked ? CollectionAccent.stone : collection.accent).resolvedColor(in: theme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 accentCircleIcon
                 Spacer(minLength: 0)
-                if !kindHints.isEmpty {
+                if collection.protectionID != nil { Image(systemName: locked ? "lock.fill" : "lock.open.fill").accessibilityLabel(locked ? "Locked collection" : "Protected collection, unlocked") }
+                if !locked, !kindHints.isEmpty {
                     HStack(spacing: 4) {
                         ForEach(kindHints) { kind in
                             Circle()
@@ -35,7 +39,7 @@ struct CollectionCard: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
 
-            if !collection.detail.isEmpty {
+            if !locked, !collection.detail.isEmpty {
                 Text(collection.detail)
                     .font(.footnote)
                     .foregroundStyle(Color(theme.palette.secondary))
@@ -46,11 +50,11 @@ struct CollectionCard: View {
             Spacer(minLength: 4)
 
             HStack(spacing: 10) {
-                Text(CollectionCount.items(itemCount))
+                Text(locked ? "Locked" : CollectionCount.items(itemCount))
                     .font(.caption.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(tint)
-                if subfolderCount > 0 {
+                if !locked, subfolderCount > 0 {
                     Label("\(subfolderCount)", systemImage: "folder.fill")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(Color(theme.palette.secondary))

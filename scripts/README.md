@@ -1,4 +1,4 @@
-# Scripts Placeholder
+# Project scripts
 
 This folder is intended for project automation scripts.
 
@@ -8,6 +8,7 @@ Use scripts for repeatable development, verification, setup, maintenance, data p
 
 | Script | Purpose |
 | --- | --- |
+| `install-ipad.sh` | Build signed Debug Sophia, verify the signature and bundle identity, install in place on the selected iPad, and launch. See the [deployment guide](../docs/deployment/deployment.md#scripted-installation). |
 | `sync-ai-adapters.ps1` | Preferred target-aware sync for Claude, Codex, Cursor, Copilot, OpenCode, Aider, Cline, Kilo, Windsurf, Antigravity, and OpenHands adapters from canonical `.agents/` sources. |
 | `generate-ai-adapters.ps1` | Compatibility wrapper that runs `sync-ai-adapters.ps1 -Target all`. |
 | `validate-ai-template.ps1` | Validate canonical role metadata, skill frontmatter, generated adapter formatting, and absence of removed granular skills. Exits nonzero on failure. |

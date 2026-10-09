@@ -34,6 +34,7 @@ enum StudyBackupService {
         collections: CollectionsStore,
         companion: CompanionSession
     ) async throws -> Data {
+        try await notes.protection.authorize([.notes: notes.snapshot.notes.map(\.protectionID), .collections: collections.collections.map(\.protectionID)])
         let notesData = try await notes.export()
         let annotationsData = try await annotations.export()
         guard let activityData = await activity.exportArchive() else { throw StudyBackupError.invalid }
@@ -42,12 +43,13 @@ enum StudyBackupService {
             notes: notesData,
             annotations: annotationsData,
             activity: activityData,
-            collections: collections.exportBackupSnapshot(),
+            collections: try collections.exportBackupSnapshot(),
             companion: companion.backupSnapshot()
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
+        try notes.protection.require(notes.snapshot.notes.map(\.protectionID), in: .notes)
         return try encoder.encode(envelope)
     }
 
@@ -64,10 +66,17 @@ enum StudyBackupService {
         decoder.dateDecodingStrategy = .iso8601
         let envelope = try decoder.decode(StudyFullBackupEnvelope.self, from: data)
         guard envelope.schemaVersion == 1 else { throw StudyBackupError.unsupported }
+        try await notes.protection.authorize([.notes: notes.snapshot.notes.map(\.protectionID), .collections: collections.collections.map(\.protectionID)])
+        try notes.protection.require(notes.snapshot.notes.map(\.protectionID), in: .notes)
+        try collections.protection.require(collections.collections.map(\.protectionID), in: .collections)
+        _ = try NotesFileRepository.inspectArchive(envelope.notes)
+        guard (1...2).contains(envelope.collections.schemaVersion) else { throw StudyBackupError.unsupported }
         await notes.restore(envelope.notes)
+        guard notes.notice == "Notes backup restored. The pre-restore copy is available in Backups." else { throw StudyBackupError.invalid }
         await annotations.restore(envelope.annotations, document: readerDocument)
         await activity.restoreArchive(envelope.activity)
         await collections.restoreBackupSnapshot(envelope.collections)
+        guard collections.notice == "Collections restored from backup." else { throw StudyBackupError.invalid }
         await companion.restoreBackupSnapshot(envelope.companion)
     }
 }

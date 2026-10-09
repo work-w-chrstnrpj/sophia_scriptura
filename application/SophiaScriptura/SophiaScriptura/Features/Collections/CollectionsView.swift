@@ -3,9 +3,10 @@ import SwiftUI
 /// Topic folders for notes, bookmarks, and gleanings. No Folder holds whatever has no topic.
 struct CollectionsView: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     var notes: NotesSession
-    var openNote: (UUID) -> Void
+    var openNote: (UUID, UUID) -> Void
     var openPassage: (SavedPassage) -> Void
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
@@ -25,7 +26,7 @@ struct CollectionsView: View {
             guard !collection.isUnfiled, collection.archivedAt == nil else { return false }
             if !trimmed.isEmpty {
                 return collection.name.localizedCaseInsensitiveContains(trimmed) ||
-                    collection.detail.localizedCaseInsensitiveContains(trimmed)
+                    (!store.isLocked(collection.id) && collection.detail.localizedCaseInsensitiveContains(trimmed))
             }
             return collection.parentID == nil
         }
@@ -76,7 +77,8 @@ struct CollectionsView: View {
                                             kindHints: store.membershipKindHints(
                                                 for: collection.id,
                                                 notes: notes.snapshot.notes
-                                            )
+                                            ),
+                                            inheritedLocked: store.isLocked(collection.id)
                                         )
                                     }
                                 }
@@ -118,6 +120,9 @@ struct CollectionsView: View {
                     .toolbar(.visible, for: .navigationBar)
             }
         }
+        .onChange(of: protection.unlocked) { _, _ in
+            if let collection = editingCollection, store.isLocked(collection.id) { editingCollection = nil }
+        }
     }
 
     private func folderLink<Label: View>(_ collection: StudyCollection, @ViewBuilder label: () -> Label) -> some View {
@@ -138,9 +143,18 @@ struct CollectionsView: View {
         .buttonStyle(.plain)
         .contextMenu {
             if !collection.isUnfiled {
-                Button("Edit Collection", systemImage: "pencil") {
-                    editingCollection = collection
+                if !store.isLocked(collection.id) {
+                    Button("Edit Collection", systemImage: "pencil") { editingCollection = collection }
                 }
+                ItemProtectionContextActions(
+                    noun: "Collection",
+                    protectionID: collection.protectionID,
+                    locked: store.isLocked(collection.id),
+                    protect: { Task { await store.setProtected(collection.id, enabled: true) } },
+                    lock: { store.protection.lock([.collections]) },
+                    unlock: { Task { await store.requestAccess(collection.id) } },
+                    remove: { Task { await store.setProtected(collection.id, enabled: false) } }
+                )
                 Button("Archive Collection", systemImage: "archivebox") {
                     store.archiveCollection(id: collection.id)
                 }
@@ -176,6 +190,8 @@ struct CollectionsView: View {
                 .accessibilityIdentifier("collections.title")
 
             Spacer(minLength: 12)
+
+            ProtectionControls(domains: [.collections], available: store.collections.contains { $0.protectionID != nil && !$0.isUnfiled }).labelStyle(.iconOnly)
 
             Button { showArchivedCollections = true } label: {
                 LibraryHeaderIcon(systemImage: "archivebox")
@@ -268,5 +284,5 @@ struct CollectionsView: View {
 }
 
 #Preview {
-    CollectionsView(store: .demo(), notes: NotesSession(), openNote: { _ in }, openPassage: { _ in })
+    CollectionsView(store: .demo(), notes: NotesSession(), openNote: { _, _ in }, openPassage: { _ in })
 }

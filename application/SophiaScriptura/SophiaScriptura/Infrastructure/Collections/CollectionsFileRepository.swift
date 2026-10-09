@@ -53,7 +53,7 @@ actor CollectionsFileRepository: CollectionsRepository {
         guard current.revision == expectedRevision else { throw CollectionsError.stale }
         var next = snapshot
         next.revision = current.revision + 1
-        next.schemaVersion = 1
+        next.schemaVersion = next.collections.contains(where: { $0.protectionID != nil }) ? 2 : 1
         try commit(next, previous: currentPointer, recovered: recovered)
         return next
     }
@@ -92,16 +92,34 @@ actor CollectionsFileRepository: CollectionsRepository {
                 try raw.write(to: directory.appendingPathComponent("damaged-" + UUID().uuidString + ".json"), options: .atomic)
             }
         }
+        var fallback = previous
+        if let previous {
+            let oldBytes = try read(url(previous))
+            var protectedFallback = try decode(oldBytes)
+            let bindings = Dictionary(uniqueKeysWithValues: snapshot.collections.compactMap { folder in folder.protectionID.map { (folder.id, $0) } })
+            var updated = false
+            for i in protectedFallback.collections.indices {
+                if let binding = bindings[protectedFallback.collections[i].id], protectedFallback.collections[i].protectionID != binding {
+                    protectedFallback.collections[i].protectionID = binding; updated = true
+                }
+            }
+            if updated {
+                protectedFallback.schemaVersion = 2
+                let securePrevious = Pointer(id: UUID())
+                try encode(protectedFallback).write(to: url(securePrevious), options: .atomic)
+                fallback = securePrevious
+            }
+        }
         let pointer = Pointer(id: UUID())
         try data.write(to: url(pointer), options: .atomic)
-        if let previous {
-            try JSONEncoder().encode(previous).write(to: directory.appendingPathComponent("previous.json"), options: .atomic)
+        if let fallback {
+            try JSONEncoder().encode(fallback).write(to: directory.appendingPathComponent("previous.json"), options: .atomic)
         }
         try JSONEncoder().encode(pointer).write(to: directory.appendingPathComponent("current.json"), options: .atomic)
     }
 
     private func encode(_ snapshot: CollectionsSnapshot) throws -> Data {
-        guard snapshot.schemaVersion == 1 else { throw CollectionsError.unsupported }
+        guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
         let payload = try JSONEncoder().encode(snapshot)
         let data = try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
         return data
@@ -112,7 +130,7 @@ actor CollectionsFileRepository: CollectionsRepository {
         guard envelope.schemaVersion == 1 else { throw CollectionsError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw CollectionsError.invalid }
         let snapshot = try JSONDecoder().decode(CollectionsSnapshot.self, from: envelope.payload)
-        guard snapshot.schemaVersion == 1 else { throw CollectionsError.unsupported }
+        guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
         return snapshot
     }
 

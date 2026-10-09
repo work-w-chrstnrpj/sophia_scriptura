@@ -9,7 +9,7 @@ struct SettingsArchiveHubView: View {
     var body: some View {
         List {
             NavigationLink {
-                StudyArchivedNotesView(session: notes)
+                StudyArchivedNotesView(session: notes, collections: collections)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notes archive")
@@ -54,17 +54,21 @@ struct SettingsArchiveHubView: View {
 
 struct StudyArchivedNotesView: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: NotesSession
+    @ObservedObject var collections: CollectionsStore
     @State private var search = ""
     @State private var searchPresented = false
     @State private var sort = "Modified"
     @State private var tag = ""
     @State private var noteKindFilter: NoteKind?
     private var notes: [NoteDocument] {
-        session.snapshot.notes.filter {
+        let _ = protection.unlocked
+        return session.snapshot.notes.filter {
             $0.isArchived
-                && (search.isEmpty || $0.searchableText.localizedCaseInsensitiveContains(search))
-                && (tag.isEmpty || $0.tags.contains(tag))
+                && !collections.concealsNote($0.id)
+                && (search.isEmpty || (session.isLocked($0) ? $0.title : $0.searchableText).localizedCaseInsensitiveContains(search))
+                && (tag.isEmpty || (!session.isLocked($0) && $0.tags.contains(tag)))
                 && (noteKindFilter == nil || $0.kind == noteKindFilter)
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
@@ -83,7 +87,7 @@ struct StudyArchivedNotesView: View {
                     }
                     Picker("Tag", selection: $tag) {
                         Text("All tags").tag("")
-                        ForEach(Array(Set(session.snapshot.notes.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
+                        ForEach(Array(Set(session.snapshot.notes.filter { !session.isLocked($0) && !collections.concealsNote($0.id) }.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
                     }
                     Picker("Type", selection: $noteKindFilter) {
                         Text("All types").tag(NoteKind?.none)
@@ -130,13 +134,14 @@ struct StudyArchivedNotesView: View {
 
 struct StudyArchivedCollectionsView: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     @State private var search = ""
     @State private var searchPresented = false
     @State private var sort = "Modified"
     private var collections: [StudyCollection] {
         store.archivedCollections.filter {
-            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.detail.localizedCaseInsensitiveContains(search)
+            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || (!store.isLocked($0.id) && $0.detail.localizedCaseInsensitiveContains(search))
         }.sorted {
             if sort == "Name", $0.name != $1.name { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             return ($0.archivedAt ?? $0.modifiedAt) > ($1.archivedAt ?? $1.modifiedAt)
@@ -161,7 +166,7 @@ struct StudyArchivedCollectionsView: View {
                 List(collections) { collection in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(collection.name).font(.headline)
-                        Text(collection.detail).font(.caption).foregroundStyle(.secondary)
+                        Text(store.isLocked(collection.id) ? "Locked" : collection.detail).font(.caption).foregroundStyle(.secondary)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) { store.moveCollectionToTrash(id: collection.id) } label: {

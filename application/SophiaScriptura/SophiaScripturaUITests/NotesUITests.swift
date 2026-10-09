@@ -209,6 +209,35 @@ final class NotesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["notes.reader.book"].waitForExistence(timeout: 5))
     }
 
+    func testCanvasSelectsDeletesOneStrokeAndPastesItsCopy() {
+        let app = launch(fingerInk: true); notes(app); newNote(app, kind: "canvas")
+        let viewport = app.scrollViews["notes.viewport"]
+        XCTAssertTrue(viewport.waitForExistence(timeout: 10))
+        let firstStart = viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.32))
+        firstStart.press(forDuration: 0.1, thenDragTo: viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.32)))
+        viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.52)).press(forDuration: 0.1,
+            thenDragTo: viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.52)))
+        let ink = viewport
+        app.buttons["notes.options"].tap()
+        XCTAssertTrue(app.buttons["Strokes"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["Strokes"].tap()
+        viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.32)).tap()
+        let copy = app.buttons["notes.strokes.copy"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue((ink.value as? String ?? "").contains("1 selected strokes"), String(describing: ink.value))
+        copy.tap()
+        app.buttons["notes.strokes.delete"].tap()
+        let oneStroke = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (ink.value as? String ?? "").hasPrefix("1 strokes") }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [oneStroke], timeout: 5), .completed)
+        app.buttons["notes.options"].tap(); app.buttons["notes.canvas.paste"].tap()
+        let twoStrokes = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (ink.value as? String ?? "").hasPrefix("2 strokes") }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [twoStrokes], timeout: 5), .completed)
+        let image = XCTAttachment(screenshot: app.screenshot()); image.name = "SP025 stroke copy and paste"; image.lifetime = .keepAlways; add(image)
+        app.buttons["notes.undo"].tap()
+        let undone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in (ink.value as? String ?? "").hasPrefix("1 strokes") }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [undone], timeout: 5), .completed)
+    }
+
     func testCanvasDrawingObjectMovesAndReopens() {
         let app = launch(fingerInk: true); notes(app)
         newNote(app, kind: "canvas")

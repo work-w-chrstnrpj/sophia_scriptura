@@ -9,7 +9,7 @@ struct SettingsTrashHubView: View {
     var body: some View {
         List {
             NavigationLink {
-                StudyTrashedNotesView(session: notes)
+                StudyTrashedNotesView(session: notes, collections: collections)
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notes")
@@ -54,7 +54,9 @@ struct SettingsTrashHubView: View {
 
 struct StudyTrashedNotesView: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: NotesSession
+    @ObservedObject var collections: CollectionsStore
     @State private var search = ""
     @State private var searchPresented = false
     @State private var sort = "Deleted"
@@ -64,8 +66,8 @@ struct StudyTrashedNotesView: View {
     private var notes: [NoteDocument] {
         session.snapshot.notes.filter {
             $0.isTrashed
-                && (search.isEmpty || $0.searchableText.localizedCaseInsensitiveContains(search))
-                && (tag.isEmpty || $0.tags.contains(tag))
+                && (search.isEmpty || collections.searchableNoteText($0).localizedCaseInsensitiveContains(search))
+                && (tag.isEmpty || (collections.canRevealNoteMetadata($0) && $0.tags.contains(tag)))
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
             if sort == "Modified", $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
@@ -82,7 +84,7 @@ struct StudyTrashedNotesView: View {
                     }
                     Picker("Tag", selection: $tag) {
                         Text("All tags").tag("")
-                        ForEach(Array(Set(session.snapshot.notes.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
+                        ForEach(collections.visibleNoteTags(in: session.snapshot.notes.filter(\.isTrashed)), id: \.self) { Text($0).tag($0) }
                     }
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
@@ -124,6 +126,7 @@ struct StudyTrashedNotesView: View {
 }
 
 struct StudyTrashedCollectionsView: View {
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     @State private var search = ""
     @State private var searchPresented = false
@@ -132,7 +135,7 @@ struct StudyTrashedCollectionsView: View {
 
     private var collections: [StudyCollection] {
         store.trashedCollections.filter {
-            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.detail.localizedCaseInsensitiveContains(search)
+            search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || (!store.isLocked($0.id) && $0.detail.localizedCaseInsensitiveContains(search))
         }.sorted {
             if sort == "Name", $0.name != $1.name { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
             return ($0.trashedAt ?? $0.modifiedAt) > ($1.trashedAt ?? $1.modifiedAt)
@@ -157,7 +160,7 @@ struct StudyTrashedCollectionsView: View {
                 List(collections) { collection in
                     TrashedStudyRow(
                         title: collection.name,
-                        subtitle: collection.detail,
+                        subtitle: store.isLocked(collection.id) ? "Locked" : collection.detail,
                         trashedAt: collection.trashedAt,
                         onRestore: { store.restoreCollectionFromTrash(id: collection.id) },
                         onDelete: { pendingPermanentDelete = collection.id }

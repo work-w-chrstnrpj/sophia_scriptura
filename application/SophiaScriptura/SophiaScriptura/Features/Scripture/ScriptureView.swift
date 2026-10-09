@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ScriptureView: View {
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: ReaderSession
     @Bindable var annotations: AnnotationSession
     var notes: NotesSession
@@ -423,7 +424,7 @@ struct ScriptureView: View {
                             saveToNote(selected)
                         }.disabled(!notes.loaded)
                         ForEach(notes.snapshot.notes.filter { note in
-                            note.isActiveInLibrary && (note.objects.contains { $0.quote?.verse == verse } || note.page?.citations.contains { $0.quote.verse == verse } == true)
+                            note.isActiveInLibrary && !notes.isLocked(note) && (note.objects.contains { $0.quote?.verse == verse } || note.page?.citations.contains { $0.quote.verse == verse } == true)
                         }) { note in
                             Button(note.title) { session.hubVerse = nil; openNote(note.id) }
                         }

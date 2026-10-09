@@ -1,5 +1,71 @@
 # Personal iPad deployment
 
+## Scripted installation
+
+Connect and unlock the iPad, then run in Terminal:
+
+```bash
+cd "/Users/chrixcrusher/Documents/Projects/Sophia App"
+./scripts/install-ipad.sh
+```
+
+The [installer](../../scripts/install-ipad.sh) defaults to `iPad ni Paj`. It builds
+the current checkout as signed Debug using the project's existing team, verifies
+the signature and `com.personal.SophiaScriptura` identity, installs over the existing
+app, and launches it with a string-only environment so inherited test variables are
+not passed through. Current `devicectl` rejects an empty JSON object. It does not uninstall, reset data, change versions/signing settings, or
+invoke translation sync. New release version bumps remain a separate step; a weekly
+re-sign of the same source does not require changing the version.
+
+First-time setup still requires the owner to sign in through Xcode, select the
+existing Personal Team, pair/trust the iPad, enable Developer Mode, and trust the
+developer profile if prompted. Signing may contact Apple and prompt for Keychain
+access. The script cannot automate those account and device confirmations.
+
+```bash
+./scripts/install-ipad.sh --dry-run             # Preview only; no build/device calls
+./scripts/install-ipad.sh --list-devices        # Show known devices
+./scripts/install-ipad.sh --device "iPad ni Paj" # Or use its identifier
+./scripts/install-ipad.sh --no-launch           # Install, then open manually
+```
+
+Xcode defaults to `/Applications/Xcode.app/Contents/Developer`; override with
+`DEVELOPER_DIR` if needed. Logs are under `build/ipad-install/logs/`, and incremental
+build outputs are under `build/ipad-install/DerivedData/`. Run one installer at a time.
+The build uses `-allowProvisioningUpdates` to let Xcode maintain automatic signing.
+Use the same command when Personal Team signing expires. Keep the same team and
+bundle identifier, and do not delete the installed app to fix signing/trust errors.
+
+If building or signature/identity validation fails, installation is skipped. If
+launch fails after installation, the script reports that distinction: unlock the
+iPad, complete any developer-profile trust prompt, and open Sophia manually.
+
+Verification (2026-10-06): `bash -n`, dry-run and 15 mocked checks passed, covering
+argument handling, quoted device names, install/launch success, failure stops,
+wrong bundle rejection and exclusion of inherited launch variables. Local harness
+and results: `build/ipad-installer-checks/{check.py,results.txt}`. At that date, an actual signed
+build/install through this script was unverified. No app runtime code or product
+milestone status changed.
+
+### Current-worktree delivery — 2026-10-09
+
+Owner requested building the app on the iPad after the Activity workflow follow-up.
+The installer dry run and live device listing identified the paired physical iPad A16
+`iPad ni Paj`. `./scripts/install-ipad.sh --device 00008120-0014354C112B601E` completed
+the signed Debug build, strict signature verification, bundle-identity check,
+in-place installation and normal CoreDevice launch successfully. Bundle identity is
+`com.personal.SophiaScriptura`; existing version/build metadata remains **0.2.2 (19)**.
+The delivered source includes the current compound ink, protection/review fixes,
+Journal changes and optional Activity workflows. No uninstall, data reset or explicit
+translation sync was performed. Logs: `build/ipad-install/logs/20261009-005046-36336/`.
+Installation and launch establish delivery; physical feature acceptance remains open.
+
+Same-day owner polish was also built, strictly signature-verified, installed in place and
+launched successfully: remove the Scripture Contemplation section's Today line and rename
+the activity type to Contemplating. Logs: `build/ipad-install/logs/20261009-005511-36992/`.
+The 19 focused Activity tests passed before this deployment. No uninstall or data reset
+was performed.
+
 ## Notes bulk-delete confirmation — 2026-10-05
 
 Signed Debug **0.2.0 (17)** passed strict signature verification, installed in place

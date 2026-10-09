@@ -7,10 +7,11 @@ struct ActivityHistoryView: View {
     let open: (ActivityRecord) -> Void
     let edit: (ActivityRecord) -> Void
     let delete: (ActivityRecord) -> Void
+    var modeFilter: String? = nil
 
     var body: some View {
         List {
-            ForEach(ActivityHistoryGrouping.groups(store.records)) { group in
+            ForEach(ActivityHistoryGrouping.groups(store.records.filter { modeFilter == nil || $0.modeID == modeFilter })) { group in
                 Section {
                     ForEach(group.records) { record in
                         ActivityHistoryRow(record: record, books: books, open: { open(record) },
@@ -26,7 +27,7 @@ struct ActivityHistoryView: View {
         .listStyle(.plain)
         .appSurface()
         .background(Color(theme.palette.paper).ignoresSafeArea())
-        .navigationTitle("Activity History")
+        .navigationTitle(modeFilter == ActivityModeID.meditating.id ? "Scripture Contemplation" : "Activity History")
         .toolbarBackground(Color(theme.palette.paper), for: .navigationBar)
     }
 }

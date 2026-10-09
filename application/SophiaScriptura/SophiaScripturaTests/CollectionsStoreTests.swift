@@ -191,6 +191,9 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(outline[parentIndex + 1].id, child)
         XCTAssertEqual(outline[parentIndex + 1].depth, outline[parentIndex].depth + 1)
         XCTAssertFalse(outline.contains { $0.collection.isUnfiled })
+        let collapsed = outline.hidingCollapsedSubfolders([parent])
+        XCTAssertEqual(collapsed.map(\.id), outline.map(\.id).filter { $0 != child })
+        XCTAssertEqual(outline.hidingCollapsedSubfolders([]).map(\.id), outline.map(\.id))
 
         XCTAssertTrue(store.updateCollection(id: parent, name: " Psalms ", detail: " Songs ", accent: .indigo, icon: .bible))
         XCTAssertEqual(store.collection(id: parent)?.name, "Psalms")

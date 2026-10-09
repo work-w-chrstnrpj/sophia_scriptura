@@ -323,8 +323,8 @@ alone is not permission to retain a full text.
   and edition, description, and creation/update times. Built-in/custom mode registry,
   overlap policy, midnight allocation, concurrency, and per-book minute allocation remain
   open; do not ship the earlier `ActivitySession(start,end,source,label)` sketch.
-- `ActivityMode(id, name, kind)` — built-in modes are Reading, Studying, Meditating,
-  Journaling, Memorizing Verses and Reviewing; user-created custom modes are supported.
+- `ActivityMode(id, name, kind)` — built-in modes are Reading, Studying, Contemplating,
+  Journaling and Memorizing Verses; user-created custom modes are supported.
   Icon/color fields and whether a custom mode is archived or deleted remain design choices.
 - `PromptPreset(id, name, systemInstruction, isBuiltIn, options{...})`
 
@@ -647,7 +647,7 @@ correct distinct from exact Correct.
 
 Quiz history, deletion and recovery follow the
 [Companion contract](../data/companion-contract.md). Every quiz completed through all its
-questions and final summary creates a linked Reviewing record; active question time counts
+questions and final summary creates a linked Studying record; active question time counts
 toward the normal Activity goal and streak. Abandoned sessions do not create one
 automatically. Deleting Quiz history retains its already recorded Activity time. Activity stores duration/date,
 mode/title and quiz-session ID only; Quiz history owns correctness, answers, score, sources
@@ -683,8 +683,8 @@ diagnostics and exports.
   screen lock, chapter completion, and missing voices/audio on the owner's device.
 - Activity: the owner-approved M8 behavior, data shape, metrics, Reading workflow and open
   decisions are maintained in the [Activity design](../design/activity-screen-specification.md).
-  The screen offers Reading, Studying, Meditating, Journaling, Memorizing Verses, Reviewing
-  and custom modes; only Reading automatically routes to Scripture. Reading stores one inclusive
+  The screen offers Reading, Studying, Contemplating, Journaling, Memorizing Verses
+  and custom modes. Reading and Contemplation workflows have independent automatic-start Settings switches. With its workflow enabled, Reading stores one inclusive
   continuous reference range, including cross-book ranges, with separate records for
   disconnected passages. Starting highlights the initial verse temporarily; finish requires
   an ending verse. A session survives backgrounding/relaunch, pauses/resumes, and computes
@@ -713,7 +713,7 @@ diagnostics and exports.
   with checksum, previous-file recovery and Activity-only Files export/restore. Its one
   persisted timer draft records active intervals; `RootTabView` owns the cross-tab timer
   presentation. `CompanionSession` remains the source of quiz results and publishes a
-  lightweight Reviewing link imported once by Activity. Activity reminders, including each
+  lightweight Studying link imported once by Activity. Activity reminders, including each
   one-time reminder's cleanup choice, are persisted with the Activity snapshot and scheduled
   through local iPad notifications. Activity also persists per-mode daily goals, migrating
   the former total goal to Reading and summing active mode goals for the total threshold.
@@ -1018,3 +1018,43 @@ retains selected/edited objects, and keeps the existing viewport-sized PencilKit
 A bounded raster cache and serial ImageIO worker reduce repeated main-actor image work.
 Sharing prepares the complete document before export and restores virtualization afterwards.
 Persistence and per-feature safety bounds remain unchanged by these optimizations.
+
+## v0.3.0 planned architecture follow-up — 2026-10-07
+
+Owner-requested tickets are documented in the [v0.3.0 plan](../releases/v0.3.0.md).
+SP-025 extends existing PKDrawing ink objects with independently editable internal strokes,
+stable identity and spatial hit testing, removing the arbitrary 64-stroke batching rule for
+new regions while preserving legacy data and z-order. Strokes are not top-level canvas objects.
+SP-026 defines shared authentication infrastructure with independent Notes/Collections unlock
+sessions; SP-027/028 integrate protected item metadata, command guards, cards and routes.
+Confirmed lock behavior: Touch ID/password backup, category-wide unlock and relock, 10 idle
+minutes, locked fresh launches, manual lock controls, authenticated protection removal,
+blocked rename/color/settings and permitted archive/delete. Settings additionally provides
+combined Lock All Notes & Collections and Unlock All Notes & Collections: immediate revocation
+of both sessions or one authentication granting both, with persistent protection flags and
+independent category controls retained.
+SP-025 now has source implementation under verification; physical acceptance remains open.
+SP-026–028 remain planning targets. SP-026 lists unresolved credential,
+privacy, inheritance, backup and encryption decisions; existing storage contracts remain
+implementation truth until selected work supplies migration and verification evidence.
+
+### SP-025 architecture decision — compound ink, 2026-10-07
+
+Retain native PKDrawing payloads per ink region with additive parallel stroke IDs, instead
+of replacing the canvas model or registering strokes as objects. Ordinary groups and ink
+containment remain distinct. Preserve legacy payloads and z-order without global merging.
+Internal selection crosses regions and uses a grid broad phase with sampled masked geometry
+for taps/lasso. Move/recolor/delete produce changed region values through NotesSession history.
+The editor keeps its viewport-sized live PencilKit surface, cropped region rasters and
+bounded caches. Real payload/stroke overflow creates adjacent regions. Rejected drawings
+have a separate atomic ink recovery file and an explicit recover-as-new-note path.
+Consequences: no arbitrary 64-stroke split or per-stroke native views; stroke selection is
+geometric rather than semantic; older-build edits regenerate identities. Native partial
+erasure/gesture feel and performance still require physical evidence. Maintained detail
+lives in the [Notes contract](../data/notes-contract.md#v030-sp-025--compound-canvas-ink).
+
+## Selected v0.3.0 app access protection — SP-026–028
+
+The owner selected all remaining lock tickets together and explicitly chose app access locks with unchanged content/backup formats on 2026-10-07/08. The implementation uses a shared device-only salted password verifier, independent Notes/Collections grants, category-specific genuine activity, 600-second idle deadlines, fresh-launch locking and a snapshot cover. Combined Settings controls affect only records with protection already configured. Collection ancestors gate routes without protecting member Notes. Native accepted edits save before concealment; command boundaries guard settings/membership/export/restore as well as UI visibility.
+
+The authoritative guarantees, recovery limits, schema 4/2 downgrade behavior, source ownership and physical acceptance boundaries are [item protection](../security/item-protection.md). Device-only credentials are not portable in backups; unknown bindings remain locked and cannot be reset unauthenticated. This feature is not content encryption.

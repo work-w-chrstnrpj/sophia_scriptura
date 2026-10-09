@@ -12,7 +12,7 @@ struct MeditationJourneyView: View {
         ZStack {
             Color(theme.palette.paper).ignoresSafeArea()
             if coordinator.isLoading {
-                ProgressView("Preparing meditation…")
+                ProgressView("Preparing Scripture Contemplation…")
                     .font(.headline)
                     .foregroundStyle(Color(theme.palette.ink))
             } else if !coordinator.pages.isEmpty {
@@ -55,7 +55,7 @@ struct MeditationJourneyView: View {
                         .frame(width: 44, height: 44)
                         .background(Color(theme.palette.soft), in: Circle())
                 }
-                .accessibilityLabel("Exit meditation")
+                .accessibilityLabel("Exit Scripture Contemplation")
                 .accessibilityIdentifier("meditation.journey.close")
             }
             Spacer()

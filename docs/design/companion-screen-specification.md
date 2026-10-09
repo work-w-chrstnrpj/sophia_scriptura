@@ -140,8 +140,7 @@ message invalidates any derived context summary that included it.
 ## Quiz Me
 
 Quiz Me is a structured Companion mode, not an ordinary chat and not a new tab. Setup chooses
-quiz types, difficulty, permitted Scripture edition, timed/untimed mode, and **Record this as
-Reviewing**, which defaults on and can be disabled before the session.
+quiz types, difficulty, permitted Scripture edition, and timed/untimed mode. Completed quizzes automatically contribute active question time to Studying in Activity.
 
 | Type | Answer control | Current validation |
 | --- | --- | --- |
@@ -171,11 +170,10 @@ percentage, and Correct/Nearly correct/Incorrect/Unanswered counts.
 Quiz setup uses the already approved counts and points: Easy 10 × 1, Average 5 × 3 and
 Difficult 3 × 5. Quiz history stores the setup, edition, provider/model used for composition
 or explanation, start/active/completion time, score, completion state, every question/key,
-owner answer, result, explanation, sources and optional Reviewing record link.
+owner answer, result, explanation, sources and optional Studying record link.
 
-When **Record this as Reviewing** is enabled, a completed or intentionally ended session
-creates a Reviewing record. Only active question/feedback time counts; paused/background
-time does not. Reviewing contributes to the normal daily goal and streak. An abandoned
+A completed Quiz Me session creates a Studying record. Only active question/feedback time counts; paused/background
+time does not. Studying contributes to the normal daily goal and streak. An abandoned
 session does not create a record automatically, but its elapsed time may be saved manually.
 Activity stores duration, date, mode, title and quiz-session ID only; quiz answers and score
 remain owned by Companion. Deleting quiz history leaves a linked Activity record with a
@@ -205,7 +203,7 @@ factual keys and perceived difficulty because those properties are not proven lo
   successful search or verified citation.
 - Run representative timed and untimed quizzes, including Nearly correct, Unanswered,
   background pause, deterministic decoy, inspected Christian History source, saved history,
-  deletion and Reviewing linkage.
+  deletion and Studying linkage.
 
 ## Exclusions from the first implementation slice
 

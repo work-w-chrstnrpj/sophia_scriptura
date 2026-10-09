@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 import UserNotifications
 import SwiftUI
 @testable import SophiaScriptura
@@ -22,18 +23,19 @@ import SwiftUI
         XCTAssertEqual(reopened.records.first?.intervals.count, 2)
     }
 
-    func testReviewingImportIsIdempotent() async {
+    func testQuizStudyingImportIsIdempotent() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = ActivityStore(repository: ActivityFileRepository(directory: directory))
         await store.load()
         let id = UUID()
         let link = ReviewingActivityLink(id: UUID(), quizSessionID: id, startedAt: Date(), endedAt: Date(), activeSeconds: 90, sourceDeleted: false)
-        store.importReviewingLinks([link])
-        store.importReviewingLinks([link])
+        store.importQuizStudyLinks([link])
+        store.importQuizStudyLinks([link])
         XCTAssertEqual(store.records.count, 1)
         XCTAssertEqual(store.records.first?.quizSessionID, id)
         XCTAssertEqual(store.records.first?.activeSeconds, 90)
+        XCTAssertEqual(store.records.first?.modeID, ActivityModeID.studying.id)
         await store.flush()
     }
 
@@ -196,13 +198,13 @@ import SwiftUI
         let quizID = UUID()
         let link = ReviewingActivityLink(id: UUID(), quizSessionID: quizID, startedAt: Date().addingTimeInterval(-90),
                                          endedAt: Date(), activeSeconds: 90, sourceDeleted: false)
-        store.importReviewingLinks([link])
+        store.importQuizStudyLinks([link])
         XCTAssertEqual(store.records.count, 1)
         store.delete(store.records[0].id)
         await store.flush()
         let reopened = ActivityStore(repository: repository)
         await reopened.load()
-        reopened.importReviewingLinks([link])
+        reopened.importQuizStudyLinks([link])
         XCTAssertTrue(reopened.records.isEmpty)
     }
 
@@ -334,4 +336,70 @@ import SwiftUI
             timeZoneID: "UTC", intervals: intervals, description: "", readingRange: nil,
             editionID: nil, quizSessionID: nil, createdAt: date, updatedAt: date)
     }
+    func testOptionalWorkflowsPersistAndAllowUnconstrainedTimers() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = ActivityFileRepository(directory: directory)
+        let store = ActivityStore(repository: repository); await store.load()
+        XCTAssertTrue(store.automaticReadingWorkflow); XCTAssertTrue(store.automaticContemplationWorkflow)
+        store.setAutomaticWorkflow(false, for: ActivityModeID.reading.id)
+        XCTAssertFalse(store.launchesWorkflow(for: ActivityModeID.reading.id))
+        XCTAssertTrue(store.launchesWorkflow(for: ActivityModeID.meditating.id))
+        store.setAutomaticWorkflow(false, for: ActivityModeID.meditating.id)
+        let start = Date(timeIntervalSince1970: 1000)
+        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("reading")), title: "Free reading", now: start)
+        XCTAssertEqual(store.draft?.guidedWorkflow, false)
+        store.finish(title: "Free reading", description: "", now: start.addingTimeInterval(90))
+        XCTAssertNil(store.errorMessage); XCTAssertNil(store.records.first?.readingRange)
+        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("meditating")), title: "Free contemplation", now: start.addingTimeInterval(100))
+        XCTAssertEqual(store.draft?.guidedWorkflow, false)
+        store.setAutomaticWorkflow(true, for: "meditating")
+        XCTAssertEqual(store.draft?.guidedWorkflow, false, "Changing settings must not relaunch an active timer's workflow")
+        store.finish(title: "Free contemplation", description: "", now: start.addingTimeInterval(200))
+        await store.flush()
+        let reopened = ActivityStore(repository: repository); await reopened.load()
+        XCTAssertFalse(reopened.automaticReadingWorkflow); XCTAssertTrue(reopened.automaticContemplationWorkflow)
+        XCTAssertEqual(reopened.records.count, 2)
+        XCTAssertFalse(reopened.modes.contains { $0.id == "reviewing" })
+        XCTAssertEqual(reopened.modeIncludingArchived("meditating")?.name, "Contemplating")
+    }
+
+    func testLegacyReviewingAndMeditatingArchiveMigratesWithoutLosingTimeOrLinks() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = ActivityFileRepository(directory: directory)
+        let quizID = UUID(); let recordID = UUID(); let now = Date(timeIntervalSince1970: 1000)
+        var legacy = ActivitySnapshot()
+        legacy.dailyGoalMinutes = 30; legacy.dailyGoalMinutesByMode = ["reading": 10, "studying": 5, "reviewing": 15]
+        legacy.records = [ActivityRecord(id: recordID, title: "Quiz Me", modeID: "reviewing", modeLabel: "Reviewing",
+            activityDate: now, activeSeconds: 120, source: "quiz", timeZoneID: "UTC", intervals: [],
+            description: "Preserved", readingRange: nil, editionID: nil, quizSessionID: quizID, createdAt: now, updatedAt: now)]
+        legacy.draft = ActivityDraft(id: UUID(), title: "Existing timer", modeID: "reviewing", modeLabel: "Reviewing",
+            startedAt: now, runningSince: nil, intervals: [ActivityInterval(start: now, end: now.addingTimeInterval(60))],
+            description: "Draft", readingStart: nil, editionID: nil)
+        legacy.reminders = [ActivityReminder(id: UUID(), title: "Remember", description: "", date: now.addingTimeInterval(600),
+            modeID: "meditating", modeLabel: "Meditating", repeatRule: .daily)]
+        // Encode an actual pre-change envelope, bypassing the repository's normalized writer.
+        struct Envelope: Codable { var schemaVersion = 1; let payload: Data; let checksum: String }
+        let payload = try JSONEncoder().encode(legacy)
+        let checksum = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        let archive = try JSONEncoder().encode(Envelope(payload: payload, checksum: checksum))
+        let migrated = try await repository.restoreArchive(archive)
+        XCTAssertEqual(migrated.records.first?.id, recordID); XCTAssertEqual(migrated.records.first?.quizSessionID, quizID)
+        XCTAssertEqual(migrated.records.first?.activeSeconds, 120); XCTAssertEqual(migrated.records.first?.description, "Preserved")
+        XCTAssertEqual(migrated.records.first?.modeID, "studying"); XCTAssertEqual(migrated.records.first?.modeLabel, "Studying")
+        XCTAssertEqual(migrated.draft?.modeID, "studying"); XCTAssertEqual(migrated.draft?.activeSeconds(at: now), 60)
+        XCTAssertEqual(migrated.reminders?.first?.modeID, "meditating")
+        XCTAssertEqual(migrated.reminders?.first?.modeLabel, "Contemplating")
+        XCTAssertNil(migrated.dailyGoalMinutesByMode?["reviewing"]); XCTAssertEqual(migrated.dailyGoalMinutesByMode?["studying"], 20)
+        XCTAssertEqual(migrated.dailyGoalMinutes, 30)
+        let loaded = try await repository.load(); XCTAssertEqual(loaded.dailyGoalMinutesByMode?["studying"], 20)
+        XCTAssertNil(loaded.automaticReadingWorkflow); XCTAssertNil(loaded.automaticContemplationWorkflow)
+        let store = ActivityStore(repository: repository); await store.load()
+        store.importQuizStudyLinks([ReviewingActivityLink(id: UUID(), quizSessionID: quizID, startedAt: now,
+            endedAt: now.addingTimeInterval(120), activeSeconds: 120, sourceDeleted: false)])
+        XCTAssertEqual(store.records.count, 1)
+        await store.flush()
+    }
+
 }

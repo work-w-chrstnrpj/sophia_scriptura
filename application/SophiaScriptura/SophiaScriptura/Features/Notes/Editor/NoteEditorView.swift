@@ -7,6 +7,7 @@ struct NoteEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var session: NotesSession
     var reader: ReaderSession
+    @ObservedObject var collections: CollectionsStore
     @AppStorage("notes.scriptureVisible") private var scriptureVisible = true
     @State private var rename = false
     @State private var title = ""
@@ -23,12 +24,31 @@ struct NoteEditorView: View {
     @State private var scan: NoteScanMode?
     @State private var importAudio = false
     @State private var showFormatPopover = false
+    @State private var showCollectionPicker = false
     var body: some View {
         Group {
-            if session.note?.kind == .prayer {
-                NotePrayerEditorView(session: session, reader: reader)
+            if session.note == nil {
+                ContentUnavailableView("Note unavailable or locked", systemImage: "lock.fill")
+            } else if session.note?.kind == .prayer {
+                NotePrayerEditorView(session: session, reader: reader, addToCollection: { showCollectionPicker = true })
             } else {
                 pageOrJournalEditor
+            }
+        }
+        .sheet(isPresented: $showCollectionPicker) {
+            if let note = session.note {
+                CollectionDestinationPicker(
+                    store: collections,
+                    artifact: CollectionArtifact(
+                        id: note.id,
+                        title: note.title,
+                        subtitle: "Note · \(note.kind.displayName)",
+                        kind: .note,
+                        modifiedAt: note.updatedAt
+                    ),
+                    mode: .assign,
+                    notes: session
+                )
             }
         }
     }
@@ -128,7 +148,34 @@ struct NoteEditorView: View {
                         }
                     }
                 }
+                if session.note?.kind == .canvas {
+                    Picker("Selection", selection: $session.editsStrokes) {
+                        Text("Objects").tag(false)
+                        Text("Strokes").tag(true)
+                    }.accessibilityIdentifier("notes.selection.mode")
+                    if session.rejectedInk != nil {
+                        Button("Recover unsaved drawing", systemImage: "arrow.counterclockwise") { Task { await session.recoverRejectedInk() } }
+                            .accessibilityIdentifier("notes.ink.recover")
+                    }
+                    Button("Paste", systemImage: "doc.on.clipboard") { session.pasteCanvasClipboard() }
+                        .disabled(session.canvasClipboard.isEmpty).accessibilityIdentifier("notes.canvas.paste")
+                    Button("New drawing region", systemImage: "pencil.tip.crop.circle.badge.plus") { session.newInkRegion() }
+                        .accessibilityIdentifier("notes.ink.new.region")
+                }
                 Button("Note details", systemImage: "tag") { showDetails = true }
+                Button("Add to Collection", systemImage: "folder.badge.plus") { showCollectionPicker = true }
+                    .accessibilityIdentifier("notes.options.addToCollection")
+                if let note = session.note {
+                    if note.protectionID == nil {
+                        Button("Protect Note", systemImage: "lock") { Task { await session.setProtected(note.id, enabled: true) } }
+                            .accessibilityIdentifier("notes.options.protect")
+                    } else {
+                        Button("Lock Note", systemImage: "lock") { session.protection.lock([.notes]) }
+                            .accessibilityIdentifier("notes.options.lock")
+                        Button("Remove Note Protection", systemImage: "lock.slash") { Task { await session.setProtected(note.id, enabled: false) } }
+                            .accessibilityIdentifier("notes.options.removeProtection")
+                    }
+                }
                 Button(session.status, systemImage: session.dirty ? "arrow.clockwise" : "checkmark.circle") { Task { await session.save() } }
             } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Note options").accessibilityIdentifier("notes.options")
     }
@@ -136,7 +183,7 @@ struct NoteEditorView: View {
         guard let note = session.note else { return }
         session.metadata(title: note.title, tags: note.tags.joined(separator: ","), paper: paper)
     }
-    private var surfaceToken: String { "\(session.renderRevision)|\(session.selection)|\(session.surfaceGeneration)|\(session.focusRequest)|\(session.toolsRequest)|\(session.toolsVisible)|\(session.active)|\(session.mode)" }
+    private var surfaceToken: String { "\(session.renderRevision)|\(session.strokeSelection)|\(session.editsStrokes)|\(session.selection)|\(session.surfaceGeneration)|\(session.focusRequest)|\(session.toolsRequest)|\(session.toolsVisible)|\(session.active)|\(session.mode)" }
     private func openCitation(_ quote: NoteQuote) {
         if session.note?.kind == .journal {
             session.setJournalScriptureVisible(true)
@@ -184,6 +231,10 @@ struct NoteEditorView: View {
                     .accessibilityLabel("Zoom").accessibilityIdentifier("notes.zoom")
                 } else if recorder.recording {
                     Text("Recording").font(.caption.weight(.semibold)).foregroundStyle(.red).accessibilityIdentifier("notes.recording")
+                }
+                if session.note?.kind == .journal {
+                    NoteJournalFields(session: session)
+                        .labelStyle(.titleAndIcon)
                 }
             }
             .labelStyle(.iconOnly).buttonStyle(.plain).font(.system(size: 20))

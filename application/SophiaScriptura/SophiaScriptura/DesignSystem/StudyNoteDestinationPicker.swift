@@ -6,6 +6,7 @@ enum StudyNoteSaveContent: Equatable {
 }
 
 struct StudyNoteDestinationPicker: View {
+    @ObservedObject private var protection = ItemProtectionSession.shared
     let content: StudyNoteSaveContent
     let notes: NotesSession
     let openNote: (UUID) -> Void
@@ -37,11 +38,12 @@ struct StudyNoteDestinationPicker: View {
                             Button { add(to: note) } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(note.title)
-                                    Text(note.kind.displayName)
+                                    Text(notes.isLocked(note) ? "Locked · Unlock Notes before adding content" : note.kind.displayName)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .disabled(notes.isLocked(note))
                             .accessibilityIdentifier("study.saveNote.existing.\(note.id.uuidString)")
                         }
                     }
@@ -59,7 +61,9 @@ struct StudyNoteDestinationPicker: View {
     }
 
     private func add(to note: NoteDocument) {
+        guard !notes.isLocked(note) else { return }
         notes.open(note.id)
+        guard notes.selectedNoteID == note.id, notes.note != nil else { return }
         notes.append(saveContent: content)
         dismiss()
         openNote(note.id)
@@ -177,6 +181,7 @@ struct NoteCreatorSheet: View {
 
 /// Edits library metadata for an existing note; matches `CollectionEditorSheet` presentation.
 struct NoteEditorSheet: View {
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     let noteID: UUID
@@ -188,7 +193,7 @@ struct NoteEditorSheet: View {
     @State private var color: CollectionAccent = .preset
     @FocusState private var titleFocused: Bool
 
-    private var note: NoteDocument? { session.snapshot.notes.first { $0.id == noteID } }
+    private var note: NoteDocument? { session.snapshot.notes.first { $0.id == noteID && !session.isLocked($0) } }
     private var kind: NoteKind { note?.kind ?? .page }
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -254,7 +259,9 @@ struct NoteEditorSheet: View {
             }
         }
         .accessibilityIdentifier("notes.edit.sheet")
+        .overlay { if note == nil { Color(uiColor: .systemBackground).ignoresSafeArea().overlay { ContentUnavailableView("Note unavailable or locked", systemImage: "lock.fill") } } }
         .onAppear(perform: loadFromStore)
+        .onChange(of: protection.unlocked) { _, _ in if note == nil { dismiss() } }
     }
 
     private var defaultPreviewTitle: String {

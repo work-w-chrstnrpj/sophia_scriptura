@@ -99,3 +99,60 @@ Pencil selection encloses object centers and includes explicit group members; it
 whole ink objects. Page/Journal/Prayer retain one 16 MiB ink payload. Scripture uses its
 separate 32 MiB drawing limit. No storage migration occurs; older builds may reject notes
 exceeding the previous 200-object bound.
+
+## v0.3.0 SP-025 — compound Canvas ink
+
+Canvas continues the topmost unlocked, ungrouped ink region until a real safety boundary,
+not 64 strokes. An explicitly selected region can be extended below other objects; inserting
+non-ink content establishes a new automatic region boundary. Note options → New drawing
+region starts one deliberately. Region overflow at 10,000 strokes or 16 MiB creates adjacent
+regions preserving ink and object z-order. Existing batches/groups are not consolidated.
+
+Ink objects optionally persist `strokeIDs: [UUID]`, parallel to native PKDrawing strokes.
+Legacy IDs are derived deterministically from object ID and stroke ordinal without changing
+original bytes/frames. A changed region persists its IDs; duplicate/paste gets fresh IDs.
+The live composition assigns unique creation-date tokens for ownership, including duplicate
+legacy dates within/across objects. Transforms/recolor retain IDs; erasure removes IDs, and
+fragments sharing one source token retain the parent ID for the first fragment and acquire
+new IDs for subsequent fragments. Session history retains these values. The archive stays
+v3 with an optional field: older builds can read drawings, but editing them there drops ID
+metadata; future IDs are regenerated. No reset or destructive load-time migration occurs.
+
+Drawing-edit mode selects internal references `(objectID, strokeID)` across regions. A
+128-point grid indexes transformed stroke bounds, with a bounded-cell fallback for large
+strokes. Candidate taps test sampled PencilKit geometry, width, transforms and masks; empty
+region bounds do not block objects behind them. Lasso requires full containment of sampled
+visible centerlines (3-point sampling), rather than intersecting a bounding rectangle. It
+is geometric selection, not handwriting/word recognition or an exact private Freeform algorithm.
+Index rebuilding follows changed scenes, undo/restoration and theme changes.
+
+Object mode retains grouping, movement and resizing. Position locking prevents stroke
+movement and automatic region extension, without acting as a privacy lock. Stroke palettes
+provide recolor/copy/duplicate/delete and return to drawing selection; copied material is
+pasted from Note options. Viewport-cropped ink rasters are snapped to 256-point boundaries,
+with a 128-point margin, maximum 2,048-pixel dimensions and the existing cost-bounded cache.
+Whole-Canvas sharing temporarily renders complete regions and excludes selection outlines.
+
+If overall note limits reject a live drawing, the saved scene is restored and the rejected
+native drawing is retained atomically as `rejected-ink-<note UUID>.drawing` in that Notes
+repository. It is separately bounded to 128 MiB and validated on read, never silently inserted
+into saved content or included in the normal Notes archive. Note options → Recover unsaved
+drawing creates a new Canvas note; the source note stays unchanged. The recovery file is
+removed only after successful save. Write failures retain the in-memory drawing and show an
+error; no crash-durability claim applies when the recovery write fails. A Notes-only backup
+therefore still needs successful recovery first. Existing archive, aggregate-media and note
+count bounds remain enforced; physical sustained Pencil/performance acceptance remains open.
+
+## Journal reflection fields
+
+A Journal stores two optional values on `JournalContent`: `emotionalState` and `mentalState`. Either may be absent. Older journals decode with both empty, and an unrecognized stored name is ignored so the rest of the entry remains. Writing a journal that leaves both empty omits the keys. There is no schema change. Page and object edits keep the chosen values. Body undo does not revert them.
+
+Emotional state uses Apple Journal’s State of Mind feelings (`HKStateOfMind.Label`) plus Neutral: Amazed, Amused, Angry, Anxious, Ashamed, Brave, Calm, Content, Disappointed, Discouraged, Disgusted, Embarrassed, Excited, Frustrated, Grateful, Guilty, Happy, Hopeless, Irritated, Jealous, Joyful, Lonely, Passionate, Peaceful, Proud, Relieved, Sad, Scared, Stressed, Surprised, Worried, Annoyed, Confident, Drained, Hopeful, Indifferent, Overwhelmed, Satisfied, and Neutral.
+
+Mental state, from thriving toward distress, then Challenged: Thriving, Confident, Content, At ease, Even-minded, Neutral, Uncertain, Doubtful, Uneasy, Concerned, Worried, Overthinking, Pressured, Tense, Stressed, Anxious, Overstimulated, Ruminating, Overwhelmed, Distressed, and Challenged. Each value keeps the owner’s short meaning. Challenged means “Facing something difficult and working through it.” Library cards show the chosen labels and still omit the journal body. Search includes the labels and the mental-state meaning.
+
+## v0.3.0 whole-note protection
+
+`NoteDocument.protectionID: UUID?` is additive, defaults to nil, and binds an app access lock to a device-only credential. It is separate from Canvas position locks and stroke IDs. Protected libraries persist schema 4 (accepted schemas 1–4); plain libraries retain schema 3. Existing atomic generations and paths are retained. Notes-only export and restoration require access to protected current records; pre-restore exports inspect their own bindings. A legacy restore retains current bindings for matching IDs. Restored foreign/missing credentials fail closed. Content remains unencrypted under the owner-selected v0.3.0 policy.
+
+The complete access, privacy, lifecycle, backup and recovery contract is [item protection](../security/item-protection.md). A note whose collection is locked, including a note filed only in a nested subfolder at any depth, is omitted from the Notes library. Body undo does not change protection. Save/flush-before-conceal preserves accepted edits; locked metadata/body commands are denied while archive/delete continue working.

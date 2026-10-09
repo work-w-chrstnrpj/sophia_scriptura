@@ -65,7 +65,7 @@ struct QuizMeView: View {
                     }
                     .background(Color(theme.palette.rule).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color(theme.palette.rule).opacity(0.4)))
-                    Text("Completed quizzes automatically add their active question time to Reviewing in Activity.")
+                    Text("Completed quizzes automatically add their active question time to Studying in Activity.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 

@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct NotesView: View {
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: NotesSession
     var reader: ReaderSession
     @ObservedObject var collections: CollectionsStore
@@ -34,11 +35,13 @@ struct NotesView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     private var notes: [NoteDocument] {
-        session.snapshot.notes.filter { note in
+        let _ = protection.unlocked
+        return session.snapshot.notes.filter { note in
             let visibility = deleted ? note.isArchived : note.isActiveInLibrary
             return visibility
-                && (search.isEmpty || note.searchableText.localizedCaseInsensitiveContains(search))
-                && (tag.isEmpty || note.tags.contains(tag))
+                && !collections.concealsNote(note.id)
+                && (search.isEmpty || (session.isLocked(note) ? note.title : note.searchableText).localizedCaseInsensitiveContains(search))
+                && (tag.isEmpty || (!session.isLocked(note) && note.tags.contains(tag)))
                 && (noteKindFilter == nil || note.kind == noteKindFilter)
         }.sorted {
             if sort == "Title", $0.title != $1.title { return $0.title.localizedStandardCompare($1.title) == .orderedAscending }
@@ -75,11 +78,11 @@ struct NotesView: View {
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: Binding(get: { session.selectedNoteID != nil }, set: { if !$0 { session.flushSurface?(); session.selectedNoteID = nil } })) {
-                NoteEditorView(session: session, reader: reader)
+                NoteEditorView(session: session, reader: reader, collections: collections)
                     .toolbar(.visible, for: .navigationBar)
             }
             .navigationDestination(isPresented: $showArchivedNotes) {
-                StudyArchivedNotesView(session: session)
+                StudyArchivedNotesView(session: session, collections: collections)
                     .toolbar(.visible, for: .navigationBar)
             }
             .sheet(item: $editingNote) { note in
@@ -105,6 +108,20 @@ struct NotesView: View {
                 }
             }
         }
+        .onChange(of: protection.unlocked) { _, _ in
+            if let note = editingNote, session.isLocked(note) || collections.concealsNote(note.id) { editingNote = nil }
+            concealNotesInLockedCollections()
+        }
+        .onChange(of: session.selectedNoteID) { _, id in
+            guard let id, !session.canAccessEditor(id) else { return }
+            Task { @MainActor in
+                guard session.selectedNoteID == id else { return }
+                session.concealInaccessibleNote()
+            }
+        }
+        .onChange(of: collections.memberships) { _, _ in concealNotesInLockedCollections() }
+        .onChange(of: collections.collections) { _, _ in concealNotesInLockedCollections() }
+        .onAppear { session.collections = collections; concealNotesInLockedCollections() }
         .onChange(of: selectionMode) { _, active in
             if !active { selectedNoteIDs.removeAll() }
         }
@@ -163,6 +180,8 @@ struct NotesView: View {
 
             Spacer(minLength: 12)
 
+            ProtectionControls(domains: [.notes], available: session.snapshot.notes.contains { $0.protectionID != nil }).labelStyle(.iconOnly)
+
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectionMode.toggle()
@@ -217,7 +236,7 @@ struct NotesView: View {
                 }
                 Picker("Tag", selection: $tag) {
                     Text("All tags").tag("")
-                    ForEach(Array(Set(session.snapshot.notes.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
+                    ForEach(Array(Set(session.snapshot.notes.filter { !session.isLocked($0) && !collections.concealsNote($0.id) }.flatMap(\.tags))).sorted(), id: \.self) { Text($0).tag($0) }
                 }
                 Picker("Type", selection: $noteKindFilter) {
                     Text("All types").tag(NoteKind?.none)
@@ -368,6 +387,13 @@ struct NotesView: View {
         }
     }
 
+    private func concealNotesInLockedCollections() {
+        session.concealInaccessibleNote()
+        if let note = filingNote, collections.concealsNote(note.id) { filingNote = nil }
+        let visible = selectedNoteIDs.filter { !collections.concealsNote($0) }
+        if visible != selectedNoteIDs { selectedNoteIDs = visible }
+    }
+
     private func clearSelection() {
         selectedNoteIDs.removeAll()
         selectionMode = false
@@ -471,6 +497,7 @@ struct NotesView: View {
             HStack(alignment: .top) {
                 noteGlyph(note, accent: accent, size: 46)
                 Spacer(minLength: 8)
+                if note.protectionID != nil { Image(systemName: session.isLocked(note) ? "lock.fill" : "lock.open.fill").foregroundStyle(.secondary).accessibilityLabel(session.isLocked(note) ? "Locked note" : "Protected note, unlocked") }
             }
             .padding(.bottom, 14)
 
@@ -571,14 +598,27 @@ struct NotesView: View {
 
     @ViewBuilder
     private func noteActions(_ note: NoteDocument) -> some View {
+        ItemProtectionContextActions(
+            noun: "Note",
+            protectionID: note.protectionID,
+            locked: session.isLocked(note),
+            protect: { Task { await session.setProtected(note.id, enabled: true) } },
+            lock: { session.protection.lock([.notes]) },
+            unlock: { session.open(note.id) },
+            remove: { Task { await session.setProtected(note.id, enabled: false) } }
+        )
         if deleted {
             Button("Unarchive", systemImage: "arrow.uturn.backward") { session.unarchive(note.id) }
             Button("Delete Note", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
         } else {
-            Button("Add to Collection…", systemImage: "folder.badge.plus") { filingNote = note }
-                .accessibilityIdentifier("notes.addToCollection.\(note.title)")
-            Button("Edit Note", systemImage: "pencil") { editingNote = note }
-                .accessibilityIdentifier("notes.editNote")
+            if !session.isLocked(note) {
+                Button("Add to Collection…", systemImage: "folder.badge.plus") { filingNote = note }
+                    .accessibilityIdentifier("notes.addToCollection.\(note.title)")
+            }
+            if !session.isLocked(note) {
+                Button("Edit Note", systemImage: "pencil") { editingNote = note }
+                    .accessibilityIdentifier("notes.editNote")
+            }
             Button("Archive note", systemImage: "archivebox") { session.archive(note.id) }
             Button("Delete Note", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
         }
@@ -597,12 +637,12 @@ struct NotesView: View {
     }
 
     private func accent(for note: NoteDocument) -> CollectionAccent {
-        note.color
+        session.isLocked(note) ? .stone : note.color
     }
 
     private func noteGlyph(_ note: NoteDocument, accent: CollectionAccent, size: CGFloat) -> some View {
         let tint = accent.resolvedColor(in: theme)
-        return Image(systemName: noteKindSymbol(note.kind))
+        return Image(systemName: session.isLocked(note) ? "lock.fill" : noteKindSymbol(note.kind))
             .font(.system(size: size * 0.42, weight: .medium))
             .foregroundStyle(tint)
             .frame(width: size, height: size)
@@ -620,6 +660,7 @@ struct NotesView: View {
     }
 
     private func caption(_ note: NoteDocument) -> String {
+        if session.isLocked(note) { return "Locked · " + note.kind.displayName }
         let kind = note.kind.displayName
         let tags = note.tags.map { "#" + $0 }.joined(separator: " ")
         return tags.isEmpty ? kind : "\(kind) · \(tags)"
@@ -644,7 +685,8 @@ struct NotesView: View {
     }
 
     private func cardPreview(_ note: NoteDocument) -> String {
-        switch note.kind {
+        if session.isLocked(note) { return "Unlock to view this note" }
+        return switch note.kind {
         case .canvas, .page: bodyPreview(note)
         case .prayer: prayerCardPreview(note)
         case .journal: journalCardPreview(note)
@@ -678,11 +720,14 @@ struct NotesView: View {
         if let anchor = page.citations.first?.quote.reference {
             parts.append(anchor)
         }
+        if let emotion = note.journalContent?.emotionalState { parts.append(emotion.label) }
+        if let mind = note.journalContent?.mentalState { parts.append(mind.label) }
         if !page.ink.isEmpty { parts.append("Includes handwriting") }
         if !page.attachments.isEmpty {
             parts.append("\(page.attachments.count) attachment\(page.attachments.count == 1 ? "" : "s")")
         }
-        if parts.count == 1, page.body.isEmpty, page.ink.isEmpty, page.attachments.isEmpty, page.citations.isEmpty {
+        if parts.count == 1, page.body.isEmpty, page.ink.isEmpty, page.attachments.isEmpty, page.citations.isEmpty,
+           note.journalContent?.emotionalState == nil, note.journalContent?.mentalState == nil {
             return "Open to continue your reflection"
         }
         return parts.joined(separator: " · ")

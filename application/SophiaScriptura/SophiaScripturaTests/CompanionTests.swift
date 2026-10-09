@@ -606,9 +606,10 @@ final class CompanionTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: directory) }
         let activity = ActivityStore(repository: ActivityFileRepository(directory: directory))
         await activity.load()
-        activity.importReviewingLinks(session.reviewingLinks)
+        activity.importQuizStudyLinks(session.reviewingLinks)
         XCTAssertEqual(activity.records.first?.activeSeconds, Double(link.activeSeconds))
         XCTAssertEqual(activity.records.first?.quizSessionID, quizID)
+        XCTAssertEqual(activity.records.first?.modeID, ActivityModeID.studying.id)
     }
 
     func testAIQuizPromptOmitsRecentQuestionPaddingAndIncludesDifficultyRubric() {

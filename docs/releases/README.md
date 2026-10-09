@@ -12,6 +12,8 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v0.3.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.3.0) | 2026-10-09 | Compound ink/stroke editing, Notes/Collections access locks, Journal fields and optional Activity workflows | [Release notes](v0.3.0.md) |
+| [v0.2.2](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.2) | 2026-10-07 | Collections material fixes and Canvas selection/performance improvements | [Release notes](v0.2.2.md) |
 | [v0.2.1](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.1) | 2026-10-05 | Notes bulk-delete confirmation and captured selection | [Release notes](v0.2.1.md) |
 | [v0.2.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.0) | 2026-10-05 | Notes formatting/media, fixed Page/Journal scale, Canvas controls, annotation refinements | [Release notes](v0.2.0.md) |
 | [v0.1.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.1.0) | 2026-10-04 | First tagged personal-use release: Scripture, study hubs, Notes, Collections, Companion and Activity | [Release notes](v0.1.0.md) |
@@ -19,6 +21,10 @@ policy unless explicitly authorized.
 These are personal iPad source releases, not App Store distributions. See
 [deployment](../deployment/deployment.md) for signing and installation and
 [test evidence](../testing/test-specification.md) for verification boundaries.
+
+## Acceptance follow-ups
+
+v0.3.0 delivers SP-025–028 source and automated verification under the owner-selected app access policy. Physical Pencil, performance, biometric and accessibility acceptance remain open in their tickets.
 
 ## Publishing another version
 

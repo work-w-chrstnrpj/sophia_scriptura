@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Creates a collection or subfolder, or edits one. No Folder only exposes its color.
 struct CollectionEditorSheet: View {
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: CollectionsStore
@@ -85,7 +86,16 @@ struct CollectionEditorSheet: View {
                 }
             }
         }
+        .overlay {
+            if let id = editingID ?? parentID, store.isLocked(id) {
+                Color(uiColor: .systemBackground).ignoresSafeArea().overlay { ContentUnavailableView("Collection locked", systemImage: "lock.fill") }
+            }
+        }
+        .onChange(of: protection.unlocked) { _, _ in
+            if let id = editingID ?? parentID, store.isLocked(id) { dismiss() }
+        }
         .onAppear {
+            if let id = editingID ?? parentID, store.isLocked(id) { dismiss(); return }
             if let editing {
                 name = editing.isUnfiled ? "" : editing.name
                 detail = editing.detail

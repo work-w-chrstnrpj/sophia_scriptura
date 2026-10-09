@@ -96,6 +96,8 @@ Update this map whenever the project structure changes.
 - `service/`: no runtime backend; strict local WEBP USFM importer and independent VPL validation. Content permissions must
   be verified before implementing downloads.
 - `shared/`: book-code and prompt-preset seed JSON; not a completed shared runtime.
+- `scripts/install-ipad.sh`: personal signed Debug build, signature/identity checks,
+  in-place iPad install and normal launch; usage lives in the deployment guide.
 - `tests/`: cross-cutting manual and automated tests. Native SP-006 targets live in
   `application/SophiaScriptura/SophiaScripturaTests/` and `SophiaScripturaUITests/`.
   The isolated prototype lives in `Features/Notes/CanvasExperiment/`; its physical
@@ -276,3 +278,16 @@ provider-bound requests, persistence, chapter aggregation and disclosure boundar
 `Infrastructure/Companion/CompanionStudySources.swift` owns selected-passage links and
 reference lookup/provenance; `CompanionSourcesTests.swift` covers source and model fallback
 regressions. The Chapter control is hosted in the annotation/actions row.
+
+## SP-025 structure update
+
+`Features/Notes/Editor/NoteInkStrokeIndex.swift` owns internal stroke references, deterministic
+legacy IDs and grid/geometry queries. `NoteCanvasInk` retains PKDrawing regions with optional
+parallel `strokeIDs` in `Core/Notes/NoteDocument.swift`, reconciliation/editing and safety spill.
+NotesSession owns stroke selection/history; NotesFileRepository validates ID cardinality
+and stores rejected drawing recovery beside Notes generations. See the Notes contract
+and `NoteStrokeEditingTests.swift`. Authentication tickets SP-026–028 remain separate.
+
+## SP-026–028 structure update
+
+Whole-item app access protection is owned by `Features/Protection/` with credential persistence in `Infrastructure/Security/ItemLockCredential.swift`. Preserve independent category grants, the single authentication prompt, stale-result invalidation, flush-before-conceal and guarded session/store commands. Read `docs/security/item-protection.md` before changes: access locks are not encryption, unknown credential bindings fail closed, and simulator evidence does not close physical biometric/Pencil/privacy acceptance. Combined Settings actions affect only already protected records.

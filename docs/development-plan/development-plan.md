@@ -5,6 +5,24 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v0.3.0 follow-up — selected 2026-10-07, release authorized 2026-10-09
+
+Owner requested tickets for [v0.3.0](../releases/v0.3.0.md), then selected SP-025 implementation
+on 2026-10-07, then SP-026–028 together. The owner chose app access locks with existing storage formats. Source is implemented and simulator-verified; physical acceptance is tracked below. Owner selected commit, merge and v0.3.0 publication on 2026-10-09; physical acceptance remains tracked independently.
+Affected handwriting version: v0.2.*; target fix version: v0.3.0.
+
+| Ticket | Status | Planned outcome |
+| --- | --- | --- |
+| [SP-025](../../tickets/SP-025-v030-compound-ink-and-stroke-editing.md) | implemented; simulator verified; physical acceptance pending | Ink regions with internal stroke editing and spatial indexing |
+| [SP-026](../../tickets/SP-026-v030-lock-authentication-and-lifecycle.md) | in_progress; simulator verified; physical acceptance pending | Touch ID/password, independent category sessions, combined Settings lock/unlock, 10-minute idle/relaunch locking |
+| [SP-027](../../tickets/SP-027-v030-notes-lock.md) | in_progress; simulator verified; physical acceptance pending | Notes lock controls, protected cards and guarded routes |
+| [SP-028](../../tickets/SP-028-v030-collections-lock.md) | in_progress; simulator verified; physical acceptance pending | Collections lock controls and independent protected access |
+
+SP-025 implementation and simulator evidence are recorded in its ticket; physical acceptance
+remains open. SP-026 precedes SP-027/028. Physical Pencil and biometric acceptance,
+legacy data/recovery and resolved security policies are v0.3.0 gates. Baseline milestone
+closures and SP-024's remaining physical acceptance are unchanged.
+
 ## Current position and next step
 
 Owner selected [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md) for
@@ -53,7 +71,7 @@ by a final integrated acceptance pass. No date or effort estimate is implied.
 | M5 | Collections and full Save flow | done; owner accepted SP-015 on iPad 2026-10-02 | Nested topic folders, shared membership, bookmarks/gleanings/note quotes, attached links, organized verse hub and remove-versus-delete recovery rules | M4 note links and relevant SP-005 membership/deletion contracts |
 | M6 | Stateful Companion | done; owner verified 2026-10-04 | Multi-provider BYOK chat with formatted Markdown, passage Ask and Original Language Analysis, panel/tab continuity, attributed sources, provider configuration, structured Quiz Me with prepared questions and local question/score history | M5 integrated study artifacts; SP-016–019 |
 | M7 | Scripture audio | **abandoned** by owner 2026-10-04 | Not delivered; no planned resume | Formerly depended on M2 reader and permitted audio source |
-| M8 | Activity and background music | done; owner verified 2026-10-04 | Built-in and custom modes including Reviewing; Reading timer and verse range; Meditating fullscreen swipe journey; manual records; goal/streak/period/mode analytics; local reminders; shared Now Active cluster; Quiz Me → Reviewing linkage; background music wiring with placeholder catalog | SP-020–022; SP-021 without approved commercial tracks |
+| M8 | Activity and background music | done; owner verified 2026-10-04 | Built-in and custom modes including Studying; Reading timer and verse range; Scripture Contemplation fullscreen swipe journey; manual records; goal/streak/period/mode analytics; local reminders; shared Now Active cluster; Quiz Me → Studying linkage; background music wiring with placeholder catalog | SP-020–022; SP-021 without approved commercial tracks |
 | M9 | Integrated acceptance and refinement | done; owner verified 2026-10-04 | Owner personal verification all pass; full-scheme Xcode tests on iPad simulator; material defects accepted as resolved for personal use | M2–M8 acceptance; M7 excluded |
 
 M2–M8 are feature phases, not ticket numbers. SP-009 is the first M2 implementation
@@ -178,7 +196,7 @@ does not itself establish that the answer key is correct.
 SP-016 resolves the initial question controls, deterministic answer-validation boundary,
 per-question timers (Easy 60 seconds, Average 45, Difficult 30), points/percentage display,
 stored history and deletion behavior. The owner revised the M8 link policy: completing all
-quiz questions through the final summary automatically creates a Reviewing record, whether
+quiz questions through the final summary automatically creates a Studying record, whether
 timed or untimed and without an Activity timer. Active question duration counts toward the
 normal goal/streak; abandoned sessions are not automatically recorded. Quiz-history deletion
 leaves its Activity time intact. Activity owns duration/goal records, not the quiz answer key,
@@ -187,7 +205,7 @@ answers, score or explanation.
 Owner review: one multi-turn study conversation in each mode, including a clarification,
 a reopened conversation and a source inspection; plus representative timed/untimed Quiz Me
 runs with checked Scripture answer keys, sourced Christian History explanations, saved history,
-and the selected Reviewing-record flow. No provider purchase is implicitly authorized.
+and the selected Studying-record flow. No provider purchase is implicitly authorized.
 
 **Closure 2026-10-04:** Owner verified Companion and Quiz Me on device; all pass.
 
@@ -225,8 +243,8 @@ without an explicit new selection.
 ### M8: Activity and background music
 
 The owner-approved behavior is recorded in the [Activity design specification](../design/activity-screen-specification.md).
-Implement six built-in modes plus user-created modes, including Reviewing; one timestamp-based
-timer that survives backgrounding/relaunch and excludes paused intervals; Reading start/end reference capture
+Implement five built-in modes plus user-created modes; one timestamp-based
+timer that survives backgrounding/relaunch and excludes paused intervals; independent Settings choices for automatic Reading and Scripture Contemplation workflows (enabled by default); a separate Contemplation section; Reading start/end reference capture when its workflow is enabled
 with a fading start highlight and Scripture routing; manual entry with required title, mode,
 start date/time and either end time or duration (deriving the other); and correction/history
 flows that replace the original record. Reading stores one continuous range across
@@ -251,7 +269,7 @@ fabricate per-book allocation.
 Owner review: start Reading from a selected verse, pause/resume across tabs and relaunch,
 finish at a later verse, verify manual entry and corrections, review local metrics/streaks,
 play/change/pause music, lock/background the iPad, and exercise narration/music arbitration.
-Also verify a completed Quiz Me session can be associated with a Reviewing record according
+Also verify a completed Quiz Me session can be associated with a Studying record according
 to the approved M6/M8 integration policy, without duplicating quiz answers or score data.
 
 **Closure 2026-10-04:** Owner verified Activity, meditation journey and music controls; all pass.

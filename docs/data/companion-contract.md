@@ -157,7 +157,7 @@ history. It excludes API keys, authorization data, provider caches and restricte
 replicas. Conversation deletion removes messages, attempts, derived summaries and memberships.
 Quiz deletion removes questions, answers, explanations and sources; an Activity record keeps
 only its duration metadata and a source-deleted marker. Deleting Quiz history does not delete
-the Reviewing Activity record. Completing all quiz questions creates the Reviewing link
+the Studying Activity record. Completing all quiz questions creates the Studying link
 automatically, without a separate Activity timer or an opt-out switch; abandoned sessions
 remain unrecorded. Untimed quizzes track active question time as well as timed quizzes.
 
@@ -174,4 +174,6 @@ remain unrecorded. Untimed quizzes track active question time as well as timed q
   import rollback.
 - Deterministic Scripture quiz keys/decoys, tolerant Complete-the-Verse normalization,
   Christian History provenance and score/history round trips.
-- Reviewing linkage stores no answer/score duplication and survives source quiz deletion.
+- Studying linkage stores no answer/score duplication and survives source quiz deletion.
+
+Compatibility note for v0.3.0: Companion retains the existing `reviewingLinks`, `recordReviewing` and `reviewingLinkID` stored field names. They are historical wire names, not an Activity mode. Activity classifies all imported Quiz Me links as Studying, migrates existing Reviewing records/goals to Studying, and preserves quiz-session identity, suppression and source-deletion behavior.

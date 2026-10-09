@@ -72,7 +72,12 @@ are no decorative button capsules or duplicated navigation titles.
   one of the collection editor's consistent filled-symbol icons. The existing filled
   folder remains the default. The count must distinguish direct items from descendants.
 - Long-pressing a collection card or child-folder tile exposes **Edit Collection** and
-  **Delete Collection**. No Folder exposes only its allowed color edit.
+  **Delete Collection**. No Folder exposes only its allowed color edit. The open
+  collection (…) menu includes **Protect Collection** when the folder has no lock, and **Lock
+  Collection** plus **Remove Collection Protection** when it is unlocked. A locked folder’s
+  long-press offers **Unlock Collection** only. No Folder does not. A note filed in a locked
+  collection, or in any subfolder beneath it at any depth, stays out of the Notes library
+  until that collection is unlocked.
 - **Search** searches collection names, descriptions, tags and indexed item titles/references
   available locally. Results identify whether the match is a folder or an artifact.
 - **Sort** supports Name, Recently modified and Item count. Name sorting is locale-aware;
@@ -132,8 +137,10 @@ Items can enter a collection from three routes:
    the owner may select one or more collections.
 2. **Add from collection:** Add opens a searchable picker grouped by Scripture, Notes,
    Conversations and Links. Selecting an existing item creates membership only.
-3. **Context action:** a verse hub, Note library, Note canvas or Companion conversation can
-   use Add to Collection without leaving its current task.
+3. **Context action:** a verse hub, Note library, an open note’s (…) menu, or a Companion
+   conversation can use Add to Collection without leaving its current task. In that chooser,
+   a collection with subfolders shows a downward chevron. Tapping it hides those subfolders;
+   tapping the sideways chevron shows them again. The collection itself stays selectable.
 
 The picker shows checked membership for the current item and supports Create New Collection
 without losing the pending selection. Adding an item already present is idempotent and gives

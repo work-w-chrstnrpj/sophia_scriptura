@@ -41,9 +41,9 @@ Built for one person’s iPad, not as a hosted service or an App Store product.
 | :--- | :--- |
 | **Scripture** | Read bundled WEB offline, annotate with Apple Pencil, select text, save passages and open verse or chapter study hubs. |
 | **Collections** | Gather bookmarks, gleanings, links, notes and conversations into personalized, nested folders. |
-| **Notes** | Work in Canvas, Page, Prayer or Journal notes with typed content, ink and study references. |
+| **Notes** | Work in Canvas, Page, Prayer or Journal notes with typed content, editable ink strokes, reflection fields and optional access locks. |
 | **Companion** | Ask your own verse-linked questions, explore original-language wording, revisit conversations and use Quiz Me. |
-| **Activity** | Record study sessions, follow reading habits, set reminders and enter meditation journeys. |
+| **Activity** | Record study sessions, follow reading habits, set reminders and choose automatic Reading or Scripture Contemplation workflows. |
 | **Settings** | Personalize appearance and your profile, manage providers, and access archives, Trash and data controls. |
 
 ### From a passage to a personal insight
@@ -87,13 +87,14 @@ The workflow badge above reports **main’s workflow**, not every local test or 
 it may show no status until the workflow exists and runs on that branch. Private-repository
 badges are not publicly accessible outside GitHub.
 
-`v0.2.0` (build 16) is the current app version. Its full unit suite passed (210 tests,
-including 34 Notes tests). Earlier development builds were installed on the paired iPad;
-the final source verification does not cover UI automation or live Pencil feel.
-The earlier `v0.1.0` publication recorded a blocked unit suite;
-later CI repair on `main` is documented separately.
+`v0.3.0` (build 20) is the current app version. Its local release-snapshot unit suite
+passed 265 tests. Targeted Canvas, protection and Activity UI evidence is recorded in
+the test specification. The current feature source was built, installed in place and
+launched on the owner's iPad before the release version bump. Physical Pencil/performance,
+biometric/idle, accessibility and complete device workflow acceptance remain pending.
+The Release workflow independently builds and runs unit tests before publication.
 
-See [v0.2.0 notes](docs/releases/v0.2.0.md), [v0.1.0 notes](docs/releases/v0.1.0.md), and the
+See [v0.3.0 notes](docs/releases/v0.3.0.md), [v0.2.2 notes](docs/releases/v0.2.2.md), and the
 [test specification](docs/testing/test-specification.md).
 Scripture narration is excluded from this release.
 

@@ -64,7 +64,9 @@ import UIKit
         case .audio:
             palette.addArrangedSubview(button("Edit audio", "waveform", nil, false) { context.session.editingObjectID = id })
         case .ink:
-            break
+            palette.addArrangedSubview(button("Edit strokes", "pencil.tip.crop.circle", nil, false) {
+                context.session.editsStrokes = true
+            })
         }
     }
 

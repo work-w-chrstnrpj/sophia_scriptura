@@ -11,11 +11,11 @@ Related: [product specification](../product-specification/product-specification.
 
 ## Activity modes and records
 
-The built-in modes are Reading, Studying, Meditating, Journaling, Memorizing Verses and
-Reviewing. Reviewing is a distinct Activity type for focused review sessions, including
-Quiz Me sessions launched from Companion. The quiz's score, answers and explanations remain
-owned by Companion's quiz history; Activity tracks the review session's time and mode.
-Every quiz completed through its final summary silently creates a linked Reviewing record,
+The built-in modes are Reading, Studying, Contemplating, Journaling and
+Memorizing Verses. Completed Quiz Me sessions launched from Companion count as Studying.
+Reviewing is removed as a built-in choice; existing Reviewing time and goals migrate to Studying. The quiz's score, answers and explanations remain
+owned by Companion's quiz history; Activity tracks the study session's time and mode.
+Every quiz completed through its final summary silently creates a linked Studying record,
 whether timed or untimed and whether an Activity timer is running. Only active question time
 counts; feedback, background and abandoned sessions are excluded. Quiz history deletion
 leaves the already recorded Activity time intact. Do not duplicate quiz result data in
@@ -47,7 +47,7 @@ ranges are separate activity records in the first delivery.
 
 ## Timed Reading flow
 
-1. The Activity screen offers Start Activity and the six built-in modes plus custom modes.
+1. The Activity screen offers Start Activity and the five built-in modes plus custom modes.
 2. Selecting Reading opens passage selection for edition, book, chapter and starting verse.
 3. Title is required on the final record; a suggested title may be prefilled for quick start.
 4. Starting the session routes to Scripture and applies a temporary highlight to the
@@ -57,12 +57,11 @@ ranges are separate activity records in the first delivery.
 6. Finish opens a final-verse picker. The inclusive start-to-end reading range, title and
    computed duration are reviewed before save. The chosen design requires an end verse.
    Dismissing review preserves the session as unfinished so the user can return to it.
-7. Non-Reading modes do not automatically navigate to another feature in the first
-   delivery. They support a title, timer and optional description.
+7. Settings → Activity workflows independently controls automatic Reading and Scripture Contemplation starts. Both default on for existing behavior. When Reading is off, start only the timer, without a passage selector, Scripture navigation or required ending verse. When Contemplation is off, start only the timer, without a guided journey, passage requirement or automatic music-control reveal. Changing these settings applies to new activities; it does not restart an active workflow. Other modes support a title, timer and optional description.
 
-## Meditating journey (SP-022)
+## Scripture Contemplation (SP-022)
 
-Starting **Meditating** from Start Activity asks whether to meditate on a **specific passage**
+Activity has a separate **Scripture Contemplation** section with its own Start action and filtered history. Its activity type is **Contemplating**; the section does not show a separate today-duration line. The mode also remains available in the general mode picker. With its automatic workflow enabled, starting it asks whether to contemplate a **specific passage**
 (same chapter, at most two consecutive verses) or to use **seven curated passages** from a bundled
 seed catalog. The timer starts immediately; finishing the journey does not finish the Activity
 session.
@@ -205,17 +204,16 @@ mini-player remains distinct in purpose and participates in the same audio arbit
 
 ## Decisions and remaining questions
 
-Confirmed by the owner: built-in modes and custom modes, including Reviewing for Quiz Me;
+Confirmed by the owner: built-in modes and custom modes, including Studying for Quiz Me;
 elapsed duration excludes timer pause intervals; one continuous cross-chapter/cross-book
 reading range; disconnected
-passages use separate records; an ending verse is selected during finish; only Reading
-redirects to Scripture; a shared service-aware shell cluster; narration pauses music and
+passages use separate records; an ending verse is selected during finish; Reading redirects to Scripture when its automatic workflow is enabled; a shared service-aware shell cluster; narration pauses music and
 music Play pauses narration; music can continue in background/with screen locked; the
 10-minute daily goal/streak default; and human-composed instrumental ambient lo-fi with no
 vocals.
 
 The owner revised the Quiz Me boundary on 2026-10-03: completing all questions through the
-summary always creates a Reviewing record. Active question duration excludes feedback and
+summary always creates a Studying record. Active question duration excludes feedback and
 background time and counts toward the normal goal/streak. Abandoned quizzes do not create
 one. Quiz history and Activity time can be deleted independently. Activity stores only
 duration/date, mode/title and quiz-session ID; answers, scores, sources and explanations
@@ -241,3 +239,7 @@ selection remains for the separate music ticket. The owner selected a 3–5 trac
 Play/Pause/Next/Loop with iPad volume, and external-audio takeover on explicit Play on
 2026-10-03. [SP-021](../../tickets/SP-021-background-music.md) records the planning
 boundary; its track catalog and physical checks remain open.
+
+### v0.3.0 compatibility
+
+Keep the persisted `meditating` mode ID while displaying Contemplating as the activity type and Scripture Contemplation as the section title. Activity load, restore and save normalize legacy `reviewing` records, draft and reminders to `studying`, update built-in labels, and combine Reviewing/Studying daily goals without changing the total. Preserve IDs, intervals, durations, titles, quiz links and suppression IDs. Optional workflow preferences decode to enabled when absent and travel in Activity/full backups. Companion's existing `reviewingLinks` wire keys remain compatible; Activity imports them as Studying exactly once per quiz session.

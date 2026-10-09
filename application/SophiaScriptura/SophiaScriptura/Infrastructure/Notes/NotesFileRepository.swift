@@ -22,6 +22,26 @@ actor NotesFileRepository: NotesRepository {
         #endif
         return base.appendingPathComponent("Notes-v1")
     }
+    private func rejectedInkURL(_ noteID: UUID) -> URL {
+        directory.appendingPathComponent("rejected-ink-" + noteID.uuidString + ".drawing")
+    }
+    func retainRejectedInk(_ data: Data, noteID: UUID) throws {
+        guard data.count <= Self.archiveLimit else { throw NotesError.limit }
+        _ = try PKDrawing(data: data)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: rejectedInkURL(noteID), options: .atomic)
+    }
+    func rejectedInk(noteID: UUID) throws -> Data? {
+        let url = rejectedInkURL(noteID)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let data = try read(url)
+        _ = try PKDrawing(data: data)
+        return data
+    }
+    func clearRejectedInk(noteID: UUID) throws {
+        let url = rejectedInkURL(noteID)
+        if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+    }
     private func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     private func read(_ url: URL, limit: Int = NotesFileRepository.archiveLimit) throws -> Data {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isSymbolicLinkKey])
@@ -51,6 +71,9 @@ actor NotesFileRepository: NotesRepository {
                 guard bytes <= Self.archiveLimit / 3 else { throw NotesError.limit }
                 if object.kind == .ink {
                     try validateInk(object.payload)
+                    if let ids = object.strokeIDs {
+                        guard ids.count == (try PKDrawing(data: object.payload)).strokes.count else { throw NotesError.invalid }
+                    }
                 }
                 if object.kind == .image || (object.kind == .link && !object.payload.isEmpty) {
                     guard let source = CGImageSourceCreateWithData(object.payload as CFData, nil),
@@ -69,6 +92,14 @@ actor NotesFileRepository: NotesRepository {
         let data = try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
         guard data.count <= Self.archiveLimit else { throw NotesError.limit }
         return data
+    }
+    nonisolated static func inspectArchive(_ data: Data) throws -> NotesSnapshot {
+        guard data.count <= archiveLimit else { throw NotesError.limit }
+        let envelope = try JSONDecoder().decode(Envelope.self, from: data)
+        guard envelope.schemaVersion == 1 else { throw NotesError.unsupported }
+        guard SHA256.hash(data: envelope.payload).map({ String(format: "%02x", $0) }).joined() == envelope.checksum else { throw NotesError.invalid }
+        let snapshot = try JSONDecoder().decode(NotesSnapshot.self, from: envelope.payload)
+        try snapshot.validate(); return snapshot
     }
     private func decode(_ data: Data) throws -> NotesSnapshot {
         guard data.count <= Self.archiveLimit else { throw NotesError.limit }
@@ -112,7 +143,7 @@ actor NotesFileRepository: NotesRepository {
         return try commit(snapshot, revision: old.revision + 1, previous: previous, recovered: recovered)
     }
     private func commit(_ snapshot: NotesSnapshot, revision: Int, previous: Pointer?, recovered: Bool) throws -> NotesSnapshot {
-        var next = snapshot; next.revision = revision; next.schemaVersion = 3
+        var next = snapshot; next.revision = revision; next.schemaVersion = next.notes.contains(where: { $0.protectionID != nil }) ? 4 : 3
         let data = try encode(next), fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
         if let previous, try decode(read(url(previous))).schemaVersion < 3 {
@@ -125,12 +156,32 @@ actor NotesFileRepository: NotesRepository {
                 try raw.write(to: directory.appendingPathComponent("damaged-" + UUID().uuidString + ".json"), options: .atomic)
             }
         }
+        var fallback = previous
+        if let previous {
+            let oldBytes = try read(url(previous))
+            var protectedFallback = try decode(oldBytes)
+            let bindings = Dictionary(uniqueKeysWithValues: next.notes.compactMap { note in note.protectionID.map { (note.id, $0) } })
+            var updated = false
+            for i in protectedFallback.notes.indices {
+                if let binding = bindings[protectedFallback.notes[i].id], protectedFallback.notes[i].protectionID != binding {
+                    protectedFallback.notes[i].protectionID = binding; updated = true
+                }
+            }
+            if updated {
+                let preserved = directory.appendingPathComponent("before-item-protection.notes")
+                if !fm.fileExists(atPath: preserved.path) { try oldBytes.write(to: preserved, options: .atomic) }
+                protectedFallback.schemaVersion = 4
+                let securePrevious = Pointer(id: UUID())
+                try encode(protectedFallback).write(to: url(securePrevious), options: .atomic)
+                fallback = securePrevious
+            }
+        }
         let p = Pointer(id: UUID())
         try data.write(to: url(p), options: .atomic)
         try interrupt?(.staged)
         _ = try decode(read(url(p)))
         try interrupt?(.published)
-        if let previous { try JSONEncoder().encode(previous).write(to: directory.appendingPathComponent("previous.json"), options: .atomic) }
+        if let fallback { try JSONEncoder().encode(fallback).write(to: directory.appendingPathComponent("previous.json"), options: .atomic) }
         try interrupt?(.fallback)
         try JSONEncoder().encode(p).write(to: directory.appendingPathComponent("current.json"), options: .atomic)
         cleanup(current: p)
@@ -146,7 +197,7 @@ actor NotesFileRepository: NotesRepository {
         }
     }
     func exportArchive() throws -> Data {
-        var value = try resolved().0; value.schemaVersion = 3
+        var value = try resolved().0; value.schemaVersion = value.notes.contains(where: { $0.protectionID != nil }) ? 4 : 3
         return try encode(value)
     }
     func preRestoreArchive() throws -> Data { try read(url(pointer("pre-restore.json"))) }
@@ -159,10 +210,13 @@ actor NotesFileRepository: NotesRepository {
     }
 
     func restore(_ data: Data, expectedRevision: Int) throws -> NotesSnapshot {
-        let imported = try decode(data)
+        var imported = try decode(data)
         do {
             let (old, previous, recovered) = try resolved()
             guard old.revision == expectedRevision else { throw NotesError.stale }
+            for i in imported.notes.indices where imported.notes[i].protectionID == nil {
+                imported.notes[i].protectionID = old.notes.first(where: { $0.id == imported.notes[i].id })?.protectionID
+            }
             if let previous { try JSONEncoder().encode(previous).write(to: directory.appendingPathComponent("pre-restore.json"), options: .atomic) }
             return try commit(imported, revision: old.revision + 1, previous: previous, recovered: recovered)
         } catch NotesError.damaged {

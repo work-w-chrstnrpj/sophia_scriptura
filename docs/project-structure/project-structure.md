@@ -17,6 +17,7 @@ acceptance pending, 2026-09-29.
 | `shared/` | Book-code and prompt seed JSON; schema/guardrails still need review |
 | `application/SophiaScriptura/SophiaScripturaTests/`, `SophiaScripturaUITests/` | Executable native experiment tests |
 | `tests/` | Cross-cutting testing guidance; target fixtures/cases are planned |
+| `scripts/install-ipad.sh` | Personal iPad build/signature validation/install/launch automation; logs and derived data stay in ignored `build/ipad-install/` |
 | `docs/product-specification/` | Numbered requirements and confirmed owner context |
 | `docs/tdd/` | Canonical technical intent and evidence sources |
 | `docs/integrations/` | Dated Scripture-content feasibility, permissions and import acceptance plan; no implemented provider client |
@@ -225,3 +226,11 @@ validated object payload. The surface owns contextual controls tied to selection
 `DesignSystem/AppTheme.swift` shares the selected paper/ink palette across tab bodies,
 status/navigation backgrounds and native Notes rendering. RootTabView owns the full-height
 viewport and overlaid dock; `ThemeWorkspaceUITests` covers this shared presentation boundary.
+
+SP-025: `Features/Notes/Editor/NoteInkStrokeIndex.swift` owns internal stroke references,
+legacy identity derivation and spatial geometry queries. `NoteCanvasInk` owns composition,
+identity reconciliation and region edits/spill. NotesSession owns selection/history/recovery
+commands; NotesFileRepository owns additive metadata validation and rejected ink recovery.
+`NoteStrokeEditingTests.swift` covers identity, geometry, limits and persistence.
+
+SP-026–028: `Features/Protection/` owns independent access sessions, authentication presentation, combined/category controls and real-input idle tracking. `Infrastructure/Security/ItemLockCredential.swift` owns the device Keychain verifier. NotesSession and CollectionsStore guard domain commands and protected routes; StudyBackupService preflights access across both categories. The authoritative boundaries are in `docs/security/item-protection.md`.

@@ -69,7 +69,7 @@ final class NotesTests: XCTestCase {
             let edited = PKDrawing(strokes: scene.drawing.strokes + [stroke])
             objects = scene.objects(after: edited, replacing: objects, extending: NoteCanvasInk.extensionOwner(in: objects, selection: []))
         }
-        XCTAssertEqual(objects.count, 5)
+        XCTAssertEqual(objects.count, 1)
         XCTAssertEqual(try NoteCanvasInk(objects: objects).drawing.strokes.count, 300)
         let store = NotesFileRepository(directory: try folder())
         var note = NoteDocument()
@@ -628,6 +628,74 @@ final class NotesTests: XCTestCase {
         XCTAssertEqual(attachment.object.kind, .audio)
         XCTAssertEqual(attachment.object.text, "Prayer")
         XCTAssertEqual(session.note?.objects.isEmpty, true)
+        try session.note?.validate()
+    }
+
+    @MainActor func testJournalReflectionFieldsStayOptional() async throws {
+        var note = NoteDocument(kind: .journal)
+        XCTAssertNil(note.journalContent?.emotionalState)
+        XCTAssertNil(note.journalContent?.mentalState)
+        guard case .journal(var content) = note.content else { return XCTFail("Expected a journal") }
+        content.emotionalState = .happy
+        content.mentalState = .atEase
+        note.content = .journal(content)
+        var page = note.page ?? NotePage()
+        page.body = "kept"
+        note.page = page
+        note.objects = []
+        XCTAssertEqual(note.journalContent?.emotionalState, .happy)
+        XCTAssertEqual(note.journalContent?.mentalState, .atEase)
+        XCTAssertEqual(note.page?.body, "kept")
+
+        let decoded = try JSONDecoder().decode(NoteDocument.self, from: JSONEncoder().encode(note))
+        XCTAssertEqual(decoded.journalContent?.emotionalState, .happy)
+        XCTAssertEqual(decoded.journalContent?.mentalState, .atEase)
+
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(NoteDocument(kind: .journal))) as? [String: Any])
+        var contentJSON = try XCTUnwrap(object["content"] as? [String: Any])
+        var journal = try XCTUnwrap(contentJSON["journal"] as? [String: Any])
+        XCTAssertNil(journal["emotionalState"])
+        XCTAssertNil(journal["mentalState"])
+
+        object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(note)) as? [String: Any])
+        contentJSON = try XCTUnwrap(object["content"] as? [String: Any])
+        journal = try XCTUnwrap(contentJSON["journal"] as? [String: Any])
+        journal.removeValue(forKey: "emotionalState")
+        journal.removeValue(forKey: "mentalState")
+        contentJSON["journal"] = journal
+        object["content"] = contentJSON
+        let legacy = try JSONDecoder().decode(NoteDocument.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(legacy.journalContent?.emotionalState)
+        XCTAssertNil(legacy.journalContent?.mentalState)
+        XCTAssertEqual(legacy.page?.body, "kept")
+
+        journal["emotionalState"] = "not-a-feeling"
+        journal["mentalState"] = JournalMentalState.challenged.rawValue
+        contentJSON["journal"] = journal
+        object["content"] = contentJSON
+        let unknown = try JSONDecoder().decode(NoteDocument.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(unknown.journalContent?.emotionalState)
+        XCTAssertEqual(unknown.journalContent?.mentalState, .challenged)
+        XCTAssertEqual(unknown.journalContent?.mentalState?.meaning, "Facing something difficult and working through it.")
+
+        XCTAssertEqual(JournalEmotionalState.allCases.count, 39)
+        XCTAssertTrue(JournalEmotionalState.allCases.contains(.neutral))
+        XCTAssertEqual(JournalMentalState.allCases.count, 21)
+        XCTAssertEqual(JournalMentalState.allCases.last, .challenged)
+
+        let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
+        await session.load()
+        session.create(kind: .journal)
+        session.setJournalEmotionalState(.guilty)
+        session.setJournalMentalState(.thriving)
+        XCTAssertEqual(session.note?.journalContent?.emotionalState, .guilty)
+        XCTAssertEqual(session.note?.journalContent?.mentalState, .thriving)
+        XCTAssertTrue(session.note?.searchableText.localizedCaseInsensitiveContains("Guilty") == true)
+        XCTAssertTrue(session.note?.searchableText.localizedCaseInsensitiveContains("energized") == true)
+        session.setJournalEmotionalState(nil)
+        session.setJournalMentalState(nil)
+        XCTAssertNil(session.note?.journalContent?.emotionalState)
+        XCTAssertNil(session.note?.journalContent?.mentalState)
         try session.note?.validate()
     }
 

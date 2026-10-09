@@ -11,8 +11,10 @@ final class CollectionsStore: ObservableObject {
     @Published private(set) var conversations: [StudyConversation]
     @Published private(set) var notice: String?
     private let repository: (any CollectionsRepository)?
+    var protection = ItemProtectionSession.shared
     private var revision = 0
     private var linkedNoteIDs = Set<UUID>()
+    private var linkedNoteBindings: [UUID: UUID] = [:]
     private var writeChain: Task<Void, Never>?
 
     init(
@@ -121,6 +123,92 @@ final class CollectionsStore: ObservableObject {
         return CollectionsStore(collections: collections, artifacts: artifacts, memberships: memberships)
     }
 
+    /// Notes filed in a locked collection, or in any folder nested under one, stay out of the Notes library.
+    /// Depth does not matter. Membership in any locked folder is enough. The note's own lock is separate.
+    func concealsNote(_ noteID: UUID) -> Bool {
+        let hidden = folderIDsHiddenFromNotes()
+        return collectionIDs(containing: noteID).contains { hidden.contains($0) || isLocked($0) }
+    }
+
+    /// Locked folders plus every nested folder beneath them. The walk has no depth limit.
+    func folderIDsHiddenFromNotes() -> Set<UUID> {
+        var hidden = Set<UUID>()
+        var pending: [UUID] = []
+        for folder in collections where !folder.isUnfiled && protection.isLocked(folder.protectionID, in: .collections) {
+            if hidden.insert(folder.id).inserted { pending.append(folder.id) }
+        }
+        while let current = pending.popLast() {
+            for child in collections where child.parentID == current && child.id != StudyCollection.unfiledID {
+                if hidden.insert(child.id).inserted { pending.append(child.id) }
+            }
+        }
+        return hidden
+    }
+
+    /// An editor opened from a collection keeps that route's access, independently of library visibility.
+    func allowsNoteOpening(_ noteID: UUID, from collectionID: UUID? = nil) -> Bool {
+        guard let collectionID else { return !concealsNote(noteID) }
+        guard !isLocked(collectionID), let folder = collection(id: collectionID), (folder.isUnfiled || folder.isActiveInLibrary) else { return false }
+        if folder.isUnfiled { return self.collectionIDs(containing: noteID).isEmpty }
+        return artifactIDs(for: collectionID, includingDescendants: true).contains(noteID)
+    }
+
+    func canRevealNoteMetadata(_ note: NoteDocument) -> Bool {
+        !protection.isLocked(note.protectionID, in: .notes) && !concealsNote(note.id)
+    }
+
+    func searchableNoteText(_ note: NoteDocument) -> String {
+        canRevealNoteMetadata(note) ? note.searchableText : note.title
+    }
+
+    func visibleNoteTags(in notes: [NoteDocument]) -> [String] {
+        Array(Set(notes.filter(canRevealNoteMetadata).flatMap(\.tags))).sorted()
+    }
+
+    /// A child route requires access through every protected ancestor, without protecting member notes.
+    func isLocked(_ id: UUID) -> Bool {
+        var current: UUID? = id; var seen = Set<UUID>()
+        while let next = current {
+            guard seen.insert(next).inserted, let folder = collection(id: next) else { return true }
+            if protection.isLocked(folder.protectionID, in: .collections) { return true }
+            current = folder.parentID
+        }
+        return false
+    }
+    func requestAccess(_ id: UUID) async {
+        do {
+            var current: UUID? = id; var seen = Set<UUID>(); var bindings: [UUID] = []
+            while let next = current {
+                guard seen.insert(next).inserted, let folder = collection(id: next) else { throw ItemLockError.locked }
+                if let binding = folder.protectionID { bindings.append(binding) }; current = folder.parentID
+            }
+            for binding in bindings { try await protection.request(binding: binding, in: .collections) }
+            guard !isLocked(id) else { throw ItemLockError.locked }
+            protection.activity(in: .collections)
+        } catch { if case ItemLockError.cancelled = error {} else { notice = error.localizedDescription } }
+    }
+    func setProtected(_ id: UUID, enabled: Bool) async {
+        guard let original = collection(id: id), !original.isUnfiled else { return }
+        do {
+            if let parent = original.parentID { await requestAccess(parent); guard !isLocked(parent) else { throw ItemLockError.locked } }
+            if !enabled {
+                try await protection.confirmRemoval(binding: original.protectionID, in: .collections)
+            } else if original.protectionID == nil {
+                try await protection.authenticate([.collections], setupIfNeeded: true)
+            } else {
+                try await protection.request(binding: original.protectionID, in: .collections)
+            }
+            try protection.require([original.protectionID ?? protection.credential?.id], in: .collections)
+            guard let i = collections.firstIndex(where: { $0.id == id }), collections[i].protectionID == original.protectionID else { return }
+            collections[i].protectionID = enabled ? protection.credential?.id : nil
+            touch(id); enqueueWrite(); await flush()
+        } catch { if case ItemLockError.cancelled = error {} else { notice = error.localizedDescription } }
+    }
+    private func allowChanges(_ ids: Set<UUID>) -> Bool {
+        guard !ids.contains(where: isLocked) else { notice = ItemLockError.locked.localizedDescription; return false }
+        protection.activity(in: .collections); return true
+    }
+
     func collection(id: UUID) -> StudyCollection? {
         collections.first { $0.id == id }
     }
@@ -158,12 +246,13 @@ final class CollectionsStore: ObservableObject {
     }
 
     func artifactIDs(for collectionID: UUID, includingDescendants: Bool) -> Set<UUID> {
+        guard !isLocked(collectionID) else { return [] }
         var collectionIDs: Set<UUID> = [collectionID]
         if includingDescendants {
             var pending = [collectionID]
             while let current = pending.popLast() {
                 let childIDs = collections.filter { $0.parentID == current }.map(\.id)
-                for childID in childIDs where collectionIDs.insert(childID).inserted {
+                for childID in childIDs where !isLocked(childID) && collectionIDs.insert(childID).inserted {
                     pending.append(childID)
                 }
             }
@@ -185,6 +274,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func toggleMembership(artifactID: UUID, collectionID: UUID) {
+        guard allowChanges([collectionID]) else { return }
         guard let folder = collection(id: collectionID), !folder.isUnfiled else { return }
         guard knownItem(artifactID) else { return }
         let membership = CollectionMembership(collectionID: collectionID, artifactID: artifactID)
@@ -199,6 +289,7 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func createCollection(name: String, detail: String, parentID: UUID?, accent: CollectionAccent, icon: CollectionIcon = .folder) -> UUID? {
+        if let parentID { guard allowChanges([parentID]) else { return nil } }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
         guard trimmedName.localizedCaseInsensitiveCompare("No Folder") != .orderedSame else { return nil }
@@ -223,6 +314,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func updateAccent(id: UUID, accent: CollectionAccent) {
+        guard allowChanges([id]) else { return }
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         collections[index].accent = accent
         collections[index].modifiedAt = Date()
@@ -231,6 +323,7 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent, icon: CollectionIcon? = nil) -> Bool {
+        guard allowChanges([id]) else { return false }
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return false }
         if collections[index].isUnfiled { return false }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -247,6 +340,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func addMembership(artifactID: UUID, collectionID: UUID) {
+        guard allowChanges([collectionID]) else { return }
         guard let folder = collection(id: collectionID), !folder.isUnfiled, knownItem(artifactID) else { return }
         guard memberships.insert(CollectionMembership(collectionID: collectionID, artifactID: artifactID)).inserted else { return }
         touch(collectionID)
@@ -254,8 +348,13 @@ final class CollectionsStore: ObservableObject {
     }
 
     /// Adds the destination before removing the source so the item is never left without a home.
-    func move(artifactID: UUID, from source: UUID?, to destination: UUID) {
-        guard source != destination, let folder = collection(id: destination), !folder.isUnfiled, knownItem(artifactID) else { return }
+    @discardableResult
+    func move(artifactID: UUID, from source: UUID?, to destination: UUID) -> Bool {
+        guard allowChanges(Set([source, destination].compactMap { $0 })) else { return false }
+        guard let folder = collection(id: destination), !folder.isUnfiled, knownItem(artifactID) else {
+            notice = "The item or destination is no longer available."; return false
+        }
+        guard source != destination else { return true }
         memberships.insert(CollectionMembership(collectionID: destination, artifactID: artifactID))
         if let source, collection(id: source)?.isUnfiled == false {
             memberships.remove(CollectionMembership(collectionID: source, artifactID: artifactID))
@@ -263,13 +362,19 @@ final class CollectionsStore: ObservableObject {
         }
         touch(destination)
         enqueueWrite()
+        return true
     }
 
-    func setMemberships(artifactID: UUID, collectionIDs: Set<UUID>) {
-        guard knownItem(artifactID) else { return }
-        let valid = Set(collectionIDs.filter { id in collection(id: id).map { !$0.isUnfiled } ?? false })
+    @discardableResult
+    func setMemberships(artifactID: UUID, collectionIDs: Set<UUID>) -> Bool {
         let current = self.collectionIDs(containing: artifactID)
-        guard valid != current else { return }
+        let proposed = collectionIDs.subtracting([StudyCollection.unfiledID])
+        let changed = proposed.symmetricDifference(current)
+        guard allowChanges(changed) else { return false }
+        guard knownItem(artifactID) else { notice = "Unlock the note or check that the item still exists."; return false }
+        let valid = Set(proposed.filter { id in collection(id: id).map { !$0.isUnfiled } ?? false })
+        guard valid == proposed else { notice = "A selected collection is no longer available."; return false }
+        guard valid != current else { return true }
         for id in current.subtracting(valid) {
             memberships.remove(CollectionMembership(collectionID: id, artifactID: artifactID))
             touch(id)
@@ -279,6 +384,7 @@ final class CollectionsStore: ObservableObject {
             touch(id)
         }
         enqueueWrite()
+        return true
     }
 
     func collectionIDs(containing artifactID: UUID) -> Set<UUID> {
@@ -347,6 +453,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func archiveCollection(id: UUID) {
+        protection.cancel(affecting: [.collections])
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         collections[index].archivedAt = Date()
         touch(id)
@@ -373,6 +480,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func moveCollectionToTrash(id: UUID) {
+        protection.cancel(affecting: [.collections])
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         let promotedParent = collections[index].parentID
         for childIndex in collections.indices where collections[childIndex].parentID == id {
@@ -392,6 +500,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func permanentlyDeleteCollection(id: UUID) {
+        protection.cancel(affecting: [.collections])
         guard let removed = collection(id: id), !removed.isUnfiled else { return }
         let promotedParent = removed.parentID
         for index in collections.indices where collections[index].parentID == id {
@@ -417,6 +526,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeArtifact(_ artifactID: UUID, from collectionID: UUID) {
+        guard noteAccessAllows(artifactID) else { return }
+        guard allowChanges([collectionID]) else { return }
         guard collection(id: collectionID)?.isUnfiled != true else { return }
         memberships.remove(CollectionMembership(collectionID: collectionID, artifactID: artifactID))
         touch(collectionID)
@@ -452,6 +563,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeAllCollections() {
+        protection.lock([.collections])
         let folderIDs = collections.filter { !$0.isUnfiled }.map(\.id)
         for id in folderIDs { permanentlyDeleteCollection(id: id) }
         memberships.removeAll()
@@ -469,6 +581,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func link(notes: [NoteDocument]) {
+        linkedNoteBindings = Dictionary(uniqueKeysWithValues: notes.compactMap { note in note.protectionID.map { (note.id, $0) } })
         linkedNoteIDs = Set(notes.filter(\.isActiveInLibrary).map(\.id))
     }
 
@@ -535,6 +648,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func presentedArtifacts(for collectionID: UUID, includingDescendants: Bool, notes: [NoteDocument]) -> [CollectionArtifact] {
+        guard !isLocked(collectionID) else { return [] }
         let material = presentedArtifacts(notes: notes)
         if collection(id: collectionID)?.isUnfiled == true {
             let ids = unfiledIDs(in: material)
@@ -607,8 +721,17 @@ final class CollectionsStore: ObservableObject {
         return Set(material.map(\.id)).subtracting(filed)
     }
 
+    private func noteAccessAllows(_ id: UUID) -> Bool {
+        guard !protection.isLocked(linkedNoteBindings[id], in: .notes) else {
+            notice = ItemLockError.locked.localizedDescription
+            return false
+        }
+        return true
+    }
+
     private func knownItem(_ id: UUID) -> Bool {
-        artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation } || passages.contains { $0.id == id } || links.contains { $0.id == id } || conversations.contains { $0.id == id } || linkedNoteIDs.contains(id)
+        guard noteAccessAllows(id) else { return false }
+        return artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation } || passages.contains { $0.id == id } || links.contains { $0.id == id } || conversations.contains { $0.id == id } || linkedNoteIDs.contains(id)
     }
 
     private func touch(_ collectionID: UUID) {
@@ -630,25 +753,35 @@ final class CollectionsStore: ObservableObject {
         collections = folders
     }
 
-    func exportBackupSnapshot() -> CollectionsSnapshot {
-        exportSnapshot()
+    func exportBackupSnapshot() throws -> CollectionsSnapshot {
+        try protection.require(collections.map(\.protectionID), in: .collections)
+        return exportSnapshot()
     }
 
     func restoreBackupSnapshot(_ snapshot: CollectionsSnapshot) async {
-        apply(snapshot)
-        revision = snapshot.revision
-        guard let repository else { return }
         do {
-            let saved = try await repository.save(exportSnapshot(), expectedRevision: revision)
-            revision = saved.revision
+            try protection.require(collections.map(\.protectionID), in: .collections)
+            guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+            await flush()
+            try protection.require(collections.map(\.protectionID), in: .collections)
+            var restored = snapshot
+            for i in restored.collections.indices where restored.collections[i].protectionID == nil {
+                restored.collections[i].protectionID = collection(id: restored.collections[i].id)?.protectionID
+            }
+            restored.revision = revision
+            restored.schemaVersion = restored.collections.contains(where: { $0.protectionID != nil }) ? 2 : 1
+            protection.lock([.collections])
+            if let repository {
+                let saved = try await repository.save(restored, expectedRevision: revision)
+                apply(saved)
+            } else { apply(restored) }
             notice = "Collections restored from backup."
-        } catch {
-            notice = error.localizedDescription
-        }
+        } catch { notice = error.localizedDescription }
     }
 
     private func exportSnapshot() -> CollectionsSnapshot {
         CollectionsSnapshot(
+            schemaVersion: collections.contains(where: { $0.protectionID != nil }) ? 2 : 1,
             revision: revision,
             collections: collections.filter { !$0.isUnfiled },
             passages: passages,

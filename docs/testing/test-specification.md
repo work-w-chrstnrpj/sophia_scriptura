@@ -818,3 +818,72 @@ This establishes baseline activity, not a measured improvement or a confirmed la
 No draft installation/release was performed. The optimized build still requires physical
 Pencil, erase/undo, selection, pan/zoom, persistence and responsiveness acceptance.
 See [SP-024](../../tickets/SP-024-v022-study-material-and-canvas-fixes.md).
+
+## SP-025 compound Canvas ink verification — 2026-10-07
+
+Owner selected implementation. `build/sp025/verified-unit.xcresult` passed **226 unit tests**
+on iPad (A16), iPadOS 26.5, with code signing disabled. `build/sp025/final-regression.xcresult`
+passed the prior 225-unit snapshot plus two focused Canvas UI checks: select/copy/delete
+one of two strokes, Paste/Undo, and existing palette color/share behavior. Final unit
+review adds extreme legacy-date collision and grid-coordinate safety coverage; UI paths
+were unchanged by those final geometry/history/position-lock refinements.
+
+Focused `NoteStrokeEditingTests` verifies 1,002 strokes in one region, 10,001-stroke
+safety spill with layer-order preservation, subset move/color/delete, stable IDs for legacy
+duplicates and split fragments, masks/transforms, cross-region lasso, sparse candidate
+reduction, undo/redo/copy/export/restore and rejected-ink recovery after session restart.
+Existing Notes regressions verify v1/v2 compatibility, corruption recovery, geometry and
+culling. Screenshot attachments are retained under `build/sp025/ui-attachments/`.
+
+Initial checks exposed a fixture compile omission, color-space equality mismatch and
+DEBUG accessibility-count targeting; those were fixed before the successful runs. Xcode
+reported a simulator diagnostic-collection warning about `simctl` discovery after one
+successful run; the `.xcresult` and test summaries confirm test success. No hosted CI
+or signed build/install was performed. No measured device speed improvement is claimed.
+
+Physical gates: [SP-025](../../tickets/SP-025-v030-compound-ink-and-stroke-editing.md) and
+[Canvas walkthrough](sp013-ipad-guide.md#sp-025-physical-canvas-acceptance--v030). Actual
+Pencil/mask erasure behavior, palm rejection, varied-zoom/theme visual acceptance and
+performance remain **Not Run** on the owner device.
+
+## SP-026–028 protection verification
+
+`ItemProtectionTests` covers salted password verification, category/combined grants and cancellation, idle deadlines, restart/background expiry, late password and biometric callbacks, persisted attempt backoff, credential-write failure, foreign credentials, metadata/body/membership command guards, accepted-buffer flush before concealment, legacy decoding, protected schemas, restoration preserving bindings, protection removal and password changes. It also covers Settings control availability, category-scoped cancellation when a note is archived or deleted, clearing every collection without revoking the Notes session, and hiding a note from the Notes library while any of its collections is locked, including a note filed only in a nested subfolder at any depth. `ItemProtectionUITests` covers real app password setup, card/menu concealment, independent Collection opening, combined Settings unlock, relaunch locking and password change. Existing Notes editing and Collection-created-note UI flows are regression gates.
+
+2026-10-08 simulator evidence on iPad (A16) `523DDB8A-9EF6-44ED-A4F8-F8059ECB7725`:
+
+- `ItemProtectionTests`: **27 passed, 0 failed**. Result: `build/sp026-028/unit.xcresult`. This run used `CODE_SIGNING_ALLOWED=NO` because the suite injects an in-memory credential vault.
+- `ItemProtectionUITests`: **1 passed, 0 failed** in 146.7 seconds. Result: `build/sp026-028/ui-signed.xcresult`. Automatic signing was required. An earlier unsigned run, `build/sp026-028/ui.xcresult`, failed before the password sheet appeared and showed “The original lock credential is unavailable,” because the simulator Keychain rejected the unsigned app.
+
+Owner iPad gates (Not Run by simulator): actual Touch ID success/cancel/failure/lockout and fallback; ten-minute per-category idle while the other category/music is active; force lock while Page/Canvas/Prayer/Journal has unsaved native edits; lock removal and password change on device; opening the app does not show a Sophia Protected screen; quit/relaunch on device; VoiceOver, keyboard, Dynamic Type, appearance and Pencil continuity. Verify backups on the original device and missing/foreign credentials remain locked. See [the protection contract](../security/item-protection.md).
+
+### v0.3.0 protection review regressions
+
+- A note shared with a locked folder stays hidden in Notes but opens through an unlocked collection route. Its own Notes lock still requires authentication. Relocking or removing the originating route conceals the editor and blocks further edits; accepted buffers are flushed first.
+- Collection-origin authorization is rechecked after awaiting Notes authentication, including a folder deleted during the prompt.
+- Filing may change unlocked memberships while retaining unchanged locked memberships. Removing/adding a locked edge fails atomically and returns a failure; the picker stays open with an explanation. A no-op succeeds without changing memberships.
+- Trash permits title search, restore and deletion for collection-hidden notes, while hiding private tags and body search matches. Active notes do not contribute Trash tag suggestions.
+- The protection UI flow waits for the Settings scroll surface and scrolls to combined controls/password actions before asserting visibility. Settings layout order is not a test readiness condition.
+
+Review-fix verification on 2026-10-08: 51 focused protection/collection tests passed, then the final source snapshot passed 263 unit tests and all three selected simulator UI flows (collection note creation, lock controls/relaunch/password change, and shared-note opening/filing with a locked membership retained). Evidence: `build/sp026-028/review-fixes-focused.xcresult` and `build/sp026-028/review-fixes-acceptance.xcresult`. Real-device biometric, Pencil/idle and accessibility acceptance remains pending.
+
+### Activity workflow choices — 2026-10-08
+
+- Legacy Activity envelopes lacking workflow flags preserve automatic Reading/Contemplation defaults. Flags persist through relaunch and backups; switching them does not launch or alter a running workflow.
+- With Reading off, start and finish a timer without choosing Scripture or an ending verse. With Reading on, choose the initial passage, navigate to Scripture and finish with the ending verse.
+- Start from the separate Scripture Contemplation section. Off starts only a timer; on retains the specific/seven-passage guided journey, exit and recorder behavior.
+- Quiz Me imports idempotently into Studying. Restore an actual legacy Reviewing envelope with records, an active draft, reminders and mode goals; retain durations, IDs, links and the total goal while combining Studying/Reviewing goals. Reviewing must not appear as a built-in choice.
+
+Verification completed 2026-10-09 on iPad (A16): 60 focused Activity/Companion tests passed in `build/activity-workflows/focused.xcresult`; all 265 unit tests passed in `build/activity-workflows/acceptance.xcresult`. That combined run failed its initial UI locator. After correcting the locator, the UI flow exposed automatic List button/link activation in the new Contemplation card; explicit bordered Start and borderless History styles fixed it. The journey exit locator uses its accessible label because SwiftUI inherits the overlay identifier on that button.
+
+The final `ActivityWorkflowUITests` flow passed 1/1 in 110.170 seconds in `build/activity-workflows/ui-complete.xcresult`: independent preferences persist through relaunch, plain Reading and Contemplation stay in Activity, Start does not also open history, filtered history excludes Reading, guided Reading opens Scripture, guided Contemplation opens its journey, and exit keeps the timer active until Finish/Save. The final card fix was verified by this UI rerun; the prior full unit result predates only those button-style changes. `git diff --check` and relative file-link checks passed. Xcode reported its existing orientation and simulator diagnostic-collection warnings after successful testing.
+
+Physical iPad, specific-passage journey navigation, audio, VoiceOver, keyboard, Dynamic Type and appearance checks remain pending for the owner follow-up. No release or physical installation was performed.
+
+Subsequent owner polish, 2026-10-09: remove the Contemplation section's Today duration line and use **Contemplating** as the activity type while retaining **Scripture Contemplation** for the section. The existing 19 Activity tests passed with updated label/migration expectations in `build/activity-workflows/contemplating-label.xcresult`; `git diff --check` passed. The existing workflow UI assertions were updated for the recorder label; that UI suite was not rerun for this text/layout change.
+
+## v0.3.0 release snapshot — 2026-10-09
+
+Owner authorized commit, push, merge and release. App version 0.3.0/build 20 passed all **265 unit tests** and **four selected UI flows**, zero failures, in `build/v030/release-acceptance.xcresult` (log: `build/v030/release-acceptance.log`). The Activity UI test was rerun here with the final Contemplating label and section layout. Other flows cover independent and combined protection controls, relaunch/password change, shared-note opening/filing retaining a locked membership, and selecting/copying/deleting/pasting one ink stroke with undo. UI duration was 395.559 seconds; unit duration was 23.306 seconds.
+
+The release snapshot was staged and audited before verification. Subsequent changes only align release documentation and evidence. No generated build artifacts, credentials or private study data are staged. `git diff --cached --check` and relative documentation file-link validation pass. Existing orientation and simulator diagnostic-collection warnings did not change the successful test result. Physical Pencil/performance, actual biometrics/idle, full workflows and accessibility remain pending; the authorized personal source release does not mark those gates passed. Local recovery refs/bundle and staged patch are retained under `build/v030/` and the pre-release recovery branch.

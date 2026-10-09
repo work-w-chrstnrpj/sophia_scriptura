@@ -88,6 +88,16 @@ struct ActivityView: View {
                     }
                 }
                 Section {
+                    contemplationCard
+                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 12, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } header: {
+                    Text("Scripture Contemplation")
+                        .font(.system(.title2, design: .serif).weight(.semibold))
+                        .foregroundStyle(Color(theme.palette.ink)).textCase(nil)
+                }
+                Section {
                     if store.records.isEmpty {
                         Text("No activities recorded yet.")
                             .foregroundStyle(Color(theme.palette.secondary))
@@ -310,6 +320,30 @@ struct ActivityView: View {
         .padding(.bottom, 4)
     }
 
+    private var contemplationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(store.automaticContemplationWorkflow
+                 ? "Begin the same guided passages and reflection workflow."
+                 : "Record contemplation time freely. The guided workflow is off in Settings.")
+                .font(.subheadline).foregroundStyle(Color(theme.palette.secondary))
+            Button("Start Scripture Contemplation", systemImage: "sparkles") {
+                prepareStart(); modeID = ActivityModeID.meditating.id
+            }
+            .buttonStyle(.bordered)
+            .disabled(!store.isReady || store.draft != nil)
+            .accessibilityIdentifier("activity.contemplation.start")
+            NavigationLink("View contemplation history") {
+                ActivityHistoryView(store: store, books: books, open: { selectedRecord = $0 },
+                    edit: { prepareCorrection($0) }, delete: { recordToDelete = $0 },
+                    modeFilter: ActivityModeID.meditating.id)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("activity.contemplation.history")
+        }
+        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20))
+    }
+
     private var auxiliaryCard: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 175), spacing: 12)], spacing: 12) {
             auxiliaryButton("Add Manual", icon: "plus.square") { prepareManual() }
@@ -451,12 +485,14 @@ struct ActivityView: View {
 
     private var modePicker: some View {
         Picker("Mode", selection: $modeID) { ForEach(selectableModes) { item in Text(item.name).tag(item.id) } }
+            .accessibilityIdentifier("activity.start.mode")
             .onChange(of: modeID) { _, value in
                 if value != ActivityModeID.meditating.id { meditateOnPassage = false }
             }
     }
 
     private var startDisabled: Bool {
+        guard store.launchesWorkflow(for: modeID) else { return false }
         if modeID == ActivityModeID.reading.id { return !startVerseOptions.contains(verse) }
         if modeID == ActivityModeID.meditating.id, meditateOnPassage {
             return !startVerseOptions.contains(verse) || !meditationEndVerseOptions.contains(meditateEndVerse)
@@ -527,11 +563,11 @@ struct ActivityView: View {
             Form {
                 modePicker
                 TextField("Title", text: $title)
-                if modeID == ActivityModeID.reading.id {
+                if modeID == ActivityModeID.reading.id, store.automaticReadingWorkflow {
                     versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions, selectedEditionID: editionID)
                 }
-                if modeID == ActivityModeID.meditating.id {
-                    Toggle("Meditate on a specific passage", isOn: $meditateOnPassage)
+                if modeID == ActivityModeID.meditating.id, store.automaticContemplationWorkflow {
+                    Toggle("Contemplate a specific passage", isOn: $meditateOnPassage)
                     if meditateOnPassage {
                         versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions, selectedEditionID: editionID)
                         meditationEndVersePicker
@@ -541,17 +577,22 @@ struct ActivityView: View {
                             .foregroundStyle(Color(theme.palette.secondary))
                     }
                 }
+                if (modeID == ActivityModeID.reading.id || modeID == ActivityModeID.meditating.id) && !store.launchesWorkflow(for: modeID) {
+                    Text("Only the activity timer will start. You can enable the guided workflow in Settings.")
+                        .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+                }
             }.navigationTitle("Start Activity")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { showingStart = false } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Start") {
                             let selected = mode
-                            let start = selected.id == ActivityModeID.reading.id ? VerseID(referenceSystemID: referenceSystemID, book: book, chapter: chapter, verse: verse) : nil
+                            let start = selected.id == ActivityModeID.reading.id && store.automaticReadingWorkflow ? VerseID(referenceSystemID: referenceSystemID, book: book, chapter: chapter, verse: verse) : nil
                             store.start(mode: selected, title: title.isEmpty ? selected.name : title, readingStart: start, editionID: editionID)
+                            guard store.errorMessage == nil else { return }
                             showingStart = false
                             if let start { startReading(start) }
-                            if selected.id == ActivityModeID.meditating.id {
+                            if selected.id == ActivityModeID.meditating.id, store.automaticContemplationWorkflow {
                                 let chosen: PassageRange? = meditateOnPassage ? meditationRange : nil
                                 beginMeditationJourney(MeditationJourneyLaunch(
                                     referenceSystemID: referenceSystemID,
@@ -559,7 +600,7 @@ struct ActivityView: View {
                                     chosenRange: chosen
                                 ))
                             }
-                        }.disabled(startDisabled)
+                        }.disabled(startDisabled).accessibilityIdentifier("activity.start.confirm")
                     }
                 }
         }

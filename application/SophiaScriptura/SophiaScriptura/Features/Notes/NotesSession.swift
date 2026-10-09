@@ -4,6 +4,47 @@ import ImageIO
 
 /// Owns one library and serializes autosave; surfaces never write files.
 @MainActor @Observable final class NotesSession {
+    var protection = ItemProtectionSession.shared
+    private var flushingForLock = false
+    weak var collections: CollectionsStore?
+    private(set) var openingCollectionID: UUID?
+    func canAccessEditor(_ id: UUID) -> Bool {
+        guard let document = snapshot.notes.first(where: { $0.id == id }), !isLocked(document) else { return false }
+        return flushingForLock || collections?.allowsNoteOpening(id, from: openingCollectionID) != false
+    }
+    func concealInaccessibleNote() {
+        guard let id = selectedNoteID, !canAccessEditor(id) else { return }
+        flushingForLock = true; flushSurface?(); flushingForLock = false
+        selectedNoteID = nil; selection = []; strokeSelection = []; undoStack = []; redoStack = []
+        rejectedInk = nil; toolsVisible = false; surfaceGeneration = UUID(); inkRecoveryGeneration = UUID()
+        Task { await save() }
+    }
+    func isLocked(_ note: NoteDocument) -> Bool { !flushingForLock && protection.isLocked(note.protectionID, in: .notes) }
+    func setProtected(_ id: UUID, enabled: Bool) async {
+        guard let original = snapshot.notes.first(where: { $0.id == id }), original.protectionID != nil || enabled else { return }
+        do {
+            if !enabled {
+                try await protection.confirmRemoval(binding: original.protectionID, in: .notes)
+            } else if original.protectionID == nil {
+                try await protection.authenticate([.notes], setupIfNeeded: true)
+            } else {
+                try await protection.request(binding: original.protectionID, in: .notes)
+            }
+            try protection.require([original.protectionID ?? protection.credential?.id], in: .notes)
+            guard let i = snapshot.notes.firstIndex(where: { $0.id == id }), snapshot.notes[i].protectionID == original.protectionID else { return }
+            snapshot.notes[i].protectionID = enabled ? protection.credential?.id : nil
+            snapshot.notes[i].updatedAt = Date(); changed(); await save()
+        } catch { if case ItemLockError.cancelled = error {} else { report(error) } }
+    }
+    func concealProtectedNote() {
+        if clipboardProtectionID != nil { canvasClipboard = []; clipboardProtectionID = nil }
+        flushingForLock = true; flushSurface?(); flushingForLock = false
+        if let selected = snapshot.notes.first(where: { $0.id == selectedNoteID }), selected.protectionID != nil {
+            selectedNoteID = nil; selection = []; strokeSelection = []; undoStack = []; redoStack = []; rejectedInk = nil; canvasClipboard = []
+            toolsVisible = false; surfaceGeneration = UUID(); inkRecoveryGeneration = UUID()
+        }
+        Task { await save() }
+    }
     enum Mode: String, CaseIterable { case select = "Select", text = "Text", draw = "Draw", pan = "Pan" }
     private(set) var snapshot = NotesSnapshot()
     private(set) var loaded = false
@@ -11,8 +52,17 @@ import ImageIO
     private(set) var saving = false
     private(set) var restoring = false
     var notice: String?
-    var selectedNoteID: UUID?
-    var selection = Set<UUID>()
+    var selectedNoteID: UUID? {
+        didSet { if selectedNoteID != oldValue || selectedNoteID == nil { openingCollectionID = nil } }
+    }
+    var selection = Set<UUID>() { didSet { if !selection.isEmpty { strokeSelection = [] } } }
+    var strokeSelection = Set<NoteStrokeReference>()
+    var editsStrokes = false { didSet { if editsStrokes != oldValue { selection = []; strokeSelection = [] } } }
+    var startsNewInkRegion = false
+    func newInkRegion() {
+        flushSurface?(); editsStrokes = false; selection = []; strokeSelection = []; startsNewInkRegion = true
+        mode = .draw; toolsVisible = true; toolsRequest = UUID()
+    }
     var mode = Mode.select
     var active = false
     var surfaceGeneration = UUID()
@@ -29,6 +79,48 @@ import ImageIO
     var flushSurface: (() -> Void)?
     var shareCanvas: (() -> Void)?
     private(set) var canvasClipboard: [NoteObject] = []
+    private var clipboardProtectionID: UUID?
+    private(set) var rejectedInk: Data?
+    private var inkRecoveryTask: Task<Void, Never>?
+    private var inkRecoveryGeneration = UUID()
+    func retainRejectedInk(_ data: Data) {
+        guard let id = selectedNoteID else { return }
+        inkRecoveryGeneration = UUID(); rejectedInk = data
+        let previous = inkRecoveryTask
+        inkRecoveryTask = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            do { try await repository.retainRejectedInk(data, noteID: id) }
+            catch { notice = "Unsaved ink remains in memory, but its recovery file could not be written: \(error.localizedDescription)" }
+        }
+    }
+    func loadRejectedInk() async {
+        guard let id = selectedNoteID else { return }
+        let generation = inkRecoveryGeneration
+        await inkRecoveryTask?.value
+        do {
+            let data = try await repository.rejectedInk(noteID: id)
+            guard selectedNoteID == id, inkRecoveryGeneration == generation else { return }
+            rejectedInk = data
+            if data != nil { notice = "Unsaved ink was retained. Use Note options → Recover unsaved drawing." }
+        } catch { if selectedNoteID == id, inkRecoveryGeneration == generation { report(error) } }
+    }
+    func recoverRejectedInk() async {
+        await inkRecoveryTask?.value
+        guard let originalID = selectedNoteID, let original = note, let data = rejectedInk else { return }
+        do {
+            let drawing = try PKDrawing(data: data)
+            let recovered = try NoteCanvasInk(objects: []).objects(after: drawing, replacing: [])
+            guard let id = create(kind: .canvas, title: "Recovered drawing") else { return }
+            edit { $0.objects = recovered; $0.protectionID = original.protectionID }
+            guard note?.id == id, note?.objects == recovered else { return }
+            await save()
+            if !dirty {
+                try await repository.clearRejectedInk(noteID: originalID)
+                rejectedInk = nil; notice = "Recovered the unsaved drawing in a new Canvas note."
+            }
+        } catch { report(error) }
+    }
     private let repository: any NotesRepository
     private var change = 0
     private var saveTask: Task<Void, Never>?
@@ -46,7 +138,7 @@ import ImageIO
             let beforePageBytes = Self.pageBytes(beforePage)
             let afterPageBytes = Self.pageBytes(afterPage)
             let objectBytes = (before + after).reduce(0) { total, object in
-                total + object.payload.count + object.text.utf8.count
+                total + object.payload.count + object.text.utf8.count + (object.strokeIDs?.count ?? 0) * 16
             }
             return beforePageBytes + afterPageBytes + objectBytes
         }
@@ -64,7 +156,7 @@ import ImageIO
     var renderRevision: Int { change }
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
-    var note: NoteDocument? { snapshot.notes.first { $0.id == selectedNoteID } }
+    var note: NoteDocument? { snapshot.notes.first { $0.id == selectedNoteID && canAccessEditor($0.id) } }
     var status: String { saving ? "Saving…" : dirty ? "Not saved — Retry" : "Saved" }
     init(repository: any NotesRepository = NotesFileRepository(directory: NotesFileRepository.defaultDirectory())) { self.repository = repository }
     func load() async {
@@ -93,6 +185,7 @@ import ImageIO
 
     /// Deletes the on-device Notes store and starts with an empty library.
     func resetLibrary() async {
+        protection.lock([.notes])
         do {
             try await repository.resetStorage()
             snapshot = NotesSnapshot()
@@ -109,9 +202,21 @@ import ImageIO
             report(error)
         }
     }
-    func open(_ id: UUID) {
-        flushSurface?(); selectedNoteID = id; selection = []; selectingMultiple = false; mode = .select
+    func open(_ id: UUID, from collectionID: UUID? = nil) {
+        guard collections?.allowsNoteOpening(id, from: collectionID) != false else { report(ItemLockError.locked); return }
+        guard let target = snapshot.notes.first(where: { $0.id == id }) else { return }
+        if isLocked(target) {
+            Task {
+                do { try await protection.request(binding: target.protectionID, in: .notes)
+                    guard snapshot.notes.contains(where: { $0.id == id && $0.protectionID == target.protectionID }) else { return }; open(id, from: collectionID)
+                } catch { if case ItemLockError.cancelled = error {} else { report(error) } }
+            }; return
+        }
+        protection.activity(in: .notes)
+        flushSurface?(); selectedNoteID = id; openingCollectionID = collectionID; strokeSelection = []; startsNewInkRegion = false; editsStrokes = false; selection = []; selectingMultiple = false; mode = .select
         undoStack = []; redoStack = []; surfaceGeneration = UUID(); bodySelection = NSRange(location: 0, length: 0)
+        inkRecoveryGeneration = UUID(); rejectedInk = nil
+        Task { [weak self] in await self?.loadRejectedInk() }
     }
     @discardableResult func create(
         kind: NoteKind = .page,
@@ -161,6 +266,8 @@ import ImageIO
 
     func updateNote(id: UUID, title: String, tags: String, paper: NoteDocument.Paper, color: CollectionAccent) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !isLocked(snapshot.notes[i]) else { notice = ItemLockError.locked.localizedDescription; return }
+        protection.activity(in: .notes)
         let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
         snapshot.notes[i].title = trimmed.isEmpty ? defaultTitle(for: snapshot.notes[i].kind) : trimmed
         snapshot.notes[i].tags = Array(Set(tags.split(separator: ",").map { String($0.trimmingCharacters(in: .whitespaces).prefix(60)) }.filter { !$0.isEmpty })).sorted().prefix(30).map { $0 }
@@ -184,12 +291,15 @@ import ImageIO
 
     func setColor(_ color: CollectionAccent, for id: UUID) {
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !isLocked(snapshot.notes[i]) else { notice = ItemLockError.locked.localizedDescription; return }
+        protection.activity(in: .notes)
         snapshot.notes[i].color = color
         snapshot.notes[i].updatedAt = Date()
         changed()
     }
     /// Hides the note in the library; unarchive from Settings or Notes archive.
     func archive(_ id: UUID) {
+        protection.cancel(affecting: [.notes])
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes[i].archivedAt = Date()
         snapshot.notes[i].trashedAt = nil
@@ -210,6 +320,7 @@ import ImageIO
     func restoreFromArchive(_ id: UUID) { unarchive(id) }
 
     func moveToTrash(_ id: UUID) {
+        protection.cancel(affecting: [.notes])
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         let now = Date()
         snapshot.notes[i].trashedAt = now
@@ -251,6 +362,7 @@ import ImageIO
     /// Permanently removes every note, including archived notes, and closes the editor.
     func removeAllNotes() {
         guard !restoring, loaded else { return }
+        protection.lock([.notes])
         snapshot.notes.removeAll()
         selectedNoteID = nil
         surfaceGeneration = UUID()
@@ -263,6 +375,7 @@ import ImageIO
 
     /// Removes the note from the library entirely. Prefer archiving for reversible removal.
     func permanentlyDelete(_ id: UUID) {
+        protection.cancel(affecting: [.notes])
         guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes.remove(at: i)
         changed()
@@ -273,14 +386,21 @@ import ImageIO
     func delete(_ id: UUID, restore: Bool = false) {
         if restore { restoreFromArchive(id) } else { archive(id) }
     }
-    private var index: Int? { snapshot.notes.firstIndex { $0.id == selectedNoteID } }
+    private var index: Int? { snapshot.notes.firstIndex { $0.id == selectedNoteID && canAccessEditor($0.id) } }
     func edit(_ operation: (inout NoteDocument) -> Void, record: Bool = true) {
         guard !restoring, let i = index else { return }
+        if record { protection.activity(in: .notes) }
         let before = snapshot.notes[i]
         var next = before; operation(&next)
         guard before != next else { return }
         do {
             try next.validate()
+            let oldObjects = Dictionary(uniqueKeysWithValues: before.allObjects.map { ($0.id, $0) })
+            for object in next.allObjects where object.kind == .ink && oldObjects[object.id] != object {
+                let drawing = try PKDrawing(data: object.payload)
+                guard drawing.strokes.count <= 10_000 else { throw NotesError.limit }
+                if let ids = object.strokeIDs, ids.count != drawing.strokes.count { throw NotesError.invalid }
+            }
             if let page = next.page, NotePageTypography.height(of: page) > NoteDocument.extent - 400 {
                 notice = "This page has reached its length limit. Start another note to keep all text reachable."; return
             }
@@ -471,8 +591,28 @@ import ImageIO
     }
     func copySelection() {
         guard let note else { return }
+        if !strokeSelection.isEmpty, let scene = try? NoteCanvasInk(objects: note.objects) {
+            canvasClipboard = scene.copying(strokeSelection); clipboardProtectionID = note.protectionID; return
+        }
         let ids = note.members(selection)
-        canvasClipboard = note.objects.filter { ids.contains($0.id) }
+        canvasClipboard = note.objects.filter { ids.contains($0.id) }; clipboardProtectionID = note.protectionID
+    }
+
+    func pasteCanvasClipboard() {
+        guard let note, note.kind == .canvas, !canvasClipboard.isEmpty, !protection.isLocked(clipboardProtectionID, in: .notes) else { return }
+        var copies = canvasClipboard
+        let groups = Dictionary(uniqueKeysWithValues: Set(copies.compactMap(\.group)).map { ($0, UUID()) })
+        for index in copies.indices {
+            copies[index].id = UUID()
+            copies[index].group = copies[index].group.flatMap { groups[$0] }
+            copies[index].positionLocked = false
+            if let ids = copies[index].strokeIDs { copies[index].strokeIDs = ids.map { _ in UUID() } }
+            copies[index].frame.origin.x = min(NoteDocument.extent - copies[index].frame.width, copies[index].frame.minX + 32)
+            copies[index].frame.origin.y = min(NoteDocument.extent - copies[index].frame.height, copies[index].frame.minY + 32)
+        }
+        edit { $0.objects += copies }
+        let ids = Set(copies.map(\.id))
+        if ids.isSubset(of: Set(self.note?.objects.map(\.id) ?? [])) { selection = ids; strokeSelection = []; focusRequest = UUID() }
     }
 
     func cutSelection() {
@@ -500,11 +640,25 @@ import ImageIO
 
     func duplicateSelection() {
         guard let note else { return }
+        if !strokeSelection.isEmpty {
+            guard let scene = try? NoteCanvasInk(objects: note.objects) else { return }
+            var copies = scene.copying(strokeSelection)
+            for index in copies.indices {
+                copies[index].frame.origin.x = min(NoteDocument.extent - copies[index].frame.width, copies[index].frame.minX + 32)
+                copies[index].frame.origin.y = min(NoteDocument.extent - copies[index].frame.height, copies[index].frame.minY + 32)
+            }
+            edit { $0.objects += copies }
+            if Set(copies.map(\.id)).isSubset(of: Set(self.note?.objects.map(\.id) ?? [])) {
+                selection = Set(copies.map(\.id)); strokeSelection = []
+            }
+            return
+        }
         let ids = note.members(selection)
         var copies = note.objects.filter { ids.contains($0.id) }
         let groupMap = Dictionary(uniqueKeysWithValues: Set(copies.compactMap(\.group)).map { ($0, UUID()) })
         for i in copies.indices {
             copies[i].id = UUID()
+            if let ids = copies[i].strokeIDs { copies[i].strokeIDs = ids.map { _ in UUID() } }
             copies[i].group = copies[i].group.flatMap { groupMap[$0] }
             copies[i].frame.origin.x = min((note.page?.width ?? NoteDocument.extent) - copies[i].frame.width, copies[i].frame.minX + 32)
             copies[i].frame.origin.y = min(NoteDocument.extent - copies[i].frame.height, copies[i].frame.minY + 32)
@@ -535,10 +689,31 @@ import ImageIO
             while self.undoStack.reduce(0, { $0 + $1.bytes }) > 24 * 1024 * 1024 { self.undoStack.removeFirst() }
         }
     }
-    func move(_ delta: CGSize) { edit { $0.move(selection, by: delta) } }
+    func move(_ delta: CGSize) {
+        if !strokeSelection.isEmpty { editSelectedStrokes(.move(delta)) }
+        else { edit { $0.move(selection, by: delta) } }
+    }
+    func colorSelectedStrokes(_ color: UIColor) { editSelectedStrokes(.color(color)) }
+    private func editSelectedStrokes(_ operation: NoteCanvasInk.StrokeEdit) {
+        guard let note, !strokeSelection.isEmpty else { return }
+        do {
+            let scene = try NoteCanvasInk(objects: note.objects)
+            var change = operation
+            if case .move(let delta) = operation {
+                let bounds = scene.strokeIndex.bounds(of: strokeSelection)
+                guard !bounds.isNull else { return }
+                change = .move(CGSize(width: max(-bounds.minX, min(NoteDocument.extent - bounds.maxX, delta.width)),
+                                      height: max(-bounds.minY, min(NoteDocument.extent - bounds.maxY, delta.height))))
+            }
+            let edited = scene.editing(strokeSelection, in: note.objects, operation: change)
+            edit { $0.objects = edited }
+            if case .delete = operation { strokeSelection = [] }
+        } catch { report(error) }
+    }
     func group() { edit { $0.group(selection) } }
     func ungroup() { edit { $0.ungroup(selection) } }
     func remove() {
+        if !strokeSelection.isEmpty { editSelectedStrokes(.delete); return }
         edit { note in
             if let attachments = note.page?.attachments.filter({ selection.contains($0.id) }).sorted(by: { $0.location > $1.location }) {
                 for item in attachments { note.page?.replace(NSRange(location: item.location, length: 1), with: "") }
@@ -574,7 +749,7 @@ import ImageIO
             let order = forward ? entry.afterOrder : entry.beforeOrder
             note.objects.sort { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }
         }, record: false)
-        selection = []; surfaceGeneration = UUID()
+        selection = []; strokeSelection = []; surfaceGeneration = UUID()
     }
     func replaceBody(_ range: NSRange, with text: String) {
         edit { note in note.page?.replace(range, with: text) }
@@ -696,19 +871,34 @@ import ImageIO
         }
     }
     func export() async throws -> Data {
+        try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)])
+        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
         flushSurface?(); await save()
         guard !dirty, !saving else { throw NotesError.stale }
-        return try await repository.exportArchive()
+        let data = try await repository.exportArchive()
+        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+        return data
     }
-    func preRestore() async throws -> Data { try await repository.preRestoreArchive() }
+    func preRestore() async throws -> Data {
+        try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)])
+        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+        let data = try await repository.preRestoreArchive()
+        let backup = try NotesFileRepository.inspectArchive(data)
+        try await protection.authorize([.notes: backup.notes.map(\.protectionID)])
+        try protection.require(backup.notes.map(\.protectionID), in: .notes)
+        return data
+    }
     func restore(_ data: Data) async {
         guard !restoring else { return }
+        do { try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)]) } catch { report(error); return }
         flushSurface?(); await save()
         guard !saving, !dirty else { notice = "Save current edits before restoring."; return }
         restoring = true
         defer { restoring = false }
         do {
+            try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
             let next = try await repository.restore(data, expectedRevision: snapshot.revision)
+            protection.lock([.notes])
             surfaceGeneration = UUID(); flushSurface = nil; snapshot = next; loaded = true
             selectedNoteID = nil; selection = []; undoStack = []; redoStack = []; notice = "Notes backup restored. The pre-restore copy is available in Backups."
         } catch { report(error) }
@@ -756,6 +946,24 @@ import ImageIO
         edit({ note in
             guard case .journal(var content) = note.content else { return }
             content.scriptureVisible = visible
+            note.content = .journal(content)
+        }, record: false)
+    }
+
+    func setJournalEmotionalState(_ state: JournalEmotionalState?) {
+        protection.activity(in: .notes)
+        edit({ note in
+            guard case .journal(var content) = note.content else { return }
+            content.emotionalState = state
+            note.content = .journal(content)
+        }, record: false)
+    }
+
+    func setJournalMentalState(_ state: JournalMentalState?) {
+        protection.activity(in: .notes)
+        edit({ note in
+            guard case .journal(var content) = note.content else { return }
+            content.mentalState = state
             note.content = .journal(content)
         }, record: false)
     }

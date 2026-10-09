@@ -123,3 +123,21 @@ Explicit grouping is now accepted. Use
 [SP-006](../../tickets/SP-006-native-canvas-experiment.md) to test the proposed input
 and coordinate model on the actual iPad. Export pagination and performance budgets
 remain separate decisions. No native testing or persistence pass is claimed by this document.
+
+## SP-025 native stroke editing — v0.3.0
+
+The Canvas Pencil lasso tool selects strokes inside real ink regions. Tap one stroke or
+loop around multiple strokes across regions; drag a selected stroke to move the selection.
+The floating stroke palette recolors, copies, duplicates or deletes just those strokes.
+Select drawing returns to whole-region selection. Note options → Selection offers Objects
+and Strokes explicitly; Objects keeps group and region movement/resizing semantics.
+The native lasso initially chooses Strokes; selecting Objects afterward enables the
+existing whole-object loop. Empty space inside a drawing's bounds passes through to other
+objects. Drawing-edit lasso uses full containment of sampled visible centerlines, including
+masks; it does not recognize words or automatically select a complete handwritten word.
+
+Note options → New drawing region chooses fresh ink ownership, and Paste inserts copied
+material with fresh object/stroke identities. Ordinary handwriting has no 64-stroke boundary.
+Safety-bound spill remains adjacent to its source to preserve overlaps. No automatic
+merge/separate drawing commands or unlimited canvas extent are included. Full geometry and
+Pencil gesture feel still require physical acceptance.

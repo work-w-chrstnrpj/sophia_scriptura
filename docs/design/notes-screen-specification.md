@@ -47,6 +47,10 @@ content and editing rules.
   adjustment is available only while the Scripture pane is open. Pinch zoom remains Canvas-only.
 - The Page and Journal bar is one row: Pencil, text format, checkbox, table, and attach.
   Attach includes a link, photo, document or text scan, and recorded or imported audio.
+- A Journal shows Emotional state and Mental state at the right end of the same toolbar
+  row as the Pencil control. Both start empty and can be cleared. Emotional state offers Apple Journal’s
+  feelings plus Neutral. Mental state lists the named mind-sets with their short meanings,
+  including Challenged. The library card shows those labels and still hides the journal body.
 
 ### Shared Scripture pane
 
@@ -547,3 +551,18 @@ selection and persistence. Whole-Canvas sharing temporarily mounts all content a
 image decoding. A bounded ink/image cache avoids repeated rendering after scrolling;
 ImageIO import and displayed-image decoding use a serial background worker. Physical iPad
 profiling and long drawing sessions remain acceptance gates.
+
+## v0.3.0 SP-025 follow-up
+
+Canvas Note options adds Selection (Objects/Strokes), New drawing region and Paste. Note
+options and the prayer (…) menu follow the hold-menu states: Protect Note when it has no lock, and Lock Note plus Remove Note Protection when it is unlocked. A locked note’s hold menu offers Unlock Note only. A note filed in a locked collection, or in any subfolder beneath it at any depth, stays out of the Notes library until that collection is unlocked. The Pencil lasso chooses stroke editing; its tap/loop selects internal strokes across regions,
+with a stroke palette for Color, Copy, Duplicate, Delete and Select drawing. Selected
+strokes drag independently; whole objects retain the existing palette/group/resize behavior.
+Continuous writing stays in the latest eligible topmost ink region without 64-stroke batches.
+At explicit stroke/payload safety limits, additional ink spills into adjacent regions.
+
+Large regions use bounded viewport-cropped rasters while vectors remain in the document.
+Rejected ink is retained separately with Note options → Recover unsaved drawing, producing
+a new Canvas note after validation; saved source content is unchanged. See the
+[Notes contract](../data/notes-contract.md) for identity, recovery and downgrade details.
+This is SP-025 implementation, separate from the planned Notes/Collections authentication locks.

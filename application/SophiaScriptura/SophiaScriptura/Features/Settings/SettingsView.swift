@@ -33,11 +33,13 @@ struct SettingsView: View {
                     profileSection
                     appearanceSection
                     readingSection
+                    activityWorkflowsSection
                     offlineSection
                     translationsSection
                     providerSection
                     musicSection
                     shellSection
+                    protectionSection
                     archiveSection
                     trashSection
                     deleteDataSection
@@ -128,6 +130,36 @@ struct SettingsView: View {
                     set: { shellPreferences.setShowTabActionButtons($0) }
                 ))
                 .accessibilityIdentifier("settings.shellTabActionsVisible")
+            }
+        }
+    }
+
+    private var activityWorkflowsSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Activity workflows")
+                Toggle("Automatically start Reading workflow", isOn: Binding(
+                    get: { activity.automaticReadingWorkflow },
+                    set: { activity.setAutomaticWorkflow($0, for: ActivityModeID.reading.id) }
+                )).accessibilityIdentifier("settings.activity.readingWorkflow")
+                Toggle("Automatically start Scripture Contemplation workflow", isOn: Binding(
+                    get: { activity.automaticContemplationWorkflow },
+                    set: { activity.setAutomaticWorkflow($0, for: ActivityModeID.meditating.id) }
+                )).accessibilityIdentifier("settings.activity.contemplationWorkflow")
+                Text("When off, starting the activity only starts its timer. Reading will not open Scripture or require a passage, and Scripture Contemplation will not open the guided journey. Changes apply to new activities.")
+                    .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+            }.disabled(!activity.isReady)
+        }
+    }
+
+    private var protectionSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Protection")
+                ProtectionSettingsSection(
+                    notesProtected: notes.snapshot.notes.contains { $0.protectionID != nil },
+                    collectionsProtected: collections.collections.contains { $0.protectionID != nil && !$0.isUnfiled }
+                )
             }
         }
     }

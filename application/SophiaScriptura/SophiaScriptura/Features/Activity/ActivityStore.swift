@@ -20,6 +20,22 @@ import Combine
     func goalMinutes(for modeID: String) -> Int { snapshot.dailyGoalMinutesByMode?[modeID] ?? 0 }
     var reminders: [ActivityReminder] { (snapshot.reminders ?? []).sorted { $0.date < $1.date } }
     var isReady: Bool { loaded }
+    var automaticReadingWorkflow: Bool { snapshot.automaticReadingWorkflow ?? true }
+    var automaticContemplationWorkflow: Bool { snapshot.automaticContemplationWorkflow ?? true }
+    func launchesWorkflow(for modeID: String) -> Bool {
+        switch modeID {
+        case ActivityModeID.reading.id: automaticReadingWorkflow
+        case ActivityModeID.meditating.id: automaticContemplationWorkflow
+        default: false
+        }
+    }
+    func setAutomaticWorkflow(_ enabled: Bool, for modeID: String) {
+        guard loaded else { return }
+        if modeID == ActivityModeID.reading.id { snapshot.automaticReadingWorkflow = enabled }
+        else if modeID == ActivityModeID.meditating.id { snapshot.automaticContemplationWorkflow = enabled }
+        else { return }
+        persist()
+    }
     var modes: [ActivityMode] {
         ActivityModeID.allCases.map { ActivityMode(id: $0.id, name: $0.title, isBuiltIn: true) }
         + snapshot.customModes.filter { !$0.archived }
@@ -76,7 +92,7 @@ import Combine
         errorMessage = nil
         guard snapshot.draft == nil else { errorMessage = "Finish the current activity before starting another."; return }
         snapshot.draft = ActivityDraft(id: UUID(), title: title, modeID: mode.id, modeLabel: mode.name,
-            startedAt: now, runningSince: now, intervals: [], description: "", readingStart: readingStart, editionID: editionID)
+            startedAt: now, runningSince: now, intervals: [], description: "", readingStart: readingStart, editionID: editionID, guidedWorkflow: launchesWorkflow(for: mode.id))
         persist()
     }
 
@@ -294,7 +310,7 @@ import Combine
         persist()
     }
 
-    func importReviewingLinks(_ links: [ReviewingActivityLink]) {
+    func importQuizStudyLinks(_ links: [ReviewingActivityLink]) {
         guard loaded else { return }
         var changed = false
         for link in links where !snapshot.records.contains(where: { $0.quizSessionID == link.quizSessionID })
@@ -308,10 +324,10 @@ import Combine
                 || (record.intervals.isEmpty && record.source == "manual" && Calendar.current.isDate(record.activityDate, inSameDayAs: link.startedAt))
             }
             if intersectsTimer || intersectsRecord {
-                errorMessage = "A Quiz Me review overlaps another activity. Correct the activity before importing its Reviewing time."
+                errorMessage = "A Quiz Me session overlaps another activity. Correct the activity before importing its Studying time."
                 continue
             }
-            let mode = ActivityModeID.reviewing
+            let mode = ActivityModeID.studying
             let now = Date()
             snapshot.records.append(ActivityRecord(id: link.id, title: "Quiz Me", modeID: mode.id,
                 modeLabel: mode.title, activityDate: link.startedAt, activeSeconds: Double(link.activeSeconds),

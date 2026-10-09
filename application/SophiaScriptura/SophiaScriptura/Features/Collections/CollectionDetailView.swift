@@ -9,10 +9,11 @@ struct CollectionDetailView: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
     var notes: NotesSession
-    var openNote: (UUID) -> Void
+    var openNote: (UUID, UUID) -> Void
     var openPassage: (SavedPassage) -> Void
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
@@ -36,7 +37,7 @@ struct CollectionDetailView: View {
     private var isUnfiled: Bool { currentCollection?.isUnfiled == true }
 
     private func displayAccent(for collection: StudyCollection) -> CollectionAccent {
-        collection.isUnfiled ? .noFolder : collection.accent
+        store.isLocked(collection.id) ? .stone : collection.isUnfiled ? .noFolder : collection.accent
     }
 
     private var visibleArtifacts: [CollectionArtifact] {
@@ -59,10 +60,19 @@ struct CollectionDetailView: View {
     var body: some View {
         Group {
             if let collection = currentCollection {
-                collectionDetail(collection)
+                if store.isLocked(collectionID) {
+                    VStack(spacing: 20) {
+                        ContentUnavailableView("Locked Collection", systemImage: "lock.fill", description: Text("Unlock Collections to view this folder."))
+                        Button("Unlock Collection") { Task { await store.requestAccess(collectionID) } }
+                    }.navigationTitle(collection.name)
+                } else { collectionDetail(collection) }
             } else {
                 ContentUnavailableView("Collection unavailable", systemImage: "folder.badge.questionmark")
             }
+        }
+        .task { if store.isLocked(collectionID) { await store.requestAccess(collectionID) } }
+        .onChange(of: protection.unlocked) { _, _ in
+            if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; passageCard = nil; linkCard = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
         }
     }
 
@@ -89,7 +99,7 @@ struct CollectionDetailView: View {
     private func collectionSheets(_ collection: StudyCollection) -> some View {
                 collectionContent(collection)
                 .sheet(isPresented: $showingPicker) {
-                    CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes, openNote: openNote, openCompanion: openCompanion, createConversation: createConversation)
+                    CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes, openNote: { openNote($0, collectionID) }, openCompanion: openCompanion, createConversation: createConversation)
                 }
                 .sheet(isPresented: $showingEditor) {
                     CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collectionID)
@@ -170,6 +180,15 @@ struct CollectionDetailView: View {
                     Button("Add Study Material", systemImage: "plus") { showingPicker = true }
                     Button("New Subfolder", systemImage: "folder.badge.plus") { showingSubfolderEditor = true }
                     Button("Edit Collection…", systemImage: "pencil") { showingEditor = true }
+                    if collection.protectionID == nil {
+                        Button("Protect Collection", systemImage: "lock") { Task { await store.setProtected(collection.id, enabled: true) } }
+                            .accessibilityIdentifier("collections.actions.protect")
+                    } else {
+                        Button("Lock Collection", systemImage: "lock") { store.protection.lock([.collections]) }
+                            .accessibilityIdentifier("collections.actions.lock")
+                        Button("Remove Collection Protection", systemImage: "lock.slash") { Task { await store.setProtected(collection.id, enabled: false) } }
+                            .accessibilityIdentifier("collections.actions.removeProtection")
+                    }
                     Button("Archive Collection", systemImage: "archivebox") {
                         store.archiveCollection(id: collectionID)
                     }
@@ -277,7 +296,17 @@ struct CollectionDetailView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child }
+                            if !store.isLocked(child.id) { Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child } }
+                            ItemProtectionContextActions(
+                                noun: "Collection",
+                                protectionID: child.protectionID,
+                                locked: store.isLocked(child.id),
+                                protect: { Task { await store.setProtected(child.id, enabled: true) } },
+                                lock: { store.protection.lock([.collections]) },
+                                unlock: { Task { await store.requestAccess(child.id) } },
+                                remove: { Task { await store.setProtected(child.id, enabled: false) } }
+                            )
+                            Button("Archive Collection", systemImage: "archivebox") { store.archiveCollection(id: child.id) }
                             Button("Delete Collection", systemImage: "trash", role: .destructive) { deletingSubfolder = child }
                         }
                         .accessibilityIdentifier("collections.folder.\(child.name)")
@@ -289,13 +318,14 @@ struct CollectionDetailView: View {
 
     private func subfolderTile(_ child: StudyCollection) -> some View {
         HStack(spacing: 12) {
-            CollectionFolderGlyph(accent: child.accent, icon: child.icon ?? .folder, size: 38)
+            if child.protectionID != nil { Image(systemName: store.isLocked(child.id) ? "lock.fill" : "lock.open.fill").foregroundStyle(.secondary) }
+            CollectionFolderGlyph(accent: store.isLocked(child.id) ? .stone : child.accent, icon: child.icon ?? .folder, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(child.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(1)
-                Text(CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes)))
+                Text(store.isLocked(child.id) ? "Locked" : CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes)))
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(Color(theme.palette.secondary))
@@ -432,7 +462,7 @@ struct CollectionDetailView: View {
     private func open(_ artifact: CollectionArtifact) {
         switch artifact.kind {
         case .note:
-            openNote(artifact.id)
+            openNote(artifact.id, collectionID)
         case .bookmark, .gleaning:
             passageCard = artifact.id
         case .link:

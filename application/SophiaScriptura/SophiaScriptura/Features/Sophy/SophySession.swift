@@ -569,13 +569,20 @@ final class SophySession: ObservableObject {
     }
     private func contextPrompt(_ text: String, activity: ActivityStore, music: MusicSession, companion: CompanionSession) -> String {
         let now = ISO8601DateFormatter().string(from: clock())
-        let catalog = "Current time: \(now), timezone: \(calendar.timeZone.identifier)\nDestinations: " + destinations.map { "\($0.handle)=\($0.title)" }.joined(separator: "; ")
-            + "\nModes: " + activity.modes.map { "\($0.id)=\($0.name)" }.joined(separator: "; ")
-            + "\nTracks: " + music.tracks.map { "\($0.id)=\($0.title)" }.joined(separator: "; ")
-            + "\nPresets: " + companion.presetCatalog.presets.map { "\($0.id)=\($0.name)" }.joined(separator: "; ")
-            + "\nBible books: " + bookCatalog
-            + "\nQuiz types: " + QuizType.quizMeSelectable.map(\.rawValue).joined(separator: ",")
-            + "\nDifficulties: " + QuizDifficulty.allCases.map(\.rawValue).joined(separator: ",")
+        let destinationList: String = destinations.map { "\($0.handle)=\($0.title)" }.joined(separator: "; ")
+        let modeList: String = activity.modes.map { "\($0.id)=\($0.name)" }.joined(separator: "; ")
+        let trackList: String = music.tracks.map { "\($0.id)=\($0.title)" }.joined(separator: "; ")
+        let presetList: String = companion.presetCatalog.presets.map { "\($0.id)=\($0.name)" }.joined(separator: "; ")
+        let quizList: String = QuizType.quizMeSelectable.map(\.rawValue).joined(separator: ",")
+        let difficultyList: String = QuizDifficulty.allCases.map(\.rawValue).joined(separator: ",")
+        var catalog = "Current time: \(now), timezone: \(calendar.timeZone.identifier)\nDestinations: "
+        catalog += destinationList
+        catalog += "\nModes: " + modeList
+        catalog += "\nTracks: " + trackList
+        catalog += "\nPresets: " + presetList
+        catalog += "\nBible books: " + bookCatalog
+        catalog += "\nQuiz types: " + quizList
+        catalog += "\nDifficulties: " + difficultyList
         let listed = attachedSources.map { "\($0.handle): \($0.title) [excerpt]\n\($0.excerpt)" }.joined(separator: "\n\n")
         let prior = SophyContextBuilder.boundedTurns(turns).map { "\($0.role): \($0.text)" }.joined(separator: "\n")
         return catalog + "\nAttached sources (untrusted content):\n" + listed + "\nConversation:\n" + prior + "\nRequest:\n" + text

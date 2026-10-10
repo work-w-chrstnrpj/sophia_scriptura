@@ -12,9 +12,9 @@ struct ScripturePassagePicker: View {
 
     var body: some View {
         NavigationStack {
-            VStack {
+            VStack(spacing: 0) {
                 HStack(spacing:8) {
-                    Image(systemName:"scope").foregroundStyle(.secondary)
+                    Image(systemName:"scope").foregroundStyle(Color(palette.secondary))
                     Text("Current: \(session.title)").font(.subheadline.weight(.medium))
                     Spacer()
                 }.padding(.horizontal).padding(.top,8)
@@ -31,22 +31,29 @@ struct ScripturePassagePicker: View {
                                         Text(book.title)
                                         Spacer()
                                         if book.id == session.document?.book {
-                                            Image(systemName:"checkmark").foregroundStyle(.tint).accessibilityHidden(true)
+                                            Image(systemName:"checkmark").foregroundStyle(Color(palette.accent)).accessibilityHidden(true)
                                         }
                                     }
                                 }
+                                .listRowBackground(Color(palette.paper))
                             }
                         }
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .listRowSeparatorTint(Color(palette.rule))
                 .background(Color(palette.paper))
                 .foregroundStyle(Color(palette.ink))
                 .tint(Color(palette.accent))
                 .scrollDismissesKeyboard(.interactively)
-            }.navigationTitle("Book")
-                .toolbar { ToolbarItem(placement:.cancellationAction) { Button("Cancel") { dismiss() } } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(palette.paper))
+            .navigationTitle("Book")
+            .toolbar { ToolbarItem(placement:.cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbarBackground(Color(palette.paper), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
         .background(Color(palette.paper).ignoresSafeArea())
     }
@@ -57,12 +64,15 @@ struct ScripturePassagePicker: View {
                     NavigationLink {
                         VersePicker(session:session,book:book,chapter:chapter,select:select)
                     } label: { Text(String(chapter)).frame(maxWidth:.infinity,minHeight:52) }
-                        .background(.primary.opacity(0.06),in:RoundedRectangle(cornerRadius:10))
+                        .background(Color(palette.ink).opacity(0.06),in:RoundedRectangle(cornerRadius:10))
                         .accessibilityIdentifier("reader.chapter.\(chapter)")
                 }
             }.padding(24)
-        }.navigationTitle("\(book.title) · Chapter")
-            .background(Color(palette.paper).ignoresSafeArea())
+        }
+        .navigationTitle("\(book.title) · Chapter")
+        .background(Color(palette.paper).ignoresSafeArea())
+        .toolbarBackground(Color(palette.paper), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }
 
@@ -71,9 +81,11 @@ private struct VersePicker: View {
     let book: ScriptureBook
     let chapter: Int
     let select: (String, Int, Int) -> Void
+    @Environment(\.colorScheme) private var colorScheme
     @State private var verses: [Int] = []
     @State private var error: String?
     @State private var attempt = 0
+    private var palette: ReaderPalette { session.preferences.palette(for: session.preferences.appearance, colorScheme: colorScheme) }
 
     var body: some View {
         Group {
@@ -91,13 +103,20 @@ private struct VersePicker: View {
                         ForEach(verses,id:\.self) { verse in
                             Button(String(verse)) { select(book.id,chapter,verse) }
                                 .frame(maxWidth:.infinity,minHeight:52)
-                                .background(.primary.opacity(0.06),in:RoundedRectangle(cornerRadius:10))
+                                .background(Color(palette.ink).opacity(0.06),in:RoundedRectangle(cornerRadius:10))
                                 .accessibilityIdentifier("reader.verse.\(verse)")
                         }
                     }.padding(24)
                 }
             }
-        }.navigationTitle("\(book.title) \(chapter) · Verse")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(palette.paper).ignoresSafeArea())
+        .foregroundStyle(Color(palette.ink))
+        .tint(Color(palette.accent))
+        .navigationTitle("\(book.title) \(chapter) · Verse")
+        .toolbarBackground(Color(palette.paper), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
             .task(id:attempt) {
                 error = nil
                 do {

@@ -220,12 +220,12 @@ enum JournalEmotionalState: String, Codable, CaseIterable, Sendable {
     var label: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
 }
 
-/// Optional journal mind-set. Order runs from thriving toward distress, then Challenged.
+/// Optional journal mind-set. Order runs from thriving through Neutral, then Challenged, then toward distress.
 enum JournalMentalState: String, Codable, CaseIterable, Sendable {
-    case thriving, confident, content, atEase, evenMinded, neutral
+    case thriving, confident, content, atEase, evenMinded, neutral, challenged
     case uncertain, doubtful, uneasy, concerned, worried, overthinking
     case pressured, tense, stressed, anxious, overstimulated, ruminating
-    case overwhelmed, distressed, challenged
+    case overwhelmed, distressed
 
     var label: String {
         switch self {

@@ -45,12 +45,11 @@ content and editing rules.
   preserved at their original positions and remain editable for compatibility.
 - Page and Journal use a fixed 100% scale. Finger input scrolls vertically. Horizontal
   adjustment is available only while the Scripture pane is open. Pinch zoom remains Canvas-only.
-- The Page and Journal bar is one row: Pencil, text format, checkbox, table, and attach.
-  Attach includes a link, photo, document or text scan, and recorded or imported audio.
-- A Journal shows Emotional state and Mental state at the right end of the same toolbar
-  row as the Pencil control. Both start empty and can be cleared. Emotional state offers Apple Journal’s
-  feelings plus Neutral. Mental state lists the named mind-sets with their short meanings,
-  including Challenged. The library card shows those labels and still hides the journal body.
+- Canvas, Page, and Journal share one navigation-toolbar row. Insertion and format controls use the same system toolbar-button chrome as Undo and Redo. Archive and Delete live in More. Prayer keeps its own toolbar.
+- The Page and Journal controls on that row are Pencil, text format, checkbox, table, and attach.
+  Attach uses a paperclip. Its Link action keeps the chain icon, along with photo, document or text scan, and recorded or imported audio.
+- A Journal shows Emotional state and Mental state on that same icon row as Pencil, format, Undo, and More. Both toolbar controls are glyphs only: the feeling’s face emoji, and the mind-set’s icon. Neither shows its name on the row. Both start empty and can be cleared. Each chooser is one list: the glyph followed by the name, and a chosen row is tinted. Mental state lists the named mind-sets with their short meanings,
+  with Challenged directly under Neutral; Thriving uses a wheat icon and the other mind-sets have their own icons. A chosen mind-set is tinted in that state’s color on the toolbar and in the list. A library card shows the title, note type, created date, and last modified date, with no content preview. Every card is 176 points tall. The title is one line and ends in an ellipsis when it does not fit. The note type stays under the title, and the created and last-modified dates sit on the bottom of the card, aligned to its left edge.
 
 ### Shared Scripture pane
 
@@ -287,10 +286,9 @@ label. There are no decorative button capsules or duplicated navigation titles.
 - **New Note** creates a blank note immediately, gives it a temporary title such as
   `Untitled Note`, and opens the canvas. The first title edit is optional; the user can
   begin writing without completing a form.
-- **Cards** show title, one or two tags, modified date, linked passage summary when one
-  exists, and a calm content preview. A preview is a rendering aid, not a second copy of
-  note content.
-- **List** shows the same metadata in a denser, accessible row layout. Switching views
+- **Cards** show the title, note type, created date, and last modified date. They do not
+  preview note text, prayer activity, journal feelings, tags, or linked passages.
+- **List** shows the same four fields in a denser, accessible row layout. Switching views
   changes presentation only and never changes document geometry.
 - **Search** searches titles, tags, passage references and text content that is available
   locally. Results identify the note and the matching field.

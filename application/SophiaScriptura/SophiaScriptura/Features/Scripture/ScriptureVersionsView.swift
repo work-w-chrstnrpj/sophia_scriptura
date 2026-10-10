@@ -12,8 +12,9 @@ struct ScriptureVersionsView: View {
             List {
                 Section {
                     Label("Current: \(session.edition?.name ?? session.abbreviation)",systemImage:"checkmark.circle.fill")
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(Color(palette.accent))
                 }
+                .listRowBackground(Color(palette.paper))
                 Section("Bundled Bible") {
                     Button { Task { await session.selectEdition("web.engwebp"); dismiss() } } label: {
                         HStack { Text("World English Bible · WEB"); Spacer(); if session.edition?.id == "web.engwebp" { Image(systemName:"checkmark").accessibilityHidden(true) } }
@@ -21,6 +22,7 @@ struct ScriptureVersionsView: View {
                     Text("Always available offline. Public domain.").font(.caption)
                     Link("WEB publisher",destination:URL(string:"https://ebible.org/engwebp/")!)
                 }
+                .listRowBackground(Color(palette.paper))
                 Section("Licensed offline Bibles") {
                     ForEach(session.translations) { status in
                         VStack(alignment:.leading,spacing:8) {
@@ -42,6 +44,7 @@ struct ScriptureVersionsView: View {
                     if let message = session.syncMessage { Text(message).font(.caption).accessibilityIdentifier("versions.status") }
                     Button("Sync all three now") { Task { await session.syncAllTranslations() } }.disabled(session.syncing)
                 }
+                .listRowBackground(Color(palette.paper))
                 Section("API.Bible connection") {
                     SecureField("API key",text:$key).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityIdentifier("versions.key")
@@ -51,6 +54,7 @@ struct ScriptureVersionsView: View {
                     }.disabled(key.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || session.syncing)
                     Text(OfflineContentPolicy.current.enforcesRefresh ? "Syncing is manual only. Connect and press a Sync button at least every 30 days; expired translations lock until renewed. Keep Sophia open while downloading." : "Development authorization is active for NIV11, NLT and NKJV. Cached copies remain encrypted and local while you develop; production builds retain the normal refresh policy.").font(.caption)
                 }
+                .listRowBackground(Color(palette.paper))
                 Section("Attribution") {
                     Text(session.edition?.attribution ?? "")
                     Link("Scripture provided through API.Bible",destination:URL(string:"https://api.bible")!)
@@ -58,14 +62,18 @@ struct ScriptureVersionsView: View {
                     Link("NLT · Tyndale",destination:URL(string:"https://www.tyndale.com")!)
                     Link("NKJV · Thomas Nelson",destination:URL(string:"https://www.thomasnelsonbibles.com")!)
                 }
+                .listRowBackground(Color(palette.paper))
             }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .listRowSeparatorTint(Color(palette.rule))
                 .background(Color(palette.paper))
                 .foregroundStyle(Color(palette.ink))
                 .tint(Color(palette.accent))
                 .navigationTitle("Versions")
                 .toolbar { Button("Done") { dismiss() } }
+                .toolbarBackground(Color(palette.paper), for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .task { await session.refreshTranslations() }
         }.background(Color(palette.paper).ignoresSafeArea())
     }

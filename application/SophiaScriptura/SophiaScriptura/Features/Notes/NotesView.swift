@@ -33,6 +33,8 @@ struct NotesView: View {
     @State private var pendingBulkDeleteIDs: Set<UUID> = []
     @State private var confirmResetLibrary = false
     @Environment(\.scenePhase) private var scenePhase
+    /// Every library card uses this height. Title and note type stay at the top; the dates sit on the bottom.
+    private let noteCardHeight: CGFloat = 176
 
     private var notes: [NoteDocument] {
         let _ = protection.unlocked
@@ -493,51 +495,50 @@ struct NotesView: View {
         let accent = accent(for: note)
         let tint = accent.resolvedColor(in: theme)
         let isSelected = selectedNoteIDs.contains(note.id)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                noteGlyph(note, accent: accent, size: 46)
-                Spacer(minLength: 8)
-                if note.protectionID != nil { Image(systemName: session.isLocked(note) ? "lock.fill" : "lock.open.fill").foregroundStyle(.secondary).accessibilityLabel(session.isLocked(note) ? "Locked note" : "Protected note, unlocked") }
-            }
-            .padding(.bottom, 14)
-
+        return VStack(alignment: .leading, spacing: 10) {
             Button { activate(note) } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(note.title)
-                        .font(.system(.headline, design: .serif).weight(.semibold))
-                        .foregroundStyle(Color(theme.palette.ink))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(caption(note))
-                        .font(.footnote)
-                        .foregroundStyle(Color(theme.palette.secondary))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(cardPreview(note))
-                        .font(.subheadline)
-                        .foregroundStyle(cardPreviewColor(note))
-                        .lineLimit(4)
-                        .multilineTextAlignment(.leading)
-                        .padding(.top, 8)
-                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading)
+                    HStack(alignment: .top, spacing: 12) {
+                        noteGlyph(note, accent: accent, size: 36)
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(note.title)
+                                    .font(.system(.headline, design: .serif).weight(.semibold))
+                                    .foregroundStyle(Color(theme.palette.ink))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                                if note.protectionID != nil {
+                                    Image(systemName: session.isLocked(note) ? "lock.fill" : "lock.open.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityLabel(session.isLocked(note) ? "Locked note" : "Protected note, unlocked")
+                                }
+                            }
+                            Text(note.kind.displayName)
+                                .font(.footnote)
+                                .foregroundStyle(Color(theme.palette.secondary))
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 16)
+                    noteDates(note, accent: accent)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: noteCardHeight - 28, maxHeight: noteCardHeight - 28, alignment: .top)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            Spacer(minLength: 12)
-            HStack(alignment: .bottom) {
-                noteDates(note, accent: accent)
-                Spacer()
-                if deleted {
-                    Button("Unarchive") { session.unarchive(note.id) }
-                        .buttonStyle(CollectionSecondaryButtonStyle())
-                }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: noteCardHeight, maxHeight: noteCardHeight, alignment: .top)
+        .overlay(alignment: .bottomTrailing) {
+            if deleted {
+                Button("Unarchive") { session.unarchive(note.id) }
+                    .buttonStyle(CollectionSecondaryButtonStyle())
+                    .padding(14)
             }
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 248, alignment: .topLeading)
         .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(alignment: .top) {
             UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
@@ -573,7 +574,8 @@ struct NotesView: View {
                             .font(.system(.body, design: .serif).weight(.semibold))
                             .foregroundStyle(Color(theme.palette.ink))
                             .lineLimit(1)
-                        Text(caption(note))
+                            .truncationMode(.tail)
+                        Text(note.kind.displayName)
                             .font(.caption)
                             .foregroundStyle(Color(theme.palette.secondary))
                             .lineLimit(1)
@@ -659,13 +661,6 @@ struct NotesView: View {
         }
     }
 
-    private func caption(_ note: NoteDocument) -> String {
-        if session.isLocked(note) { return "Locked · " + note.kind.displayName }
-        let kind = note.kind.displayName
-        let tags = note.tags.map { "#" + $0 }.joined(separator: " ")
-        return tags.isEmpty ? kind : "\(kind) · \(tags)"
-    }
-
     private func noteDates(_ note: NoteDocument, accent: CollectionAccent) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Created \(note.createdAt.formatted(date: .abbreviated, time: .omitted))")
@@ -675,62 +670,7 @@ struct NotesView: View {
         }
         .font(.caption2.weight(.medium))
         .foregroundStyle(accent.resolvedColor(in: theme))
-    }
-
-    private func cardPreviewColor(_ note: NoteDocument) -> Color {
-        switch note.kind {
-        case .canvas, .page: Color(theme.palette.ink)
-        case .prayer, .journal: Color(theme.palette.secondary)
-        }
-    }
-
-    private func cardPreview(_ note: NoteDocument) -> String {
-        if session.isLocked(note) { return "Unlock to view this note" }
-        return switch note.kind {
-        case .canvas, .page: bodyPreview(note)
-        case .prayer: prayerCardPreview(note)
-        case .journal: journalCardPreview(note)
-        }
-    }
-
-    /// Canvas and Page library cards show a short excerpt of note content.
-    private func bodyPreview(_ note: NoteDocument) -> String {
-        (note.page?.body.isEmpty == false ? note.page?.body : nil)
-            ?? note.objects.first.map { $0.quote?.source ?? ($0.text.isEmpty ? $0.kind.rawValue.capitalized : $0.text) }
-            ?? "Blank note"
-    }
-
-    /// Prayer cards: status and activity, not the prayer text (keeps cards private at a glance).
-    private func prayerCardPreview(_ note: NoteDocument) -> String {
-        guard let prayer = note.prayerContent else { return "Prayer" }
-        var parts = ["Prayed \(prayer.prayerCount) time\(prayer.prayerCount == 1 ? "" : "s")", prayer.status.label]
-        if prayer.updates.isEmpty {
-            parts.append("No updates yet")
-        } else {
-            parts.append("\(prayer.updates.count) update\(prayer.updates.count == 1 ? "" : "s")")
-        }
-        if note.page?.ink.isEmpty == false { parts.append("Includes handwriting") }
-        return parts.joined(separator: " · ")
-    }
-
-    /// Journal cards: entry context and anchors, not the journal body.
-    private func journalCardPreview(_ note: NoteDocument) -> String {
-        let page = note.page ?? NotePage()
-        var parts = ["Journal entry"]
-        if let anchor = page.citations.first?.quote.reference {
-            parts.append(anchor)
-        }
-        if let emotion = note.journalContent?.emotionalState { parts.append(emotion.label) }
-        if let mind = note.journalContent?.mentalState { parts.append(mind.label) }
-        if !page.ink.isEmpty { parts.append("Includes handwriting") }
-        if !page.attachments.isEmpty {
-            parts.append("\(page.attachments.count) attachment\(page.attachments.count == 1 ? "" : "s")")
-        }
-        if parts.count == 1, page.body.isEmpty, page.ink.isEmpty, page.attachments.isEmpty, page.citations.isEmpty,
-           note.journalContent?.emotionalState == nil, note.journalContent?.mentalState == nil {
-            return "Open to continue your reflection"
-        }
-        return parts.joined(separator: " · ")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

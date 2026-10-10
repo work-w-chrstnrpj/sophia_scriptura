@@ -5,6 +5,31 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v1.0.0 — multi-source translations, planned 2026-10-10
+
+[SP-033](../../tickets/SP-033-v100-multi-source-translation-release.md) defines the
+owner-requested release outcome: retain bundled WEBP and API.Bible, add independently
+managed AO Lab translations. Sequence: SP-034 source contracts/compatibility → SP-035
+catalog/eligibility/parser → SP-036 offline downloads → SP-037 Versions/reader integration
+→ SP-038 acceptance/release. All are draft; no product implementation or release selected.
+WEB is the World English Bible family; existing WEBP identity/data remain preserved.
+[Detailed execution guide](../design/v100-translation-implementation-guide.md) now defines
+contracts, recovery, limits and TR-01–22 evidence. D2/D3 are owner-decided; D1 is decided: KJV, BSB, ASV, LSV and WEBU; verification remains open
+Owner reports API.Bible NIV replaced by NASB; target NASB/NLT/NKJV. Owner confirmed NASB 1995; exact provider ID
+and rights remain verification inputs; current source still lists NIV. Preserve legacy NIV
+study references; do not transfer its Debug authorization to NASB.;
+dependent work cannot become ready by assuming the recommendations.
+SP-032 remains a separate v0.5.* ESV draft and is not silently superseded by this plan.
+
+## v0.5.* — ESV text and passage audio planning, 2026-10-10
+
+[SP-032](../../tickets/SP-032-v05-esv-text-audio-manual-sync.md) records the owner's
+request for ESV text and narration, bounded caching and manual refresh after 30 days.
+Status: **draft; planning complete, implementation not selected**. Proposed default:
+refresh-due status rather than an API.Bible expiry lock. Persistent audio downloads
+require separate permission evidence; online playback and bounded text are independent.
+Exact patch assignment remains open. This is new ESV-specific scope after M7 abandonment.
+
 ## v0.4.0 delivery — owner selected 2026-10-10
 
 SP-029–031 and the current study-companion presentation changes are included in version
@@ -408,3 +433,7 @@ SP-024 follow-up evidence (2026-10-07): implementation and simulator checks pass
 bounded raster reuse and background ImageIO preparation are implemented. The installed
 v0.2.1 iPad baseline trace was captured; optimized-build physical acceptance remains open.
 Owner authorized v0.2.2 release after these checks; physical acceptance remains open.
+
+## v1.0.0 audio planning expansion — 2026-10-10
+
+[SP-039](../../tickets/SP-039-v100-scripture-audio-and-verse-highlighting.md) adds a Scripture player, transport controls and verified verse-synchronized highlighting. BSB is the initial candidate, not a claim of complete audio coverage. Recording-specific rights, exact text/audio/timing binding, shared music/system ownership and AU-01–09 are required. A1–A3 approved: ±15-second/chapter controls, Continuous/Follow initially off, streaming and optional manual chapter/book downloads. Prior AO-audio exclusions are superseded for this bounded feature; word-level highlighting and unverified edition audio are excluded. Implementation remains unselected.

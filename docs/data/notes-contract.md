@@ -149,7 +149,7 @@ A Journal stores two optional values on `JournalContent`: `emotionalState` and `
 
 Emotional state uses Apple Journal’s State of Mind feelings (`HKStateOfMind.Label`) plus Neutral: Amazed, Amused, Angry, Anxious, Ashamed, Brave, Calm, Content, Disappointed, Discouraged, Disgusted, Embarrassed, Excited, Frustrated, Grateful, Guilty, Happy, Hopeless, Irritated, Jealous, Joyful, Lonely, Passionate, Peaceful, Proud, Relieved, Sad, Scared, Stressed, Surprised, Worried, Annoyed, Confident, Drained, Hopeful, Indifferent, Overwhelmed, Satisfied, and Neutral.
 
-Mental state, from thriving toward distress, then Challenged: Thriving, Confident, Content, At ease, Even-minded, Neutral, Uncertain, Doubtful, Uneasy, Concerned, Worried, Overthinking, Pressured, Tense, Stressed, Anxious, Overstimulated, Ruminating, Overwhelmed, Distressed, and Challenged. Each value keeps the owner’s short meaning. Challenged means “Facing something difficult and working through it.” Library cards show the chosen labels and still omit the journal body. Search includes the labels and the mental-state meaning.
+Mental state, from thriving through Neutral, then Challenged, then toward distress: Thriving, Confident, Content, At ease, Even-minded, Neutral, Challenged, Uncertain, Doubtful, Uneasy, Concerned, Worried, Overthinking, Pressured, Tense, Stressed, Anxious, Overstimulated, Ruminating, Overwhelmed, and Distressed. Each value keeps the owner’s short meaning. Challenged means “Facing something difficult and working through it.” Library cards show the chosen labels and still omit the journal body. Search includes the labels and the mental-state meaning.
 
 ## v0.3.0 whole-note protection
 

@@ -681,7 +681,9 @@ final class NotesTests: XCTestCase {
         XCTAssertEqual(JournalEmotionalState.allCases.count, 39)
         XCTAssertTrue(JournalEmotionalState.allCases.contains(.neutral))
         XCTAssertEqual(JournalMentalState.allCases.count, 21)
-        XCTAssertEqual(JournalMentalState.allCases.last, .challenged)
+        let mental = JournalMentalState.allCases
+        let neutralIndex = try XCTUnwrap(mental.firstIndex(of: .neutral))
+        XCTAssertEqual(mental[neutralIndex + 1], .challenged)
 
         let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
         await session.load()

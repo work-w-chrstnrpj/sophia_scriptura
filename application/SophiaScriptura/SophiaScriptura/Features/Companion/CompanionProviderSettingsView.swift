@@ -3,14 +3,16 @@ import SwiftUI
 struct CompanionProviderSettingsView: View {
     @ObservedObject var session: CompanionSession
     @EnvironmentObject private var settingsToast: SettingsToastCenter
+    @Environment(\.appTheme) private var theme
 
     var body: some View {
         Form {
             Section {
                 Text("API keys stay in the device Keychain. Sophia fetches models after you save a key. Hugging Face also accepts an exact model id, including a routing suffix such as :provider. A model list does not prove that the token can run that model, and Hugging Face models are not marked free.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(theme.palette.secondary))
             }
+            .listRowBackground(Color(theme.palette.soft))
             if !session.providerConfigurationsWithCredentials().isEmpty {
                 SharedRouteSettingsSection(session: session)
             }
@@ -18,6 +20,7 @@ struct CompanionProviderSettingsView: View {
                 ProviderKeySection(session: session, adapter: session.supportedAdapters[index])
             }
         }
+        .appSurface()
         .navigationTitle("Provider keys")
     }
 }
@@ -25,6 +28,7 @@ struct CompanionProviderSettingsView: View {
 private struct SharedRouteSettingsSection: View {
     @ObservedObject var session: CompanionSession
     @EnvironmentObject private var settingsToast: SettingsToastCenter
+    @Environment(\.appTheme) private var theme
     @State private var providerConfigID = UUID()
     @State private var modelID = ""
 
@@ -45,6 +49,7 @@ private struct SharedRouteSettingsSection: View {
             }
             .disabled(modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
+        .listRowBackground(Color(theme.palette.soft))
         .onAppear(perform: load)
     }
 
@@ -63,6 +68,7 @@ private struct ProviderKeySection: View {
     @ObservedObject var session: CompanionSession
     let adapter: any LLMProviderAdapter
     @EnvironmentObject private var settingsToast: SettingsToastCenter
+    @Environment(\.appTheme) private var theme
     @State private var apiKey = ""
     @State private var manualModelID = ""
     @State private var testing = false
@@ -108,6 +114,7 @@ private struct ProviderKeySection: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .listRowBackground(Color(theme.palette.soft))
         .onAppear {
             if manualModelID.isEmpty,
                let config = session.providerConfigurations.first(where: { $0.adapterID == adapter.id }) {

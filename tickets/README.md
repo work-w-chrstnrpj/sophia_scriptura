@@ -8,6 +8,14 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-033](SP-033-v100-multi-source-translation-release.md) | draft; v1.0.0 planning | v1.0.0 multi-source translation release |
+| [SP-034](SP-034-translation-source-contracts.md) | draft; v1.0.0 planning | Source contracts and backward-compatible translation routing |
+| [SP-035](SP-035-helloao-catalog-and-content-adapter.md) | draft; v1.0.0 planning | AO Lab catalog, eligibility and content adapter |
+| [SP-036](SP-036-helloao-offline-downloads.md) | draft; v1.0.0 planning | Recoverable AO Lab offline downloads and manual updates |
+| [SP-037](SP-037-multi-source-versions-and-reader.md) | draft; v1.0.0 planning | Multi-source Versions controls and reader integration |
+| [SP-039](SP-039-v100-scripture-audio-and-verse-highlighting.md) | draft; v1.0.0 planning; audio choices approved | Scripture audio player and synchronized verse highlighting |
+| [SP-038](SP-038-v100-translation-acceptance-and-release.md) | draft; v1.0.0 planning | v1.0.0 translation acceptance and release gate |
+| [SP-032](SP-032-v05-esv-text-audio-manual-sync.md) | draft; planning complete; audio persistence permission open | v0.5.* bounded ESV text, passage narration and manual 30-day refresh |
 | [SP-031](SP-031-study-picture-in-picture.md) | in progress; PiP device acceptance pending | Owner-selected floating music/Activity PiP and system Play/Pause mapping |
 | [SP-030](SP-030-background-music-and-activity-system-controls.md) | in progress; app+extension build; G0/device AC open | Home/Lock Screen Now Playing and Activity Live Activity; no overlay above other apps |
 | [SP-029](SP-029-v040-sophy-lady-wisdom.md) | in progress; panel, character and handoffs added; release and device acceptance open | v0.4.0 Sophy/Lady Wisdom, approved actions, Notes enhancement and Hugging Face |

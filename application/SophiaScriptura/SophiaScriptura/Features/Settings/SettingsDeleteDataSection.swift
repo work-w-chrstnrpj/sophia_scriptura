@@ -92,6 +92,7 @@ struct SettingsDeleteDataHubView: View {
     @ObservedObject var sophy: SophySession
 
     @State private var pendingDeletion: SettingsDeletionKind?
+    @State private var confirmEverything = false
 
     private let kinds: [SettingsDeletionKind] = [
         .conversations, .quizHistory, .notes, .collections, .reminders, .activities, .gleanings, .bookmarks, .links, .sophyHistory
@@ -120,6 +121,25 @@ struct SettingsDeleteDataHubView: View {
                 .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(Color(theme.palette.rule), lineWidth: 1))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Delete all data")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color(theme.palette.ink))
+                    Text("Removes every conversation, quiz, note, collection, reminder, activity, gleaning, bookmark, link, and Sophy history entry in one step. Provider keys stay on this iPad.")
+                        .font(.footnote)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                    Button("Delete all") { confirmEverything = true }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .accessibilityIdentifier("settings.delete.all")
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color(theme.palette.rule), lineWidth: 1))
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -129,7 +149,17 @@ struct SettingsDeleteDataHubView: View {
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
         .overlay {
-            if let kind = pendingDeletion {
+            if confirmEverything {
+                StudyTypedDeletionOverlay(
+                    title: "Delete all data?",
+                    message: "Every item in the sections above will be permanently removed from this iPad. Provider keys, quiz defaults, and appearance settings stay.",
+                    onConfirm: {
+                        deleteEverything()
+                        confirmEverything = false
+                    },
+                    onCancel: { confirmEverything = false }
+                )
+            } else if let kind = pendingDeletion {
                 StudyTypedDeletionOverlay(
                     title: kind.confirmationTitle,
                     message: kind.confirmationMessage,
@@ -141,7 +171,7 @@ struct SettingsDeleteDataHubView: View {
                 )
             }
         }
-        .animation(.easeOut(duration: 0.18), value: pendingDeletion != nil)
+        .animation(.easeOut(duration: 0.18), value: pendingDeletion != nil || confirmEverything)
         .accessibilityIdentifier("settings.delete.hub")
     }
 
@@ -159,6 +189,10 @@ struct SettingsDeleteDataHubView: View {
         }
         .padding(.vertical, 10)
         .frame(minHeight: 52)
+    }
+
+    private func deleteEverything() {
+        for kind in kinds { perform(kind) }
     }
 
     private func perform(_ kind: SettingsDeletionKind) {

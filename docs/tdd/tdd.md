@@ -384,6 +384,30 @@ Complete and test export/import before trusting the app with irreplaceable study
   storage before implementing Save/Ask. Narration storage and timing metadata need
   separate verification; do not promise word/verse synchronization without timing data.
 
+Planned v0.5.* follow-up: [SP-032](../../tickets/SP-032-v05-esv-text-audio-manual-sync.md)
+defines bounded ESV passage caching, explicit loading, online narration and an owner-chosen
+30-day manual refresh-due status. This is proposed behavior, not implemented support or
+a Crossway-imposed expiry period. Persistent audio caching remains permission-gated;
+API.Bible authorization and development exceptions do not transfer to ESV.
+
+### 8.2a Planned v1.0.0 multi-source Scripture library
+
+[SP-033–038](../../tickets/SP-033-v100-multi-source-translation-release.md) plan a
+source-neutral edition registry with independent bundled WEBP, API.Bible and AO Lab
+adapters. Preserve existing WEBP/API.Bible IDs and authorization; replace prefix-derived
+reference identity and policy with explicit backward-compatible metadata before adding
+AO editions. AO catalog discovery, eligibility review, chapter normalization, atomic
+offline generations and manual updates remain proposed behavior. WEB is an edition
+family, not an HTTP provider; AO WEB variants are not automatically interchangeable with
+the bundled WEBP. No cross-source fallback, automatic fetch or shared license exception.
+ESV, if implemented through SP-032, retains its separate bounded-passage policy.
+The [proposed execution guide](../design/v100-translation-implementation-guide.md)
+refines source policy, identities, content normalization and crash-safe generations.
+D2/D3 are owner-decided; D1 is decided: KJV, BSB, ASV, LSV and WEBU; verification remains open
+Owner reports API.Bible NIV replaced by NASB; target NASB/NLT/NKJV. Owner confirmed NASB 1995; exact provider ID
+and rights remain verification inputs; current source still lists NIV. Preserve legacy NIV
+study references; do not transfer its Debug authorization to NASB..
+
 ### 8.3 LLM provider (BYOK, provider-agnostic)
 
 - Proposed `LLMAdapter` has a provider-neutral boundary; this sketch is not a final API:
@@ -1096,3 +1120,7 @@ to App provides separate controls. Existing sessions own state and persistence. 
 system-controlled floating window, not a permanent iPad Home-screen notch. Rendering is
 limited to preview/active presentation and does not own timer accounting. Device background
 and lifecycle acceptance are tracked independently of build success.
+
+## v1.0.0 audio planning expansion — 2026-10-10
+
+[SP-039](../../tickets/SP-039-v100-scripture-audio-and-verse-highlighting.md) adds a Scripture player, transport controls and verified verse-synchronized highlighting. BSB is the initial candidate, not a claim of complete audio coverage. Recording-specific rights, exact text/audio/timing binding, shared music/system ownership and AU-01–09 are required. A1–A3 approved: ±15-second/chapter controls, Continuous/Follow initially off, streaming and optional manual chapter/book downloads. Prior AO-audio exclusions are superseded for this bounded feature; word-level highlighting and unverified edition audio are excluded. Implementation remains unselected.

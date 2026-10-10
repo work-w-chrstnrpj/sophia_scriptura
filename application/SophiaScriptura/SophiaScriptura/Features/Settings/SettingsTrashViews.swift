@@ -53,7 +53,6 @@ struct SettingsTrashHubView: View {
 }
 
 struct StudyTrashedNotesView: View {
-    @Environment(\.appTheme) private var theme
     @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: NotesSession
     @ObservedObject var collections: CollectionsStore
@@ -62,6 +61,9 @@ struct StudyTrashedNotesView: View {
     @State private var sort = "Deleted"
     @State private var tag = ""
     @State private var pendingPermanentDelete: UUID?
+    @State private var selection = StudySelectionSession()
+    @State private var pendingBulkDelete: Set<UUID> = []
+    @State private var confirmBulkDelete = false
 
     private var notes: [NoteDocument] {
         session.snapshot.notes.filter {
@@ -89,18 +91,47 @@ struct StudyTrashedNotesView: View {
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
                 }
+                if !notes.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "trash.notes.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(notes.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Restore",
+                    selectAllIdentifier: "trash.notes.selectAll",
+                    primaryIdentifier: "trash.notes.restoreSelected",
+                    destructiveIdentifier: "trash.notes.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(notes.map(\.id)) },
+                    onPrimary: {
+                        let ids = selection.ids
+                        for id in ids { session.restoreFromTrash(id) }
+                        selection.finishAction()
+                    },
+                    onDestructive: {
+                        pendingBulkDelete = selection.ids
+                        confirmBulkDelete = !pendingBulkDelete.isEmpty
+                    }
+                )
             }
             if notes.isEmpty {
                 ContentUnavailableView("Trash is empty", systemImage: "trash", description: Text("Deleted notes stay here for \(TrashRetention.dayCount) days."))
             } else {
                 List(notes) { note in
-                    TrashedStudyRow(
+                    StudySelectableRow(id: note.id, selected: selection.ids.contains(note.id), selectionActive: selection.active) {
+                        selection.toggle(note.id)
+                    } content: {
+                        TrashedStudyRow(
                         title: note.title,
                         subtitle: note.kind.displayName,
                         trashedAt: note.trashedAt,
                         onRestore: { session.restoreFromTrash(note.id) },
                         onDelete: { pendingPermanentDelete = note.id }
                     )
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -122,6 +153,17 @@ struct StudyTrashedNotesView: View {
         } message: {
             Text("This cannot be undone.")
         }
+        .alert("Delete \(pendingBulkDelete.count) notes permanently?", isPresented: $confirmBulkDelete) {
+            Button("Delete Permanently", role: .destructive) {
+                let ids = pendingBulkDelete
+                pendingBulkDelete.removeAll()
+                for id in ids { session.permanentlyDelete(id) }
+                selection.finishAction()
+            }
+            Button("Cancel", role: .cancel) { pendingBulkDelete.removeAll() }
+        } message: {
+            Text("This cannot be undone.")
+        }
     }
 }
 
@@ -132,6 +174,9 @@ struct StudyTrashedCollectionsView: View {
     @State private var searchPresented = false
     @State private var sort = "Deleted"
     @State private var pendingPermanentDelete: UUID?
+    @State private var selection = StudySelectionSession()
+    @State private var pendingBulkDelete: Set<UUID> = []
+    @State private var confirmBulkDelete = false
 
     private var collections: [StudyCollection] {
         store.trashedCollections.filter {
@@ -153,18 +198,47 @@ struct StudyTrashedCollectionsView: View {
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
                 }
+                if !collections.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "trash.collections.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(collections.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Restore",
+                    selectAllIdentifier: "trash.collections.selectAll",
+                    primaryIdentifier: "trash.collections.restoreSelected",
+                    destructiveIdentifier: "trash.collections.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(collections.map(\.id)) },
+                    onPrimary: {
+                        let ids = selection.ids
+                        for id in ids { store.restoreCollectionFromTrash(id: id) }
+                        selection.finishAction()
+                    },
+                    onDestructive: {
+                        pendingBulkDelete = selection.ids
+                        confirmBulkDelete = !pendingBulkDelete.isEmpty
+                    }
+                )
             }
             if collections.isEmpty {
                 ContentUnavailableView("Trash is empty", systemImage: "trash")
             } else {
                 List(collections) { collection in
-                    TrashedStudyRow(
-                        title: collection.name,
-                        subtitle: store.isLocked(collection.id) ? "Locked" : collection.detail,
-                        trashedAt: collection.trashedAt,
-                        onRestore: { store.restoreCollectionFromTrash(id: collection.id) },
-                        onDelete: { pendingPermanentDelete = collection.id }
-                    )
+                    StudySelectableRow(id: collection.id, selected: selection.ids.contains(collection.id), selectionActive: selection.active) {
+                        selection.toggle(collection.id)
+                    } content: {
+                        TrashedStudyRow(
+                            title: collection.name,
+                            subtitle: store.isLocked(collection.id) ? "Locked" : collection.detail,
+                            trashedAt: collection.trashedAt,
+                            onRestore: { store.restoreCollectionFromTrash(id: collection.id) },
+                            onDelete: { pendingPermanentDelete = collection.id }
+                        )
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -186,6 +260,17 @@ struct StudyTrashedCollectionsView: View {
         } message: {
             Text("Subfolders move up one level. Items not in another collection move to No Folder. This cannot be undone.")
         }
+        .alert("Delete \(pendingBulkDelete.count) collections permanently?", isPresented: $confirmBulkDelete) {
+            Button("Delete Permanently", role: .destructive) {
+                let ids = pendingBulkDelete
+                pendingBulkDelete.removeAll()
+                for id in ids { store.permanentlyDeleteCollection(id: id) }
+                selection.finishAction()
+            }
+            Button("Cancel", role: .cancel) { pendingBulkDelete.removeAll() }
+        } message: {
+            Text("Subfolders move up one level. Items not in another collection move to No Folder. This cannot be undone.")
+        }
     }
 }
 
@@ -194,6 +279,9 @@ struct StudyTrashedConversationsView: View {
     @State private var search = ""
     @State private var searchPresented = false
     @State private var pendingPermanentDelete: UUID?
+    @State private var selection = StudySelectionSession()
+    @State private var pendingBulkDelete: Set<UUID> = []
+    @State private var confirmBulkDelete = false
 
     private var conversations: [CompanionConversation] {
         session.trashedConversations.filter {
@@ -204,19 +292,47 @@ struct StudyTrashedConversationsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             studyListCommandBar(title: "Trashed conversations", searchPresented: $searchPresented, search: $search, prompt: "Search trashed conversations", searchIdentifier: "trash.search") {
-                EmptyView()
+                if !conversations.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "trash.conversations.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(conversations.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Restore",
+                    selectAllIdentifier: "trash.conversations.selectAll",
+                    primaryIdentifier: "trash.conversations.restoreSelected",
+                    destructiveIdentifier: "trash.conversations.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(conversations.map(\.id)) },
+                    onPrimary: {
+                        let ids = selection.ids
+                        for id in ids { session.restoreConversationFromTrash(id) }
+                        selection.finishAction()
+                    },
+                    onDestructive: {
+                        pendingBulkDelete = selection.ids
+                        confirmBulkDelete = !pendingBulkDelete.isEmpty
+                    }
+                )
             }
             if conversations.isEmpty {
                 ContentUnavailableView("Trash is empty", systemImage: "trash")
             } else {
                 List(conversations) { conversation in
-                    TrashedStudyRow(
-                        title: conversation.title,
-                        subtitle: conversation.updatedAt.formatted(date: .abbreviated, time: .shortened),
-                        trashedAt: conversation.trashedAt,
-                        onRestore: { session.restoreConversationFromTrash(conversation.id) },
-                        onDelete: { pendingPermanentDelete = conversation.id }
-                    )
+                    StudySelectableRow(id: conversation.id, selected: selection.ids.contains(conversation.id), selectionActive: selection.active) {
+                        selection.toggle(conversation.id)
+                    } content: {
+                        TrashedStudyRow(
+                            title: conversation.title,
+                            subtitle: conversation.updatedAt.formatted(date: .abbreviated, time: .shortened),
+                            trashedAt: conversation.trashedAt,
+                            onRestore: { session.restoreConversationFromTrash(conversation.id) },
+                            onDelete: { pendingPermanentDelete = conversation.id }
+                        )
+                    }
                 }
                 .listStyle(.plain)
             }
@@ -237,6 +353,17 @@ struct StudyTrashedConversationsView: View {
             Button("Cancel", role: .cancel) { pendingPermanentDelete = nil }
         } message: {
             Text("This removes the conversation and its messages and cannot be undone.")
+        }
+        .alert("Delete \(pendingBulkDelete.count) conversations permanently?", isPresented: $confirmBulkDelete) {
+            Button("Delete Permanently", role: .destructive) {
+                let ids = pendingBulkDelete
+                pendingBulkDelete.removeAll()
+                for id in ids { session.permanentlyDeleteConversation(id) }
+                selection.finishAction()
+            }
+            Button("Cancel", role: .cancel) { pendingBulkDelete.removeAll() }
+        } message: {
+            Text("This removes the conversations and their messages and cannot be undone.")
         }
     }
 }

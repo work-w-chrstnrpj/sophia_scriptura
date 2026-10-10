@@ -62,6 +62,9 @@ struct StudyArchivedNotesView: View {
     @State private var sort = "Modified"
     @State private var tag = ""
     @State private var noteKindFilter: NoteKind?
+    @State private var selection = StudySelectionSession()
+    @State private var pendingTrashIDs: Set<UUID> = []
+    @State private var confirmTrash = false
     private var notes: [NoteDocument] {
         let _ = protection.unlocked
         return session.snapshot.notes.filter {
@@ -98,17 +101,42 @@ struct StudyArchivedNotesView: View {
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
                 }
+                if !notes.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "archive.notes.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(notes.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Unarchive",
+                    selectAllIdentifier: "archive.notes.selectAll",
+                    primaryIdentifier: "archive.notes.unarchiveSelected",
+                    destructiveIdentifier: "archive.notes.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(notes.map(\.id)) },
+                    onPrimary: { unarchiveSelected() },
+                    onDestructive: {
+                        pendingTrashIDs = selection.ids
+                        confirmTrash = !pendingTrashIDs.isEmpty
+                    }
+                )
             }
             if notes.isEmpty {
                 ContentUnavailableView("No archived notes", systemImage: "archivebox", description: Text("No notes match your filters."))
             } else {
                 List(notes) { note in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(note.title).font(.headline)
-                        Text(note.kind.displayName).font(.caption).foregroundStyle(.secondary)
-                        Text("Archived \(note.archivedAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
-                            .font(.caption2)
-                            .foregroundStyle(Color(theme.palette.secondary))
+                    StudySelectableRow(id: note.id, selected: selection.ids.contains(note.id), selectionActive: selection.active) {
+                        selection.toggle(note.id)
+                    } content: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(note.title).font(.headline)
+                            Text(note.kind.displayName).font(.caption).foregroundStyle(.secondary)
+                            Text("Archived \(note.archivedAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
+                                .font(.caption2)
+                                .foregroundStyle(Color(theme.palette.secondary))
+                        }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) { session.moveToTrash(note.id) } label: {
@@ -129,6 +157,25 @@ struct StudyArchivedNotesView: View {
         .navigationTitle("Notes archive")
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
+        .alert("Move \(pendingTrashIDs.count) notes to Trash?", isPresented: $confirmTrash) {
+            Button("Move to Trash", role: .destructive) { trashSelected() }
+            Button("Cancel", role: .cancel) { pendingTrashIDs.removeAll() }
+        } message: {
+            Text("Trash keeps notes for \(TrashRetention.dayCount) days.")
+        }
+    }
+
+    private func unarchiveSelected() {
+        let ids = selection.ids
+        for id in ids { session.unarchive(id) }
+        selection.finishAction()
+    }
+
+    private func trashSelected() {
+        let ids = pendingTrashIDs
+        pendingTrashIDs.removeAll()
+        for id in ids { session.moveToTrash(id) }
+        selection.finishAction()
     }
 }
 
@@ -139,6 +186,9 @@ struct StudyArchivedCollectionsView: View {
     @State private var search = ""
     @State private var searchPresented = false
     @State private var sort = "Modified"
+    @State private var selection = StudySelectionSession()
+    @State private var pendingTrashIDs: Set<UUID> = []
+    @State private var confirmTrash = false
     private var collections: [StudyCollection] {
         store.archivedCollections.filter {
             search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || (!store.isLocked($0.id) && $0.detail.localizedCaseInsensitiveContains(search))
@@ -159,14 +209,43 @@ struct StudyArchivedCollectionsView: View {
                 } label: {
                     LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
                 }
+                if !collections.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "archive.collections.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(collections.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Unarchive",
+                    selectAllIdentifier: "archive.collections.selectAll",
+                    primaryIdentifier: "archive.collections.unarchiveSelected",
+                    destructiveIdentifier: "archive.collections.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(collections.map(\.id)) },
+                    onPrimary: {
+                        let ids = selection.ids
+                        for id in ids { store.unarchiveCollection(id: id) }
+                        selection.finishAction()
+                    },
+                    onDestructive: {
+                        pendingTrashIDs = selection.ids
+                        confirmTrash = !pendingTrashIDs.isEmpty
+                    }
+                )
             }
             if collections.isEmpty {
                 ContentUnavailableView("No archived collections", systemImage: "archivebox")
             } else {
                 List(collections) { collection in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(collection.name).font(.headline)
-                        Text(store.isLocked(collection.id) ? "Locked" : collection.detail).font(.caption).foregroundStyle(.secondary)
+                    StudySelectableRow(id: collection.id, selected: selection.ids.contains(collection.id), selectionActive: selection.active) {
+                        selection.toggle(collection.id)
+                    } content: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(collection.name).font(.headline)
+                            Text(store.isLocked(collection.id) ? "Locked" : collection.detail).font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) { store.moveCollectionToTrash(id: collection.id) } label: {
@@ -187,6 +266,17 @@ struct StudyArchivedCollectionsView: View {
         .navigationTitle("Collections archive")
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
+        .alert("Move \(pendingTrashIDs.count) collections to Trash?", isPresented: $confirmTrash) {
+            Button("Move to Trash", role: .destructive) {
+                let ids = pendingTrashIDs
+                pendingTrashIDs.removeAll()
+                for id in ids { store.moveCollectionToTrash(id: id) }
+                selection.finishAction()
+            }
+            Button("Cancel", role: .cancel) { pendingTrashIDs.removeAll() }
+        } message: {
+            Text("Trash keeps collections until you restore or delete them permanently.")
+        }
     }
 }
 
@@ -195,6 +285,9 @@ struct StudyArchivedConversationsView: View {
     @ObservedObject var session: CompanionSession
     @State private var search = ""
     @State private var searchPresented = false
+    @State private var selection = StudySelectionSession()
+    @State private var pendingTrashIDs: Set<UUID> = []
+    @State private var confirmTrash = false
     private var conversations: [CompanionConversation] {
         session.archivedConversations.filter {
             search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)
@@ -204,17 +297,45 @@ struct StudyArchivedConversationsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             studyListCommandBar(title: "Archived conversations", searchPresented: $searchPresented, search: $search, prompt: "Search conversations", searchIdentifier: "archive.search") {
-                EmptyView()
+                if !conversations.isEmpty {
+                    StudySelectModeButton(active: selection.active, identifier: "archive.conversations.select") {
+                        if selection.active { selection.cancel() } else { selection.active = true }
+                    }
+                }
+            }
+            if selection.active {
+                StudyBulkActionBar(
+                    allSelected: selection.allVisibleSelected(conversations.map(\.id)),
+                    selectedCount: selection.ids.count,
+                    primaryTitle: "Unarchive",
+                    selectAllIdentifier: "archive.conversations.selectAll",
+                    primaryIdentifier: "archive.conversations.unarchiveSelected",
+                    destructiveIdentifier: "archive.conversations.deleteSelected",
+                    onToggleAll: { selection.toggleVisible(conversations.map(\.id)) },
+                    onPrimary: {
+                        let ids = selection.ids
+                        for id in ids { session.unarchiveConversation(id) }
+                        selection.finishAction()
+                    },
+                    onDestructive: {
+                        pendingTrashIDs = selection.ids
+                        confirmTrash = !pendingTrashIDs.isEmpty
+                    }
+                )
             }
             if conversations.isEmpty {
                 ContentUnavailableView("No archived conversations", systemImage: "archivebox")
             } else {
                 List(conversations) { conversation in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(conversation.title).font(.headline)
-                        Text(conversation.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    StudySelectableRow(id: conversation.id, selected: selection.ids.contains(conversation.id), selectionActive: selection.active) {
+                        selection.toggle(conversation.id)
+                    } content: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(conversation.title).font(.headline)
+                            Text(conversation.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) { session.moveConversationToTrash(conversation.id) } label: {
@@ -235,6 +356,17 @@ struct StudyArchivedConversationsView: View {
         .navigationTitle("Conversations archive")
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
+        .alert("Move \(pendingTrashIDs.count) conversations to Trash?", isPresented: $confirmTrash) {
+            Button("Move to Trash", role: .destructive) {
+                let ids = pendingTrashIDs
+                pendingTrashIDs.removeAll()
+                for id in ids { session.moveConversationToTrash(id) }
+                selection.finishAction()
+            }
+            Button("Cancel", role: .cancel) { pendingTrashIDs.removeAll() }
+        } message: {
+            Text("Trash keeps conversations until you restore or delete them permanently.")
+        }
     }
 }
 
@@ -260,5 +392,100 @@ func studyListCommandBar<Filter: View>(
             .buttonStyle(.plain)
         }
         filter()
+    }
+}
+
+struct StudySelectionSession {
+    var active = false
+    var ids = Set<UUID>()
+
+    mutating func toggle(_ id: UUID) {
+        if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+    }
+
+    mutating func toggleVisible(_ visible: [UUID]) {
+        if allVisibleSelected(visible) { ids.subtract(visible) } else { ids.formUnion(visible) }
+    }
+
+    func allVisibleSelected(_ visible: [UUID]) -> Bool {
+        !visible.isEmpty && visible.allSatisfy { ids.contains($0) }
+    }
+
+    mutating func cancel() {
+        active = false
+        ids.removeAll()
+    }
+
+    mutating func finishAction() { cancel() }
+}
+
+struct StudySelectModeButton: View {
+    let active: Bool
+    let identifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(active ? "Done" : "Select", action: action)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
+struct StudyBulkActionBar: View {
+    @Environment(\.appTheme) private var theme
+    let allSelected: Bool
+    let selectedCount: Int
+    let primaryTitle: String
+    let selectAllIdentifier: String
+    let primaryIdentifier: String
+    let destructiveIdentifier: String
+    let onToggleAll: () -> Void
+    let onPrimary: () -> Void
+    let onDestructive: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(allSelected ? "Deselect All" : "Select All", action: onToggleAll)
+                .accessibilityIdentifier(selectAllIdentifier)
+            Spacer(minLength: 8)
+            Text("\(selectedCount) selected")
+                .font(.footnote)
+                .foregroundStyle(Color(theme.palette.secondary))
+            Button(primaryTitle, action: onPrimary)
+                .disabled(selectedCount == 0)
+                .accessibilityIdentifier(primaryIdentifier)
+            Button("Delete", role: .destructive, action: onDestructive)
+                .disabled(selectedCount == 0)
+                .accessibilityIdentifier(destructiveIdentifier)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+}
+
+struct StudySelectableRow<Content: View>: View {
+    @Environment(\.appTheme) private var theme
+    let id: UUID
+    let selected: Bool
+    let selectionActive: Bool
+    let toggle: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            if selectionActive {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(selected ? Color(theme.palette.accent) : Color(theme.palette.secondary))
+                    .accessibilityHidden(true)
+            }
+            content()
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { if selectionActive { toggle() } }
+        .accessibilityIdentifier("study.select.\(id.uuidString)")
+        .accessibilityAddTraits(selectionActive && selected ? .isSelected : [])
     }
 }

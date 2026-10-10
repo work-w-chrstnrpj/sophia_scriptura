@@ -66,11 +66,15 @@ struct CompanionView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(session.activeConversations) { conversation in
+                        let selected = session.selectedConversationID == conversation.id
+                        let selectedInk = CompanionSelectionContrast.label(on: theme.palette.accent, palette: theme.palette)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(conversation.title).font(.headline)
+                            Text(conversation.title)
+                                .font(.headline)
+                                .foregroundStyle(selected ? Color(selectedInk) : Color(theme.palette.ink))
                             Text(conversation.presetSnapshot.displayName + " · " + conversation.modelID)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(selected ? Color(selectedInk).opacity(0.82) : Color(theme.palette.secondary))
                         }
                         .tag(conversation.id as UUID?)
                         .contextMenu {
@@ -330,6 +334,21 @@ struct CompanionView: View {
         if !custom.isEmpty { return custom }
         return quiz.completedAt?.formatted(date: .abbreviated, time: .shortened)
             ?? quiz.createdAt.formatted(date: .abbreviated, time: .shortened)
+    }
+}
+
+enum CompanionSelectionContrast {
+    /// Sidebar selection fills with the accent. Pick the palette color farthest from that fill.
+    static func label(on background: UIColor, palette: ReaderPalette) -> UIColor {
+        func luminance(_ color: UIColor) -> CGFloat {
+            var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+            color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+        }
+        let backgroundLuminance = luminance(background)
+        let inkDistance = abs(luminance(palette.ink) - backgroundLuminance)
+        let paperDistance = abs(luminance(palette.paper) - backgroundLuminance)
+        return paperDistance > inkDistance ? palette.paper : palette.ink
     }
 }
 

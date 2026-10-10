@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CompanionQuizSettingsView: View {
     @ObservedObject var session: CompanionSession
+    @Environment(\.appTheme) private var theme
     @State private var providerConfigID = UUID()
     @State private var modelID = ""
     @State private var hasLoadedDefaults = false
@@ -16,8 +17,9 @@ struct CompanionQuizSettingsView: View {
             Section {
                 Text("Quiz Me uses local question fixtures. Provider and model defaults are stored for Studying metadata and future AI-generated quizzes.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(theme.palette.secondary))
             }
+            .listRowBackground(Color(theme.palette.soft))
             Section("Default provider") {
                 if configurations.isEmpty {
                     Text("Save a provider key under Provider keys first.")
@@ -40,7 +42,9 @@ struct CompanionQuizSettingsView: View {
                     Button("Save quiz defaults") { saveDefaults() }
                 }
             }
+            .listRowBackground(Color(theme.palette.soft))
         }
+        .appSurface()
         .navigationTitle("Quiz Me defaults")
         .onAppear { loadDefaults() }
         .overlay(alignment: .top) {

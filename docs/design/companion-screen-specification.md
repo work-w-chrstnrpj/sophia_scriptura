@@ -22,6 +22,7 @@ branched conversation after showing which permitted context will be copied.
 ## iPad information architecture
 
 - The leading column contains New Conversation, Quiz Me, search and conversation history.
+  A selected Chat history row keeps title and detail readable against the accent selection fill.
 - The main column contains messages, passage/note attachments, source cards and composer.
 - Source and transmitted-context details use an inspector on wide layouts and a sheet on
   compact layouts.

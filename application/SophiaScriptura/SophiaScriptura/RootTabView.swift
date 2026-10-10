@@ -85,7 +85,7 @@ struct RootTabView: View {
         if selection == .scripture, annotations.mode != .hidden { return true }
         return false
     }
-    var body: some View {
+    private var tabContent: some View {
         GeometryReader { geometry in
                 ZStack {
                     ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
@@ -132,6 +132,10 @@ struct RootTabView: View {
                 .contentMargins(.bottom, editingNote ? 0 : 100, for: .scrollContent)
                 .clipped()
         }
+    }
+
+    private var shellContent: some View {
+        tabContent
         .ignoresSafeArea(.container, edges: .bottom)
         .sheet(isPresented: $showShellNoteKindPicker) {
             NoteCreatorSheet(notes: notes) { id in
@@ -210,6 +214,10 @@ struct RootTabView: View {
         .environment(\.appTheme, theme)
         .environment(notes)
         .environmentObject(userProfile)
+    }
+
+    private var studyLifecycleContent: some View {
+        shellContent
         .onAppear {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
             notes.collections = collections
@@ -273,6 +281,10 @@ struct RootTabView: View {
                 chrome.reveal()
             }
         }
+    }
+
+    var body: some View {
+        studyLifecycleContent
         .onChange(of: companion.resolvedSharedRoute()) { _, _ in sophy.syncRoute(companion) }
         .onChange(of: notes.snapshot.notes) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
         .onChange(of: collections.collections) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }

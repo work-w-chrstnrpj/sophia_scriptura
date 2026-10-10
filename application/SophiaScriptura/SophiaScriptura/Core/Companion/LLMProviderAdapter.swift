@@ -51,6 +51,8 @@ struct LLMCompletionRequest: Sendable {
     var modelID: String
     var systemInstruction: String
     var turns: [LLMChatTurn]
+    /// When true, adapters that support OpenAI-style `response_format` request a JSON object.
+    var preferJSONObject: Bool = false
 }
 
 /// Provider-neutral streaming boundary. Concrete adapters live in Infrastructure/Companion.

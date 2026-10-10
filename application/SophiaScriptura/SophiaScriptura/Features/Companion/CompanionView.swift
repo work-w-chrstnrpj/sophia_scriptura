@@ -212,8 +212,11 @@ struct CompanionView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: showQuizSetup)
-        .sheet(isPresented: $showQuizSetup) {
-            QuizMeView(session: session)
+        .onChange(of: session.sophyQuizRequest) { _, request in
+            if request != nil { showQuizSetup = true }
+        }
+        .sheet(isPresented: $showQuizSetup, onDismiss: { session.sophyQuizRequest = nil }) {
+            QuizMeView(session: session, request: session.sophyQuizRequest)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)

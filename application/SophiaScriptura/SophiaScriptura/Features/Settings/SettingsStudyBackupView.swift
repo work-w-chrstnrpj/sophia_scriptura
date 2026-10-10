@@ -8,6 +8,7 @@ struct SettingsStudyBackupSection: View {
     @ObservedObject var activity: ActivityStore
     @ObservedObject var collections: CollectionsStore
     @ObservedObject var companion: CompanionSession
+    @ObservedObject var sophy: SophySession
     @Environment(\.appTheme) private var theme
 
     @State private var exporting = false
@@ -19,18 +20,21 @@ struct SettingsStudyBackupSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Exports scripture annotations, notes, collections, companion conversations, and activity history. User music files and provider API keys stay on this device.")
+            Text("Exports scripture annotations, notes, collections, companion conversations, and activity history, and Sophy action summaries. User music files and provider API keys stay on this device.")
                 .font(.footnote)
                 .foregroundStyle(Color(theme.palette.secondary))
             Button("Export all data") {
                 Task {
                     do {
+                        let history = try await sophy.repository.loadHistory()
+                        guard !history.mutationsDisabled else { throw SophySafeError.writeFailed }
                         let data = try await StudyBackupService.export(
                             notes: notes,
                             annotations: annotations,
                             activity: activity,
                             collections: collections,
-                            companion: companion
+                            companion: companion,
+                            sophyHistory: history.value
                         )
                         archive = StudyBackupDocument(data: data)
                         exporting = true
@@ -73,6 +77,10 @@ struct SettingsStudyBackupSection: View {
                 guard let data = pendingImport else { return }
                 Task {
                     do {
+                        guard sophy.phase != .committing else { notice = SophySafeError.busy.message; return }
+                        sophy.newSession()
+                        sophy.phase = .committing
+                        defer { sophy.phase = .idle }
                         try await StudyBackupService.restore(
                             data,
                             notes: notes,
@@ -80,8 +88,10 @@ struct SettingsStudyBackupSection: View {
                             activity: activity,
                             collections: collections,
                             companion: companion,
-                            readerDocument: reader.document
+                            readerDocument: reader.document,
+                            sophyRepository: sophy.repository
                         )
+                        await sophy.load(collections: collections, activity: activity, recoveredOlderGeneration: true)
                         notice = "Backup imported successfully."
                     } catch {
                         notice = error.localizedDescription

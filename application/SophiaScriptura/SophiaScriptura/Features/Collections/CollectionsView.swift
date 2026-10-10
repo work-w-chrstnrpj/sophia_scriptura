@@ -10,6 +10,7 @@ struct CollectionsView: View {
     var openPassage: (SavedPassage) -> Void
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
+    @State private var sophyFolder: StudyCollection?
     @State private var searchText = ""
     @State private var searchPresented = false
     @State private var sort: CollectionLibrarySort = .modified
@@ -115,6 +116,14 @@ struct CollectionsView: View {
                 }
             }
             .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
+            .navigationDestination(item: $sophyFolder) { folder in
+                CollectionDetailView(store: store, collectionID: folder.id, notes: notes, openNote: openNote,
+                    openPassage: openPassage, openCompanion: openCompanion, createConversation: createConversation)
+            }
+            .onChange(of: store.sophyOpenCollectionID) { _, id in
+                guard let id, !store.sophyFolderIsProtected(id), let folder = store.collection(id: id), folder.isActiveInLibrary else { return }
+                sophyFolder = folder; store.sophyOpenCollectionID = nil
+            }
             .navigationDestination(isPresented: $showArchivedCollections) {
                 StudyArchivedCollectionsView(store: store)
                     .toolbar(.visible, for: .navigationBar)

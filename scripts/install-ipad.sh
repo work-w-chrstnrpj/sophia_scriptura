@@ -57,8 +57,13 @@ if $list_devices; then
 fi
 
 [[ -d "$project" ]] || fail "Project missing: $project"
+if [[ "$device" =~ ^[0-9A-Fa-f-]{20,}$ ]]; then
+    build_destination="id=$device"
+else
+    build_destination='generic/platform=iOS'
+fi
 build_command=(xcrun xcodebuild -project "$project" -scheme SophiaScriptura
-    -configuration Debug -destination 'generic/platform=iOS'
+    -configuration Debug -destination "$build_destination"
     -derivedDataPath "$derived" -allowProvisioningUpdates build)
 install_command=(xcrun devicectl device install app --device "$device" "$app")
 # A string-only environment replaces inherited DEVICECTL_CHILD_* test variables.

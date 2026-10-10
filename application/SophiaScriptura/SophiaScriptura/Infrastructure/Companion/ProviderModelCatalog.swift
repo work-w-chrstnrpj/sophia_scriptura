@@ -18,6 +18,12 @@ enum ProviderModelCatalog {
         }
     }
 
+    /// Hugging Face accepts an exact model id, including a `:provider` routing suffix.
+    /// Listed models are not labeled free, and none is selected automatically.
+    static func allowsManualModelEntry(adapterID: String) -> Bool {
+        adapterID == "huggingface"
+    }
+
     static func curatedModels(adapterID: String) -> [CompanionModelOption] {
         switch adapterID {
         case "openai":
@@ -59,6 +65,8 @@ enum ProviderModelCatalog {
             return options([("meta/llama-3.1-8b-instruct", "Llama 3.1 8B Instruct", false)])
         case "github":
             return options([("openai/gpt-4o", "GPT-4o (GitHub Models)", false)])
+        case "huggingface":
+            return []
         case "mock":
             return options([
                 ("mock", "Mock model", true),
@@ -70,7 +78,8 @@ enum ProviderModelCatalog {
     }
 
     static func defaultModelID(adapterID: String) -> String {
-        curatedModels(adapterID: adapterID).first?.modelID ?? "default"
+        if allowsManualModelEntry(adapterID: adapterID) { return "" }
+        return curatedModels(adapterID: adapterID).first?.modelID ?? "default"
     }
 
     static func mergeRemote(ids: [String], adapterID: String) -> [CompanionModelOption] {
@@ -103,6 +112,9 @@ enum ProviderModelCatalog {
         adapterID: String,
         preferFree: Bool = false
     ) -> String {
+        if allowsManualModelEntry(adapterID: adapterID) {
+            return currentID.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         let pool = preferFree ? filteredModels(options, adapterID: adapterID, freeOnly: true) : options
         let effective = pool.isEmpty ? options : pool
         if !currentID.isEmpty, effective.contains(where: { $0.modelID == currentID }) { return currentID }
@@ -122,6 +134,7 @@ enum ProviderModelCatalog {
     }
 
     static func isLikelyFreeModel(modelID: String, adapterID: String) -> Bool {
+        if adapterID == "huggingface" { return false }
         let id = modelID.lowercased()
         if id.hasSuffix(":free") || id.contains(":free") { return true }
         switch adapterID {

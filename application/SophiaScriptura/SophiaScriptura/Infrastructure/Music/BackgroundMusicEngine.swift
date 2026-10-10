@@ -9,6 +9,7 @@ protocol BackgroundMusicEngineDelegate: AnyObject {
 
 final class BackgroundMusicEngine: NSObject {
     @MainActor weak var delegate: BackgroundMusicEngineDelegate?
+    @MainActor var keepsAudioSessionForPiP = false
     private var player: AVAudioPlayer?
     private var observers: [NSObjectProtocol] = []
 
@@ -31,9 +32,20 @@ final class BackgroundMusicEngine: NSObject {
     }
 
     @MainActor var isPlaying: Bool { player?.isPlaying == true }
+    @MainActor var hasPreparedPlayer: Bool { player != nil }
+    @MainActor var preparedFileURL: URL? { player?.url }
+    @MainActor var currentTime: TimeInterval { player?.currentTime ?? 0 }
+    @MainActor var duration: TimeInterval {
+        guard let duration = player?.duration, duration.isFinite, duration > 0 else { return 0 }
+        return duration
+    }
 
     @MainActor
     func prepare(url: URL) throws {
+        if player?.url == url {
+            player?.prepareToPlay()
+            return
+        }
         player = try AVAudioPlayer(contentsOf: url)
         player?.delegate = self
         player?.prepareToPlay()
@@ -50,13 +62,19 @@ final class BackgroundMusicEngine: NSObject {
     @MainActor
     func pause() {
         player?.pause()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        releaseAudioSessionIfIdle()
     }
 
     @MainActor
     func stop() {
         player?.stop()
         player = nil
+        releaseAudioSessionIfIdle()
+    }
+
+    @MainActor
+    func releaseAudioSessionIfIdle() {
+        guard !keepsAudioSessionForPiP, !isPlaying else { return }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 

@@ -59,11 +59,14 @@ struct OpenAIProviderAdapter: LLMProviderAdapter {
         for turn in request.turns {
             messages.append(["role": turn.role.rawValue, "content": turn.content])
         }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": request.modelID,
             "messages": messages,
             "stream": true
         ]
+        if request.preferJSONObject {
+            body["response_format"] = ["type": "json_object"]
+        }
         urlRequest.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (bytes, response) = try await session.bytes(for: urlRequest)
@@ -85,8 +88,7 @@ struct OpenAIProviderAdapter: LLMProviderAdapter {
                 throw mapOpenAIError(status: (response as? HTTPURLResponse)?.statusCode ?? 0, message: message)
             }
             guard let choices = json["choices"] as? [[String: Any]],
-                  let delta = choices.first?["delta"] as? [String: Any],
-                  let content = delta["content"] as? String,
+                  let content = OpenAICompatibleProviderAdapter.streamText(from: choices.first),
                   !content.isEmpty else { continue }
             continuation.yield(.textDelta(content))
         }

@@ -2,31 +2,69 @@ import SwiftUI
 
 struct CompanionProviderSettingsView: View {
     @ObservedObject var session: CompanionSession
-    @State private var statusMessage: String?
+    @EnvironmentObject private var settingsToast: SettingsToastCenter
 
     var body: some View {
         Form {
             Section {
-                Text("API keys stay in the device Keychain. Sophia fetches models from each provider after you save a key—no manual model ids.")
+                Text("API keys stay in the device Keychain. Sophia fetches models after you save a key. Hugging Face also accepts an exact model id, including a routing suffix such as :provider. A model list does not prove that the token can run that model, and Hugging Face models are not marked free.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            ForEach(0..<session.supportedAdapters.count, id: \.self) { index in
-                ProviderKeySection(session: session, adapter: session.supportedAdapters[index], statusMessage: $statusMessage)
+            if !session.providerConfigurationsWithCredentials().isEmpty {
+                SharedRouteSettingsSection(session: session)
             }
-            if let statusMessage {
-                Section { Text(statusMessage).foregroundStyle(.secondary) }
+            ForEach(0..<session.supportedAdapters.count, id: \.self) { index in
+                ProviderKeySection(session: session, adapter: session.supportedAdapters[index])
             }
         }
         .navigationTitle("Provider keys")
     }
 }
 
+private struct SharedRouteSettingsSection: View {
+    @ObservedObject var session: CompanionSession
+    @EnvironmentObject private var settingsToast: SettingsToastCenter
+    @State private var providerConfigID = UUID()
+    @State private var modelID = ""
+
+    var body: some View {
+        Section("Default provider and model") {
+            Text("New chats and Sophy use this route. Quiz keeps its own defaults until those are absent. Opening an existing chat does not change this choice.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            CompanionModelRoutingBar(
+                session: session,
+                providerConfigID: $providerConfigID,
+                modelID: $modelID,
+                accessibilityPrefix: "sharedRoute"
+            )
+            Button("Save default route") {
+                session.setSharedProviderRoute(configurationID: providerConfigID, modelID: modelID)
+                settingsToast.show("Default provider route saved.")
+            }
+            .disabled(modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        if let route = session.resolvedSharedRoute() {
+            providerConfigID = route.configurationID
+            modelID = route.modelID
+        } else if let first = session.providerConfigurationsWithCredentials().first {
+            providerConfigID = first.id
+            modelID = first.defaultModelID
+        }
+    }
+}
+
 private struct ProviderKeySection: View {
     @ObservedObject var session: CompanionSession
     let adapter: any LLMProviderAdapter
-    @Binding var statusMessage: String?
+    @EnvironmentObject private var settingsToast: SettingsToastCenter
     @State private var apiKey = ""
+    @State private var manualModelID = ""
     @State private var testing = false
     @State private var saving = false
 
@@ -48,16 +86,33 @@ private struct ProviderKeySection: View {
                 }
                 Button("Refresh models") { Task { await refreshModels(config.id) } }
                     .disabled(session.modelCatalogLoading.contains(config.id))
+                if ProviderModelCatalog.allowsManualModelEntry(adapterID: adapter.id) {
+                    TextField("Exact model id", text: $manualModelID)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("provider.manualModel.\(adapter.id)")
+                    Button("Save model id") {
+                        session.setConfigurationModel(configurationID: config.id, modelID: manualModelID)
+                        settingsToast.show("Saved \(adapter.displayName) model id.")
+                    }
+                    .disabled(manualModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
                 Button("Test connection") { Task { await test(config.id) } }.disabled(testing)
                 Button("Delete key", role: .destructive) {
                     try? session.deleteProviderKey(configurationID: config.id)
                     apiKey = ""
-                    statusMessage = "\(adapter.displayName) key removed."
+                    settingsToast.show("\(adapter.displayName) key removed.")
                 }
             }
             Text(adapter.advertisedCapabilities(modelID: "default").map(\.rawValue).sorted().joined(separator: ", "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            if manualModelID.isEmpty,
+               let config = session.providerConfigurations.first(where: { $0.adapterID == adapter.id }) {
+                manualModelID = config.defaultModelID
+            }
         }
     }
 
@@ -67,27 +122,30 @@ private struct ProviderKeySection: View {
         do {
             try session.saveProviderKey(apiKey, adapterID: adapter.id, accountLabel: "Personal")
             apiKey = ""
-            statusMessage = "\(adapter.displayName) key saved."
+            settingsToast.show("\(adapter.displayName) key saved.")
             if let config = session.providerConfigurations.first(where: { $0.adapterID == adapter.id }) {
                 await refreshModels(config.id)
             }
         } catch {
-            statusMessage = error.localizedDescription
+            settingsToast.show(error.localizedDescription)
         }
     }
 
     private func refreshModels(_ configurationID: UUID) async {
         if let message = await session.refreshModelCatalog(for: configurationID) {
-            statusMessage = message
+            settingsToast.show(message)
         } else {
-            statusMessage = "\(adapter.displayName) models updated."
+            settingsToast.show("\(adapter.displayName) models updated.")
         }
     }
 
     private func test(_ configurationID: UUID) async {
         testing = true
         defer { testing = false }
-        statusMessage = await session.testConnection(configurationID: configurationID)
-        if statusMessage == nil { statusMessage = "\(adapter.displayName) connection succeeded." }
+        if let message = await session.testConnection(configurationID: configurationID) {
+            settingsToast.show(message)
+        } else {
+            settingsToast.show("\(adapter.displayName) connection succeeded.")
+        }
     }
 }

@@ -87,14 +87,12 @@ The workflow badge above reports **main’s workflow**, not every local test or 
 it may show no status until the workflow exists and runs on that branch. Private-repository
 badges are not publicly accessible outside GitHub.
 
-`v0.3.0` (build 20) is the current app version. Its local release-snapshot unit suite
-passed 265 tests. Targeted Canvas, protection and Activity UI evidence is recorded in
-the test specification. The current feature source was built, installed in place and
-launched on the owner's iPad before the release version bump. Physical Pencil/performance,
-biometric/idle, accessibility and complete device workflow acceptance remain pending.
-The Release workflow independently builds and runs unit tests before publication.
+`v0.4.0` (build 21) adds Sophy, Hugging Face BYOK, native music/Activity
+system controls and configurable Picture in Picture. Verification and remaining
+physical/provider acceptance are recorded in the release notes. The Release workflow
+independently builds and runs unit tests before publication.
 
-See [v0.3.0 notes](docs/releases/v0.3.0.md), [v0.2.2 notes](docs/releases/v0.2.2.md), and the
+See [v0.4.0 notes](docs/releases/v0.4.0.md), [v0.3.0 notes](docs/releases/v0.3.0.md), and the
 [test specification](docs/testing/test-specification.md).
 Scripture narration is excluded from this release.
 

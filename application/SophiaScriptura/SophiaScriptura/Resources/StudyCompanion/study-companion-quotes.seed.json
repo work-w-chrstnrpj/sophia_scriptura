@@ -1,0 +1,38 @@
+{
+  "sophy": [
+    { "book": "PRO", "chapter": 1, "startVerse": 7, "endVerse": 7 },
+    { "book": "PRO", "chapter": 3, "startVerse": 5, "endVerse": 5 },
+    { "book": "PRO", "chapter": 3, "startVerse": 6, "endVerse": 6 },
+    { "book": "PRO", "chapter": 4, "startVerse": 23, "endVerse": 23 },
+    { "book": "PRO", "chapter": 9, "startVerse": 10, "endVerse": 10 },
+    { "book": "PRO", "chapter": 16, "startVerse": 3, "endVerse": 3 },
+    { "book": "PRO", "chapter": 18, "startVerse": 10, "endVerse": 10 },
+    { "book": "PRO", "chapter": 22, "startVerse": 1, "endVerse": 1 },
+    { "book": "PRO", "chapter": 27, "startVerse": 17, "endVerse": 17 },
+    { "book": "PRO", "chapter": 31, "startVerse": 30, "endVerse": 30 }
+  ],
+  "sol": [
+    { "book": "ECC", "chapter": 1, "startVerse": 2, "endVerse": 2 },
+    { "book": "ECC", "chapter": 3, "startVerse": 1, "endVerse": 1 },
+    { "book": "ECC", "chapter": 3, "startVerse": 11, "endVerse": 11 },
+    { "book": "ECC", "chapter": 5, "startVerse": 2, "endVerse": 2 },
+    { "book": "ECC", "chapter": 7, "startVerse": 14, "endVerse": 14 },
+    { "book": "ECC", "chapter": 9, "startVerse": 10, "endVerse": 10 },
+    { "book": "ECC", "chapter": 11, "startVerse": 5, "endVerse": 5 },
+    { "book": "ECC", "chapter": 12, "startVerse": 1, "endVerse": 1 },
+    { "book": "ECC", "chapter": 12, "startVerse": 13, "endVerse": 13 },
+    { "book": "ECC", "chapter": 12, "startVerse": 14, "endVerse": 14 }
+  ],
+  "sabinus": [
+    { "book": "JOB", "chapter": 1, "startVerse": 21, "endVerse": 21 },
+    { "book": "JOB", "chapter": 2, "startVerse": 10, "endVerse": 10 },
+    { "book": "JOB", "chapter": 13, "startVerse": 15, "endVerse": 15 },
+    { "book": "JOB", "chapter": 19, "startVerse": 25, "endVerse": 25 },
+    { "book": "JOB", "chapter": 23, "startVerse": 10, "endVerse": 10 },
+    { "book": "JOB", "chapter": 28, "startVerse": 28, "endVerse": 28 },
+    { "book": "JOB", "chapter": 38, "startVerse": 4, "endVerse": 4 },
+    { "book": "JOB", "chapter": 42, "startVerse": 2, "endVerse": 2 },
+    { "book": "JOB", "chapter": 42, "startVerse": 5, "endVerse": 5 },
+    { "book": "JOB", "chapter": 42, "startVerse": 6, "endVerse": 6 }
+  ]
+}

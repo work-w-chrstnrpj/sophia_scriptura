@@ -626,11 +626,14 @@ struct CompanionSnapshot: Codable, Sendable {
     var quizAttempts: [QuizAttemptRecord] = []
     var reviewingLinks: [ReviewingActivityLink] = []
     var cachedQuizQuestions: [CachedQuizQuestion] = []
+    /// Explicit shared route for new chats and Sophy. Absent values keep the legacy first-saved-key fallback.
+    var defaultProviderConfigID: UUID?
+    var defaultModelID: String?
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, revision, conversations, messages, providerConfigurations
         case attachments, sources, summaries, uiState, quizSessions, quizQuestions, quizAttempts, reviewingLinks
-        case cachedQuizQuestions
+        case cachedQuizQuestions, defaultProviderConfigID, defaultModelID
     }
 
     init(
@@ -647,7 +650,9 @@ struct CompanionSnapshot: Codable, Sendable {
         quizQuestions: [QuizQuestionRecord] = [],
         quizAttempts: [QuizAttemptRecord] = [],
         reviewingLinks: [ReviewingActivityLink] = [],
-        cachedQuizQuestions: [CachedQuizQuestion] = []
+        cachedQuizQuestions: [CachedQuizQuestion] = [],
+        defaultProviderConfigID: UUID? = nil,
+        defaultModelID: String? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.revision = revision
@@ -663,6 +668,8 @@ struct CompanionSnapshot: Codable, Sendable {
         self.quizAttempts = quizAttempts
         self.reviewingLinks = reviewingLinks
         self.cachedQuizQuestions = cachedQuizQuestions
+        self.defaultProviderConfigID = defaultProviderConfigID
+        self.defaultModelID = defaultModelID
     }
 
     init(from decoder: Decoder) throws {
@@ -681,7 +688,15 @@ struct CompanionSnapshot: Codable, Sendable {
         quizAttempts = try container.decodeIfPresent([QuizAttemptRecord].self, forKey: .quizAttempts) ?? []
         reviewingLinks = try container.decodeIfPresent([ReviewingActivityLink].self, forKey: .reviewingLinks) ?? []
         cachedQuizQuestions = try container.decodeIfPresent([CachedQuizQuestion].self, forKey: .cachedQuizQuestions) ?? []
+        defaultProviderConfigID = try container.decodeIfPresent(UUID.self, forKey: .defaultProviderConfigID)
+        defaultModelID = try container.decodeIfPresent(String.self, forKey: .defaultModelID)
     }
+}
+
+struct SharedProviderRoute: Equatable, Sendable {
+    var configurationID: UUID
+    var adapterID: String
+    var modelID: String
 }
 
 enum CompanionContentHash {

@@ -35,11 +35,16 @@ struct RootTabView: View {
     @StateObject private var companion = CompanionSession.live()
     @StateObject private var activity = ActivityStore()
     @StateObject private var music = MusicSession()
+    @StateObject private var studyPiP = StudyPiPPlayer()
+    @State private var showStudyPiP = false
+    @StateObject private var activityLiveActivity = ActivityLiveActivityCoordinator()
+    @StateObject private var sophy = SophySession()
     @StateObject private var meditationJourney = MeditationJourneyCoordinator()
     @StateObject private var shellPreferences = ShellPreferencesSession()
     @StateObject private var userProfile = UserProfileSession()
     @State private var selection: Tab = .scripture
     @State private var showMusicLibrary = false
+    @State private var restoreMusicAfterPiP = false
     @State private var shellFABEngagedUntil = Date.distantPast
     @State private var showShellNewCollection = false
     @State private var showShellNoteKindPicker = false
@@ -52,6 +57,22 @@ struct RootTabView: View {
         #endif
         return try? ReaderStateStore()
     }
+    private var studyPiPState: StudyPiPState {
+        StudyPiPState(musicTitle: music.showsNowActiveItem ? music.currentTrack?.title : nil,
+                      musicPlaying: music.snapshot.phase == .playing, activity: activity.committedProjection)
+    }
+    private func syncStudyPiP() {
+        studyPiP.setEnabled(shellPreferences.preferences.allowPictureInPicture)
+        studyPiP.bind(music: music, activity: activity)
+        studyPiP.restore = {
+            let musicOnly = activity.committedProjection == nil && music.showsNowActiveItem
+            restoreMusicAfterPiP = musicOnly && showStudyPiP
+            showStudyPiP = false
+            selection = .activity
+            if musicOnly && !restoreMusicAfterPiP { showMusicLibrary = true }
+            chrome.reveal()
+        }
+    }
     private var tabAnimation: Animation {
         reduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.42, dampingFraction: 0.9)
     }
@@ -59,6 +80,11 @@ struct RootTabView: View {
         reduceMotion ? .easeOut(duration: 0.16) : .easeInOut(duration: 0.28)
     }
     private var editingNote: Bool { selection == .notes && notes.selectedNoteID != nil }
+    private var sophyIdleQuotesSuspended: Bool {
+        if selection == .notes, notes.selectedNoteID != nil { return true }
+        if selection == .scripture, annotations.mode != .hidden { return true }
+        return false
+    }
     var body: some View {
         GeometryReader { geometry in
                 ZStack {
@@ -68,7 +94,7 @@ struct RootTabView: View {
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
                         .tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    ActivityView(store: activity, books: reader.books, editionID: reader.edition?.id,
+                    ActivityView(store: activity, sophy: sophy, companion: companion, liveActivityStatus: activityLiveActivity.status, books: reader.books, editionID: reader.edition?.id,
                                  referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp", startReading: { verse in
                         selection = .scripture
                         chrome.reveal()
@@ -97,6 +123,7 @@ struct RootTabView: View {
                         music: music,
                         shellPreferences: shellPreferences,
                         userProfile: userProfile,
+                        sophy: sophy,
                         showMusicLibrary: $showMusicLibrary
                     )
                         .tabPresentation(.settings, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
@@ -117,6 +144,20 @@ struct RootTabView: View {
             if meditationJourney.isActive {
                 MeditationJourneyView(coordinator: meditationJourney)
             }
+        }
+        .overlay {
+            SophyChrome(
+                sophy: sophy,
+                companion: companion,
+                collections: collections,
+                activity: activity,
+                music: music,
+                notes: notes,
+                books: reader.books,
+                referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
+                editionID: reader.edition?.id,
+                scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
+            )
         }
         .overlay {
             if let draft = activity.draft {
@@ -156,7 +197,10 @@ struct RootTabView: View {
             CollectionEditorSheet(store: collections, parentID: nil)
         }
         .background(Color(palette.paper).ignoresSafeArea())
-        .background(ScrollActivityObserver { chrome.reveal() })
+        .background(ScrollActivityObserver {
+            chrome.reveal()
+            sophy.noteUserActivity()
+        })
         .background(ProtectionWindowObserver(protection: protection, domain: selection == .notes ? .notes : selection == .collections ? .collections : nil))
         .sheet(item: Binding(get: { protection.prompt }, set: { _ in })) { prompt in
             ItemUnlockView(protection: protection, prompt: prompt).id(prompt.id)
@@ -167,11 +211,26 @@ struct RootTabView: View {
         .environment(notes)
         .environmentObject(userProfile)
         .onAppear {
+            sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
             notes.collections = collections
+            notes.onSophyEnhance = { selection in
+                sophy.syncRoute(companion)
+                sophy.stageEnhancement(selection)
+            }
+            sophy.onOpenQuiz = { selection = .companion; chrome.reveal() }
+            sophy.onOpenContemplation = { selection = .activity; chrome.reveal() }
+            sophy.onOpenActivity = { selection = .activity; chrome.reveal() }
+            sophy.onOpenChat = { selection = .companion; chrome.reveal() }
+            sophy.onOpenSource = { id, isCollection in
+                if isCollection { selection = .collections; collections.sophyOpenCollectionID = id }
+                else { notes.open(id); selection = .notes }
+                chrome.reveal()
+            }
             protection.willLock = { domains in
                 if domains.contains(.notes) { notes.concealProtectedNote() }
                 else { notes.flushSurface?(); Task { await notes.save() } }
                 collections.objectWillChange.send()
+                sophy.concealSensitive()
             }
             companion.onCollectionsSync = { collections.upsertCompanionConversation($0) }
             companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }
@@ -181,7 +240,43 @@ struct RootTabView: View {
         .task { await notes.load(); await collections.load(); await companion.load();
             let activeIDs = Set(companion.activeConversations.map(\.id))
             for conversation in collections.conversations where !activeIDs.contains(conversation.id) { collections.removeCompanionConversation(conversation.id) }
-            await activity.load(); activity.importQuizStudyLinks(companion.reviewingLinks) }
+            await activity.load(); activity.importQuizStudyLinks(companion.reviewingLinks)
+            activityLiveActivity.reconcile(projection: activity.committedProjection, sceneActive: scenePhase == .active)
+            await sophy.load(collections: collections, activity: activity, recoveredOlderGeneration: collections.recoveredOlderGeneration || activity.recoveredOlderGeneration) }
+        .onChange(of: activity.committedProjection) { _, projection in
+            activityLiveActivity.reconcile(projection: projection, sceneActive: scenePhase == .active)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { sophy.concealSensitive() }
+            activityLiveActivity.reconcile(projection: activity.committedProjection, sceneActive: phase == .active)
+        }
+        .onChange(of: studyPiPState) { _, _ in syncStudyPiP() }
+        .onAppear { syncStudyPiP() }
+        .onChange(of: shellPreferences.preferences.allowPictureInPicture) { _, enabled in
+            if !enabled {
+                restoreMusicAfterPiP = false
+                showStudyPiP = false
+            }
+            studyPiP.setEnabled(enabled)
+        }
+        .sheet(isPresented: $showStudyPiP, onDismiss: {
+            if restoreMusicAfterPiP {
+                restoreMusicAfterPiP = false
+                showMusicLibrary = true
+            }
+        }) {
+            StudyPiPSheet(player: studyPiP, controlLabel: studyPiPState.controlLabel)
+        }
+        .onOpenURL { url in
+            _ = SystemControlsRouting.openActivityTab(from: url) {
+                selection = .activity
+                chrome.reveal()
+            }
+        }
+        .onChange(of: companion.resolvedSharedRoute()) { _, _ in sophy.syncRoute(companion) }
+        .onChange(of: notes.snapshot.notes) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
+        .onChange(of: collections.collections) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
+        .onChange(of: collections.memberships) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
         .onChange(of: companion.reviewingLinks) { _, links in activity.importQuizStudyLinks(links) }
         .onChange(of: activity.draft) { _, value in
             if value == nil { activity.importQuizStudyLinks(companion.reviewingLinks) }
@@ -191,6 +286,18 @@ struct RootTabView: View {
         }
         .onChange(of: companion.panelExpandedToTab) { _, expanded in
             if expanded { selection = .companion; chrome.reveal(); companion.panelExpandedToTab = false }
+        }
+        .onChange(of: selection) { _, _ in
+            sophy.noteUserActivity()
+            sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
+        }
+        .onChange(of: notes.selectedNoteID) { _, _ in
+            sophy.noteUserActivity()
+            sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
+        }
+        .onChange(of: annotations.mode) { _, _ in
+            sophy.noteUserActivity()
+            sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
         .onChange(of: selection) { _, tab in
             notes.active = tab == .notes
@@ -225,6 +332,11 @@ struct RootTabView: View {
                     .shellFABEngagementOpacity(engagedUntil: $shellFABEngagedUntil)
             }
             Spacer(minLength: 12)
+            if shellPreferences.preferences.allowPictureInPicture && studyPiPState.hasContent && !editingNote {
+                Button { syncStudyPiP(); showStudyPiP = true } label: { Image(systemName: "pip.enter").padding(12) }
+                    .background(.regularMaterial, in: Capsule()).accessibilityLabel("Floating Player").accessibilityIdentifier("study.pip.open")
+                    .padding(.trailing, 12)
+            }
             tabSpecificShellFAB
         }
         .frame(maxWidth: Self.tabDockMaxWidth)
@@ -346,6 +458,7 @@ struct RootTabView: View {
                             .shadow(color:Color(palette.accent).opacity(selection == tab && !reduceMotion ? 0.3 : 0),radius:5)
                         if !compact { Text(tab.rawValue).font(.caption).lineLimit(1).fixedSize() }
                     }.frame(maxWidth:.infinity,minHeight:44).padding(.horizontal,compact ? 4 : 12)
+                    .contentShape(Rectangle())
                     .padding(.vertical,4)
                     .background {
                         if selection == tab {

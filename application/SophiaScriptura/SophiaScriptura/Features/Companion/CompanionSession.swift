@@ -23,6 +23,8 @@ final class CompanionSession: ObservableObject {
     @Published var scripturePanelConversationID: UUID?
     @Published private(set) var scriptureAutoSend: ScriptureAutoSend?
     @Published var panelExpandedToTab = false
+    @Published var sophyQuizRequest: SophyQuizRequest?
+    @Published var sophyChatDraft: String?
     @Published var activeQuizSessionID: UUID?
     @Published private(set) var modelOptionsByConfigurationID: [UUID: [CompanionModelOption]] = [:]
     @Published private(set) var modelCatalogLoading: Set<UUID> = []
@@ -32,6 +34,8 @@ final class CompanionSession: ObservableObject {
     @Published private(set) var recentQuizFixtureKeys: [String] = []
     @Published private(set) var quizDefaultProviderConfigID: UUID?
     @Published private(set) var quizDefaultModelID: String?
+    @Published private(set) var defaultProviderConfigID: UUID?
+    @Published private(set) var defaultModelID: String?
 
     let presetCatalog: PromptPresetCatalog
     let repository: (any CompanionRepository)?
@@ -215,7 +219,12 @@ final class CompanionSession: ObservableObject {
             }
             return nil
         } catch {
-            let fallback = ProviderModelCatalog.curatedModels(adapterID: record.adapterID)
+            var fallback = ProviderModelCatalog.curatedModels(adapterID: record.adapterID)
+            if ProviderModelCatalog.allowsManualModelEntry(adapterID: record.adapterID),
+               !record.defaultModelID.isEmpty,
+               !fallback.contains(where: { $0.modelID == record.defaultModelID }) {
+                fallback.insert(CompanionModelOption(modelID: record.defaultModelID, label: record.defaultModelID, isFree: false), at: 0)
+            }
             modelOptionsByConfigurationID[configurationID] = fallback
             return error.localizedDescription
         }
@@ -373,6 +382,7 @@ final class CompanionSession: ObservableObject {
     func deleteProviderKey(configurationID: UUID) throws {
         try credentials.deleteKey(for: configurationID)
         providerConfigurations.removeAll { $0.id == configurationID }
+        // Retain the explicit binding so removal cannot silently route Sophy to another provider.
         cachedQuizQuestions.removeAll { $0.scope.providerConfigurationID == configurationID }
         modelOptionsByConfigurationID.removeValue(forKey: configurationID)
         scheduleSave()
@@ -394,18 +404,22 @@ final class CompanionSession: ObservableObject {
 
     @discardableResult
     func createConversation() -> UUID? {
-        guard let config = preferredProviderConfiguration(),
-              let adapter = registry.adapter(id: config.adapterID),
+        guard let route = resolvedSharedRoute(),
+              let adapter = registry.adapter(id: route.adapterID),
               let preset = presetCatalog.snapshot(for: selectedPresetID) else {
             notice = "Configure a provider key in Settings before starting a conversation."
             return nil
         }
+        guard !route.modelID.isEmpty else {
+            notice = "Choose a model in Settings before starting a conversation."
+            return nil
+        }
         let conversation = CompanionConversation(
-            providerConfigID: config.id,
-            providerAdapterID: config.adapterID,
-            modelID: config.defaultModelID,
+            providerConfigID: route.configurationID,
+            providerAdapterID: route.adapterID,
+            modelID: route.modelID,
             presetSnapshot: preset,
-            capabilitySnapshot: ProviderCapabilitySnapshot.from(adapter: adapter, modelID: config.defaultModelID)
+            capabilitySnapshot: ProviderCapabilitySnapshot.from(adapter: adapter, modelID: route.modelID)
         )
         conversations.insert(conversation, at: 0)
         selectedConversationID = conversation.id
@@ -638,15 +652,140 @@ final class CompanionSession: ObservableObject {
         }
     }
 
+    @discardableResult
+    func stageSophyChat(presetID: String?, draft: String) -> Bool {
+        guard composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            notice = "Your current chat draft was kept. Send or save it before opening a Sophy draft."
+            return false
+        }
+        if let presetID, presetCatalog.snapshot(for: presetID) != nil { selectedPresetID = presetID }
+        guard createConversation() != nil else { return false }
+        composerText = draft
+        sophyChatDraft = draft
+        panelExpandedToTab = true
+        return true
+    }
+
+    func completeForSophy(systemInstruction: String, userText: String) async -> Result<String, SophySafeError> {
+        guard let route = resolvedSharedRoute(), !route.modelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(.unconfigured)
+        }
+        guard let adapter = registry.adapter(id: route.adapterID),
+              let apiKey = try? credentials.readKey(for: route.configurationID), !apiKey.isEmpty else {
+            return .failure(.unconfigured)
+        }
+        let request = LLMCompletionRequest(
+            modelID: route.modelID,
+            systemInstruction: presetCatalog.seed.sharedGuardrail + "\n\n" + systemInstruction,
+            turns: [LLMChatTurn(role: .user, content: userText)],
+            preferJSONObject: true
+        )
+        var text = ""
+        do {
+            for try await event in adapter.streamCompletion(apiKey: apiKey, request: request) {
+                if Task.isCancelled { return .failure(.cancelled) }
+                switch event {
+                case .responseStarted, .sourceEvidence, .completed:
+                    break
+                case .textDelta(let delta):
+                    guard text.utf8.count + delta.utf8.count <= SophyResponseValidator.rawLimit else {
+                        return .failure(.malformedPlan)
+                    }
+                    text += delta
+                case .refused:
+                    return .failure(.providerUnavailable)
+                case .failed(let error):
+                    return .failure(Self.sophyError(error))
+                }
+            }
+        } catch let error as LLMProviderError {
+            return .failure(Self.sophyError(error))
+        } catch is CancellationError {
+            return .failure(.cancelled)
+        } catch {
+            return .failure(.providerUnavailable)
+        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .failure(.providerUnavailable)
+        }
+        return .success(text)
+    }
+
+    private static func sophyError(_ error: LLMProviderError) -> SophySafeError {
+        switch error {
+        case .missingCredential: return .unconfigured
+        case .offline: return .offline
+        case .invalidCredential: return .invalidCredential
+        case .rateLimited: return .rateLimited
+        case .cancelled: return .cancelled
+        case .malformedResponse: return .malformedPlan
+        case .refused, .transport: return .providerUnavailable
+        }
+    }
+
     func preferredProviderConfiguration() -> ProviderConfigurationRecord? {
         providerConfigurations.first { hasCredential(for: $0.id) }
+    }
+
+    /// Explicit shared default when saved. Missing fields use the first configuration that has a key.
+    /// A saved default whose key was removed stays unresolved instead of switching providers.
+    func resolvedSharedRoute() -> SharedProviderRoute? {
+        if defaultProviderConfigID != nil {
+            guard let id = defaultProviderConfigID,
+                  let record = providerRecord(for: id),
+                  hasCredential(for: id) else { return nil }
+            let explicitModel = defaultModelID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = (explicitModel?.isEmpty == false) ? explicitModel! : record.defaultModelID
+            return SharedProviderRoute(configurationID: record.id, adapterID: record.adapterID, modelID: model)
+        }
+        guard let record = preferredProviderConfiguration() else { return nil }
+        return SharedProviderRoute(configurationID: record.id, adapterID: record.adapterID, modelID: record.defaultModelID)
+    }
+
+    func setSharedProviderRoute(configurationID: UUID, modelID: String) {
+        guard providerRecord(for: configurationID) != nil else { return }
+        defaultProviderConfigID = configurationID
+        defaultModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        scheduleSave()
+    }
+
+    func setConfigurationModel(configurationID: UUID, modelID: String) {
+        let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let index = providerConfigurations.firstIndex(where: { $0.id == configurationID }) else { return }
+        providerConfigurations[index].defaultModelID = trimmed
+        providerConfigurations[index].updatedAt = Date()
+        var options = modelOptionsByConfigurationID[configurationID] ?? []
+        if !options.contains(where: { $0.modelID == trimmed }) {
+            options.insert(CompanionModelOption(modelID: trimmed, label: trimmed, isFree: false), at: 0)
+            modelOptionsByConfigurationID[configurationID] = options
+        }
+        scheduleSave()
     }
 
     func resolvedQuizProviderConfiguration() -> ProviderConfigurationRecord? {
         if let id = quizDefaultProviderConfigID, let record = providerRecord(for: id), hasCredential(for: id) {
             return record
         }
-        return preferredProviderConfiguration()
+        if quizDefaultProviderConfigID == nil, let route = resolvedSharedRoute() {
+            return providerRecord(for: route.configurationID)
+        }
+        return nil
+    }
+
+    func resolvedQuizModelID(for configuration: ProviderConfigurationRecord) -> String {
+        if quizDefaultProviderConfigID == configuration.id,
+           let quizDefaultModelID,
+           !quizDefaultModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return quizDefaultModelID
+        }
+        if quizDefaultProviderConfigID == nil,
+           let route = resolvedSharedRoute(),
+           route.configurationID == configuration.id,
+           !route.modelID.isEmpty {
+            return route.modelID
+        }
+        return configuration.defaultModelID
     }
 
     func apply(_ snapshot: CompanionSnapshot) {
@@ -670,6 +809,8 @@ final class CompanionSession: ObservableObject {
         recentQuizFixtureKeys = snapshot.uiState.recentQuizFixtureKeys
         quizDefaultProviderConfigID = snapshot.uiState.quizDefaultProviderConfigID
         quizDefaultModelID = snapshot.uiState.quizDefaultModelID
+        defaultProviderConfigID = snapshot.defaultProviderConfigID
+        defaultModelID = snapshot.defaultModelID
         revision = snapshot.revision
         if selectedConversationID == nil, let first = conversations.first {
             selectedConversationID = first.id
@@ -710,7 +851,9 @@ final class CompanionSession: ObservableObject {
             quizQuestions: quizQuestions,
             quizAttempts: quizAttempts,
             reviewingLinks: reviewingLinks,
-            cachedQuizQuestions: cachedQuizQuestions
+            cachedQuizQuestions: cachedQuizQuestions,
+            defaultProviderConfigID: defaultProviderConfigID,
+            defaultModelID: defaultModelID
         )
     }
 
@@ -745,7 +888,9 @@ final class CompanionSession: ObservableObject {
             quizQuestions: quizQuestions,
             quizAttempts: quizAttempts,
             reviewingLinks: reviewingLinks,
-            cachedQuizQuestions: cachedQuizQuestions
+            cachedQuizQuestions: cachedQuizQuestions,
+            defaultProviderConfigID: defaultProviderConfigID,
+            defaultModelID: defaultModelID
         )
         do {
             let saved = try await repository.save(snapshot, expectedRevision: revision)
@@ -1005,7 +1150,7 @@ final class CompanionSession: ObservableObject {
 
     @discardableResult
     func startQuiz(types: [QuizType], difficulty: QuizDifficulty, editionID: String, timed: Bool, recordReviewing: Bool = true) async throws -> UUID {
-        let config = resolvedQuizProviderConfiguration() ?? preferredProviderConfiguration()
+        let config = resolvedQuizProviderConfiguration()
         guard let config,
               let adapter = registry.adapter(id: config.adapterID),
               let apiKey = try? credentials.readKey(for: config.id), !apiKey.isEmpty else {
@@ -1014,7 +1159,7 @@ final class CompanionSession: ObservableObject {
         }
         let selectedTypes = types.isEmpty ? QuizType.quizMeSelectable : types.filter { $0 != .completeVerse && $0 != .identifyReference }
         guard !selectedTypes.isEmpty else { throw AIQuizQuestionGenerator.GenerationError.invalid("Select at least one quiz type.") }
-        let model = quizDefaultModelID ?? config.defaultModelID
+        let model = resolvedQuizModelID(for: config)
         let scope = QuizQuestionCacheScope(
             providerConfigurationID: config.id,
             adapterID: config.adapterID,

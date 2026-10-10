@@ -72,6 +72,8 @@ import ImageIO
     var setZoom: ((CGFloat?) -> Void)?
     var zoom: CGFloat = 1
     var bodySelection = NSRange(location: 0, length: 0)
+    var sophyCanvasSelection: (id: UUID, range: NSRange)?
+    var onSophyEnhance: ((SophyNoteSelection) -> Void)?
     var editingObjectID: UUID?
     var toolsRequest = UUID()
     var toolsVisible = true
@@ -1020,5 +1022,59 @@ import ImageIO
     func permanentlyDeleteCurrentNote() {
         guard let id = note?.id else { return }
         permanentlyDelete(id)
+    }
+
+    @discardableResult
+    func applySophyReplacement(noteID: UUID, range: NSRange, digest: String, replacement: String, canvasObjectID: UUID?) -> Bool {
+        guard selectedNoteID == noteID, canAccessEditor(noteID), let current = note else { return false }
+        let before = current
+        if let canvasObjectID {
+            guard let object = current.objects.first(where: { $0.id == canvasObjectID && [.text, .bullets, .numbered].contains($0.kind) }),
+                  let slice = Self.utf16Slice(object.text, range),
+                  SophyContextBuilder.digest(slice) == digest else { return false }
+            edit { note in
+                guard let index = note.objects.firstIndex(where: { $0.id == canvasObjectID }) else { return }
+                note.objects[index].text = (object.text as NSString).replacingCharacters(in: range, with: replacement)
+            }
+            return note != before
+        }
+        guard let page = current.page,
+              let slice = Self.utf16Slice(page.body, range),
+              SophyContextBuilder.digest(slice) == digest else { return false }
+        replaceBody(range, with: replacement)
+        return note != before
+    }
+
+    static func utf16Slice(_ body: String, _ range: NSRange) -> String? {
+        let units = Array(body.utf16)
+        guard range.location != NSNotFound, range.location >= 0, range.length >= 0,
+              range.location <= units.count, range.length <= units.count - range.location else { return nil }
+        let end = range.location + range.length
+        // Swift String slicing can widen a UTF-16 index inside a grapheme. Never let a
+        // selection start/end inside a surrogate pair and use the exact native range.
+        for boundary in [range.location, end] where boundary < units.count {
+            if (0xDC00...0xDFFF).contains(units[boundary]) { return nil }
+        }
+        return (body as NSString).substring(with: range)
+    }
+
+    func sophySelection(range: NSRange, objectID: UUID? = nil) -> SophyNoteSelection? {
+        flushSurface?()
+        guard let current = note, canAccessEditor(current.id), range.length > 0 else { return nil }
+        let body = objectID.flatMap { id in current.objects.first { $0.id == id && [.text, .bullets, .numbered].contains($0.kind) }?.text } ?? (objectID == nil ? current.page?.body : nil)
+        guard let body, let text = Self.utf16Slice(body, range), !text.isEmpty else { return nil }
+        let protectedFolder = collections?.collectionIDs(containing: current.id).contains {
+            collections?.sophyFolderIsProtected($0) != false
+        } ?? false
+        return SophyNoteSelection(noteID: current.id, objectID: objectID, range: range, text: text,
+            digest: SophyContextBuilder.digest(text), revision: current.updatedAt,
+            editorRoute: openingCollectionID, requiresConsent: current.protectionID != nil || protectedFolder)
+    }
+
+    func sophySelectionIsCurrent(_ selection: SophyNoteSelection) -> Bool {
+        guard selectedNoteID == selection.noteID, openingCollectionID == selection.editorRoute,
+              canAccessEditor(selection.noteID), note?.updatedAt == selection.revision,
+              let fresh = sophySelection(range: selection.range, objectID: selection.objectID) else { return false }
+        return fresh == selection
     }
 }

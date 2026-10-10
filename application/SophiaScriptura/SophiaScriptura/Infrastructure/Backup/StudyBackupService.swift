@@ -11,6 +11,8 @@ struct StudyFullBackupEnvelope: Codable, Sendable {
     var activity: Data
     var collections: CollectionsSnapshot
     var companion: CompanionSnapshot
+    /// Visible Sophy summaries only. Absence keeps the device's current history. Never an execution journal.
+    var sophyHistory: [SophyHistoryEntry]? = nil
 }
 
 enum StudyBackupError: Error, LocalizedError {
@@ -32,7 +34,8 @@ enum StudyBackupService {
         annotations: AnnotationSession,
         activity: ActivityStore,
         collections: CollectionsStore,
-        companion: CompanionSession
+        companion: CompanionSession,
+        sophyHistory: [SophyHistoryEntry]? = nil
     ) async throws -> Data {
         try await notes.protection.authorize([.notes: notes.snapshot.notes.map(\.protectionID), .collections: collections.collections.map(\.protectionID)])
         let notesData = try await notes.export()
@@ -44,7 +47,8 @@ enum StudyBackupService {
             annotations: annotationsData,
             activity: activityData,
             collections: try collections.exportBackupSnapshot(),
-            companion: companion.backupSnapshot()
+            companion: companion.backupSnapshot(),
+            sophyHistory: sophyHistory
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -60,12 +64,20 @@ enum StudyBackupService {
         activity: ActivityStore,
         collections: CollectionsStore,
         companion: CompanionSession,
-        readerDocument: ChapterDocument?
+        readerDocument: ChapterDocument?,
+        sophyRepository: SophyFileRepository? = nil
     ) async throws {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let envelope = try decoder.decode(StudyFullBackupEnvelope.self, from: data)
         guard envelope.schemaVersion == 1 else { throw StudyBackupError.unsupported }
+        if let history = envelope.sophyHistory { try SophyFileRepository.validateHistory(history) }
+        let previousSophyHistory: [SophyHistoryEntry]?
+        if envelope.sophyHistory != nil, let sophyRepository {
+            let previous = try await sophyRepository.loadHistory()
+            guard !previous.mutationsDisabled else { throw StudyBackupError.invalid }
+            previousSophyHistory = previous.value
+        } else { previousSophyHistory = nil }
         try await notes.protection.authorize([.notes: notes.snapshot.notes.map(\.protectionID), .collections: collections.collections.map(\.protectionID)])
         try notes.protection.require(notes.snapshot.notes.map(\.protectionID), in: .notes)
         try collections.protection.require(collections.collections.map(\.protectionID), in: .collections)
@@ -78,6 +90,13 @@ enum StudyBackupService {
         await collections.restoreBackupSnapshot(envelope.collections)
         guard collections.notice == "Collections restored from backup." else { throw StudyBackupError.invalid }
         await companion.restoreBackupSnapshot(envelope.companion)
+        if let sophyHistory = envelope.sophyHistory, let sophyRepository {
+            if let previousSophyHistory, !previousSophyHistory.isEmpty {
+                let archive = await sophyRepository.directory.appendingPathComponent("history-before-restore.json")
+                try JSONEncoder().encode(previousSophyHistory).write(to: archive, options: .atomic)
+            }
+            try await sophyRepository.saveHistory(sophyHistory)
+        }
     }
 }
 

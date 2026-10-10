@@ -288,6 +288,28 @@ NotesSession owns stroke selection/history; NotesFileRepository validates ID car
 and stores rejected drawing recovery beside Notes generations. See the Notes contract
 and `NoteStrokeEditingTests.swift`. Authentication tickets SP-026–028 remain separate.
 
+## SP-030 structure update
+
+`Infrastructure/Music/MusicNowPlayingCoordinator.swift` owns Lock Screen / Control Center remote commands and Now Playing metadata; `BackgroundMusicEngine` exposes duration and resume-friendly playback. `Core/Activity/ActivitySystemProjection.swift` and `StudyActivityLiveActivityAttributes.swift` define the safe timer projection. `Infrastructure/Activity/ActivityLiveActivityCoordinator.swift` projects committed Activity drafts to ActivityKit. `StudyActivityWidgetExtension/` is the WidgetKit Live Activity target embedded in the app. `ActivityStore` publishes `committedProjection` only after successful saves. `RootTabView` reconciles Live Activities on foreground and handles `sophiascriptura://activity`. Physical G0 placement and extension signing acceptance are tracked in [SP-030](tickets/SP-030-background-music-and-activity-system-controls.md).
+
+## SP-029 structure update
+
+`Core/Sophy/` owns response values, strict JSON validation, eligibility, insights, context limits and execution-state rules.
+`Infrastructure/Sophy/` owns history, journal generations and the Lady Wisdom preference.
+`Features/Sophy/` owns the session, durable action executor, adaptive chat sheet, editable action preview, dedicated History and enhancement screens. `Core/Sophy/SophyNoteSelection.swift` owns transient typed-text selection snapshots; native Page/Canvas edit menus call the shared Notes session. Review evidence and remaining acceptance live in `docs/testing/sp029-sophy-review.md`.
+Hugging Face is an OpenAI-compatible adapter in `Infrastructure/Companion/`, and the shared
+default route lives on `CompanionSnapshot`. Folder and Activity Sophy commits are awaited
+commands on the existing stores. Notes replacement goes through `NotesSession.applySophyReplacement`.
+The character stays hidden until Settings “Turn on Lady Wisdom” is on.
+
 ## SP-026–028 structure update
 
 Whole-item app access protection is owned by `Features/Protection/` with credential persistence in `Infrastructure/Security/ItemLockCredential.swift`. Preserve independent category grants, the single authentication prompt, stale-result invalidation, flush-before-conceal and guarded session/store commands. Read `docs/security/item-protection.md` before changes: access locks are not encryption, unknown credential bindings fail closed, and simulator evidence does not close physical biometric/Pencil/privacy acceptance. Combined Settings actions affect only already protected records.
+
+## SP-031 structure update
+
+`Features/SystemPlayer/StudyPiPPlayer.swift` owns the sample-buffer floating study player,
+safe presentation state and explicit PiP preview. RootTabView owns coordinator lifetime;
+MusicSession/ActivityStore retain command and persistence ownership. BackgroundMusicEngine
+retains the shared audio session while PiP is active. See tickets/SP-031-study-picture-in-picture.md
+for limits and physical acceptance; no permanent Home-screen notch is implemented.

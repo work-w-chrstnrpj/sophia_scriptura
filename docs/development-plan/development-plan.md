@@ -5,6 +5,44 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v0.4.0 delivery — owner selected 2026-10-10
+
+SP-029–031 and the current study-companion presentation changes are included in version
+0.4.0/build 21. Signed installation and launch on the owner's iPad passed; release checks
+are recorded in [v0.4.0 notes](../releases/v0.4.0.md). Publication does not close pending
+provider, extended background, accessibility or physical visual acceptance in those tickets.
+
+## Floating study player — selected 2026-10-10
+
+[SP-031](../../tickets/SP-031-study-picture-in-picture.md) adds owner-selected PiP for
+music/Activity display, with one system Play/Pause mapped to music when present and
+Activity otherwise. Explicit preview/start, existing command owners and privacy-safe
+Activity projection are implemented; simulator and physical acceptance are recorded in
+the ticket. It supplements SP-030 and supersedes its PiP exclusion for this selected work.
+No permanent Home-screen notch is claimed; release assignment remains undecided.
+Owner-selected Settings opt-out is implemented with a persisted toggle and guarded PiP
+entry; preference and late-command regression checks are recorded in SP-031.
+
+## Background system controls — planned 2026-10-10
+
+[SP-030](../../tickets/SP-030-background-music-and-activity-system-controls.md) plans
+outside-Sophia music controls and an Activity Live Activity for the Home and Lock Screens. Playback/timing continue during app switching, but
+display above other open apps, force-close and a custom in-app pill are excluded. Actual iPad system
+placement and Personal Team extension signing must pass a feasibility gate. Status:
+**in progress** — Now Playing, committed Activity projection, Live Activity extension target, and `sophiascriptura://activity` deep link are in the tree; **G0 device evidence and AC1–AC10 acceptance remain open**. Its
+[normative execution guide](../design/sp030-system-controls-implementation-guide.md)
+defines state transitions, committed-save projection, failure tests and G0–G6 gates.
+
+## v0.4.0 — Sophy implementation and review, 2026-10-10
+
+[SP-029](../../tickets/SP-029-v040-sophy-lady-wisdom.md) captures the owner-approved
+Sophy/Lady Wisdom and Hugging Face plan as one executable release ticket with ordered
+work packages and a [normative implementation guide](../design/sophy-implementation-guide.md)
+covering contracts, crash recovery and P0–P8 evidence gates. Status: **in progress**. The panel, Lady Wisdom character, slash commands, editable previews, insights and Notes replacement are in the app and off until Settings “Turn on Lady Wisdom” is enabled. Owner-requested review corrected the chat interface, source disclosure, cancellation, enhancement safety, durable action handling and backup integration; see the [review and acceptance walkthrough](../testing/sp029-sophy-review.md). Full-scheme regression, live provider calls and physical acceptance are still open. It covers the quiet
+illustrated companion, editable action approvals, separate action-only History,
+unprotected study retrieval, consented protected-text enhancement, Activity insights,
+existing workflow handoffs and shared BYOK routing. This is not a release and not physical acceptance. Existing v0.3.0 physical acceptance remains independent.
+
 ## v0.3.0 follow-up — selected 2026-10-07, release authorized 2026-10-09
 
 Owner requested tickets for [v0.3.0](../releases/v0.3.0.md), then selected SP-025 implementation

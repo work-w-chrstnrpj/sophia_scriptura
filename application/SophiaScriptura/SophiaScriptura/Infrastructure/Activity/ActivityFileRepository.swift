@@ -23,6 +23,8 @@ actor ActivityFileRepository {
         return base.appendingPathComponent("Activity-v1")
     }
 
+    func didRecoverOlderGeneration() -> Bool { recovered }
+
     func load() throws -> ActivitySnapshot {
         let current = directory.appendingPathComponent("current.json")
         let previous = directory.appendingPathComponent("previous.json")

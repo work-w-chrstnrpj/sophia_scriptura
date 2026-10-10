@@ -4,11 +4,19 @@ struct QuizMeView: View {
     @ObservedObject var session: CompanionSession
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
-    @State private var difficulty: QuizDifficulty = .easy
-    @State private var timed = false
-    @State private var selectedTypes: Set<QuizType> = [.identifyVerse, .whoSaidIt]
+    @State private var difficulty: QuizDifficulty
+    @State private var timed: Bool
+    @State private var selectedTypes: Set<QuizType>
     @State private var errorMessage: String?
     @State private var generating = false
+
+    init(session: CompanionSession, request: SophyQuizRequest? = nil) {
+        self.session = session
+        let resolved = request ?? SophyQuizRequest(difficulty: .easy, types: [.identifyVerse, .whoSaidIt], timed: false)
+        _difficulty = State(initialValue: resolved.difficulty)
+        _timed = State(initialValue: resolved.timed)
+        _selectedTypes = State(initialValue: Set(resolved.types.isEmpty ? [QuizType.identifyVerse, .whoSaidIt] : resolved.types))
+    }
 
     private let typeColumns = [GridItem(.adaptive(minimum: 168), spacing: 10)]
 

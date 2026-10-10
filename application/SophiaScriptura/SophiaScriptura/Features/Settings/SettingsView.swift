@@ -10,10 +10,12 @@ struct SettingsView: View {
     @ObservedObject var music: MusicSession
     @ObservedObject var shellPreferences: ShellPreferencesSession
     @ObservedObject var userProfile: UserProfileSession
+    @ObservedObject var sophy: SophySession
     @Binding var showMusicLibrary: Bool
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
     @State private var showVersions = false
+    @StateObject private var settingsToast = SettingsToastCenter()
 
     private func preference<Value>(_ path: WritableKeyPath<ReaderPreferences, Value>) -> Binding<Value> {
         Binding(get: { reader.preferences[keyPath: path] }, set: { value in
@@ -31,6 +33,7 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settings.title")
 
                     profileSection
+                    ladyWisdomSection
                     appearanceSection
                     readingSection
                     activityWorkflowsSection
@@ -38,6 +41,7 @@ struct SettingsView: View {
                     translationsSection
                     providerSection
                     musicSection
+                    pictureInPictureSection
                     shellSection
                     protectionSection
                     archiveSection
@@ -61,6 +65,11 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings.content")
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
+        }
+        .environmentObject(settingsToast)
+        .overlay(alignment: .topTrailing) {
+            SettingsTransientToast(message: settingsToast.message)
+                .animation(.easeOut(duration: 0.2), value: settingsToast.message)
         }
         .sheet(isPresented: $showVersions) { ScriptureVersionsView(session: reader) }
     }
@@ -164,6 +173,22 @@ struct SettingsView: View {
         }
     }
 
+    private var pictureInPictureSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeading("Floating Player")
+                Toggle("Allow Picture in Picture", isOn: Binding(
+                    get: { shellPreferences.preferences.allowPictureInPicture },
+                    set: { shellPreferences.setAllowPictureInPicture($0) }
+                ))
+                .accessibilityIdentifier("settings.allowPictureInPicture")
+                Text("Show music and Activity in a floating player when you open PiP. Turning this off closes the floating player; music and Activity continue.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+            }
+        }
+    }
+
     private var musicSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -231,7 +256,9 @@ struct SettingsView: View {
     private var deleteDataSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeading("Delete data")
+                Text("Delete data")
+                    .font(.system(.title3, design: .serif).weight(.semibold))
+                    .foregroundStyle(.red)
                 Text("Permanently clear notes, collections, conversations, quiz history, reminders, activity history, bookmarks, gleanings, and links on this iPad.")
                     .font(.footnote)
                     .foregroundStyle(Color(theme.palette.secondary))
@@ -240,10 +267,19 @@ struct SettingsView: View {
                         notes: notes,
                         collections: collections,
                         companion: companion,
-                        activity: activity
+                        activity: activity,
+                        sophy: sophy
                     )
                 } label: {
-                    settingsLinkRow("Open delete data")
+                    HStack {
+                        Text("Open delete data")
+                            .foregroundStyle(.red)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(theme.palette.secondary))
+                    }
+                    .padding(.vertical, 4)
                 }
                 .accessibilityIdentifier("settings.delete")
             }
@@ -260,8 +296,51 @@ struct SettingsView: View {
                     annotations: annotations,
                     activity: activity,
                     collections: collections,
-                    companion: companion
+                    companion: companion,
+                    sophy: sophy
                 )
+            }
+        }
+    }
+
+    private var ladyWisdomSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Turn on Companion Character", isOn: Binding(
+                    get: { sophy.preferences.enabled },
+                    set: { sophy.setEnabled($0) }
+                ))
+                .accessibilityIdentifier("settings.sophy.enabled")
+                Text("Your study companion stays off until you turn this on. They use the same default provider and model as new Companion chats.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                Picker("Companion", selection: Binding(
+                    get: { sophy.preferences.character },
+                    set: { sophy.setCharacter($0) }
+                )) {
+                    ForEach(StudyCompanionCharacter.allCases) { character in
+                        Text("\(character.displayName) · \(character.subtitle)").tag(character)
+                    }
+                }
+                .accessibilityIdentifier("settings.sophy.character")
+                Toggle("Show idle scripture quotes", isOn: Binding(
+                    get: { sophy.preferences.idleScriptureQuotesEnabled },
+                    set: { sophy.setIdleScriptureQuotesEnabled($0) }
+                ))
+                .accessibilityIdentifier("settings.sophy.idleQuotes")
+                Picker("Show verse after idling for", selection: Binding(
+                    get: { sophy.preferences.idleDelayBeforeQuoteSeconds },
+                    set: { sophy.setIdleDelayBeforeQuoteSeconds($0) }
+                )) {
+                    ForEach(SophyPreferencesStore.idleDelayChoices, id: \.self) { seconds in
+                        Text(SophyPreferencesStore.label(for: seconds)).tag(seconds)
+                    }
+                }
+                .disabled(!sophy.preferences.idleScriptureQuotesEnabled)
+                .accessibilityIdentifier("settings.sophy.quoteInterval")
+                Text("After you idle long enough, one verse from \(sophy.preferences.character.subtitle) stays on screen until you scroll, tap, or move the companion. Quotes pause during active Notes and Scripture annotation.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
             }
         }
     }

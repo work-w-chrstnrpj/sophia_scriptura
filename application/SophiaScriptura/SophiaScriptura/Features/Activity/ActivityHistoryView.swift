@@ -8,9 +8,23 @@ struct ActivityHistoryView: View {
     let edit: (ActivityRecord) -> Void
     let delete: (ActivityRecord) -> Void
     var modeFilter: String? = nil
+    var onStartNew: (() -> Void)? = nil
 
     var body: some View {
         List {
+            if let onStartNew {
+                Section {
+                    ActivityPrimaryActionButton(
+                        title: "Start new scripture contemplation",
+                        systemImage: "sparkles",
+                        action: onStartNew,
+                        accessibilityID: "activity.contemplation.start"
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
             ForEach(ActivityHistoryGrouping.groups(store.records.filter { modeFilter == nil || $0.modeID == modeFilter })) { group in
                 Section {
                     ForEach(group.records) { record in

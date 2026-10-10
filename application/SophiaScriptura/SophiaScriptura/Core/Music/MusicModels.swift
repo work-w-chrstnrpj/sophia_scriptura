@@ -40,7 +40,7 @@ struct MusicPlaybackSnapshot: Equatable, Sendable {
     static let initial = MusicPlaybackSnapshot(selectedTrackID: nil, loopAll: true, phase: .idle, hasStartedPlayback: false)
 }
 
-enum MusicCommand: Sendable {
+enum MusicCommand: Equatable, Sendable {
     case selectTrack(String)
     case play
     case pause

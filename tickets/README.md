@@ -8,6 +8,9 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-031](SP-031-study-picture-in-picture.md) | in progress; PiP device acceptance pending | Owner-selected floating music/Activity PiP and system Play/Pause mapping |
+| [SP-030](SP-030-background-music-and-activity-system-controls.md) | in progress; app+extension build; G0/device AC open | Home/Lock Screen Now Playing and Activity Live Activity; no overlay above other apps |
+| [SP-029](SP-029-v040-sophy-lady-wisdom.md) | in progress; panel, character and handoffs added; release and device acceptance open | v0.4.0 Sophy/Lady Wisdom, approved actions, Notes enhancement and Hugging Face |
 | [SP-025](SP-025-v030-compound-ink-and-stroke-editing.md) | implemented; simulator verified; physical acceptance pending | v0.3.0 compound ink and stroke editing |
 | [SP-026](SP-026-v030-lock-authentication-and-lifecycle.md) | in_progress; simulator verified; physical acceptance pending | v0.3.0 authentication and independent lock sessions |
 | [SP-027](SP-027-v030-notes-lock.md) | in_progress; simulator verified; physical acceptance pending | v0.3.0 Notes lock |

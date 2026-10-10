@@ -35,7 +35,7 @@ final class CompanionAdapterConformanceTests: XCTestCase {
     func testProductionRegistryIncludesRequestedVendors() {
         let ids = Set(ProviderRegistry.production().supportedAdapters.map(\.id))
         XCTAssertEqual(ids.count, ProviderRegistry.production().supportedAdapters.count)
-        for expected in ["openai", "anthropic", "gemini", "openrouter", "github", "nvidia", "cerebras", "groq", "mistral"] {
+        for expected in ["openai", "anthropic", "gemini", "openrouter", "github", "nvidia", "cerebras", "groq", "mistral", "huggingface"] {
             XCTAssertTrue(ids.contains(expected), "Missing adapter \(expected)")
         }
     }

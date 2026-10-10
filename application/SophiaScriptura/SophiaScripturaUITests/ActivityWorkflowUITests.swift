@@ -10,7 +10,8 @@ final class ActivityWorkflowUITests: XCTestCase {
                 let show = app.buttons["navigation.showTabs"]
                 if show.waitForExistence(timeout: 3) { show.tap() }
             }
-            if button.isHittable { button.tap() }
+            let tabReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in button.exists && button.isHittable }, object: nil)
+            if XCTWaiter.wait(for: [tabReady], timeout: 2) == .completed { button.tap() }
             let expectation = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in ready.exists && ready.isHittable }, object: nil)
             if XCTWaiter.wait(for: [expectation], timeout: 3) == .completed { return }
         }
@@ -60,6 +61,43 @@ final class ActivityWorkflowUITests: XCTestCase {
         XCTAssertTrue(button.exists && button.isHittable, app.debugDescription)
         button.tap()
         app.buttons["activity.start.confirm"].tap()
+    }
+
+    func testFloatingPlayerPreviewForActivity() { floatingPlayer(checkPiP: false) }
+    func testFloatingPlayerStartsPiPOnDevice() { floatingPlayer(checkPiP: true) }
+
+    private func floatingPlayer(checkPiP: Bool) {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["SP009_TEST_STORE"] = UUID().uuidString
+        app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons["study.pip.open"].exists)
+        // PiP is cross-tab; Reading may use its normal guided route. No Settings
+        // mutation is needed to exercise the floating player.
+        startReading(app)
+        let open = app.buttons["study.pip.open"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10))
+        open.tap()
+        XCTAssertTrue(app.navigationBars["Floating Player"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Play/Pause controls Activity"].exists)
+        XCTAssertTrue(app.buttons["study.pip.start"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Activity floating player preview"; capture.lifetime = .keepAlways; add(capture)
+        if checkPiP {
+            let start = app.buttons["study.pip.start"]
+            let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in start.isEnabled }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed, app.debugDescription)
+            start.tap()
+            XCTAssertTrue(app.staticTexts["PiP is open. You can return Home."].waitForExistence(timeout: 10), app.debugDescription)
+            XCUIDevice.shared.press(.home)
+            let home = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            home.name = "Activity PiP on Home"; home.lifetime = .keepAlways; add(home)
+            app.activate()
+        }
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["activity.recorder.expand"].exists)
     }
 
     func testWorkflowChoicesPersistAndAllowPlainTimersOrGuidedFlows() {

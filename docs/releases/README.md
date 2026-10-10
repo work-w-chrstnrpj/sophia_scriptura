@@ -12,6 +12,7 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v0.4.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.4.0) | 2026-10-10 | Sophy, Hugging Face BYOK, music/Activity system controls and configurable PiP | [Release notes](v0.4.0.md) |
 | [v0.3.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.3.0) | 2026-10-09 | Compound ink/stroke editing, Notes/Collections access locks, Journal fields and optional Activity workflows | [Release notes](v0.3.0.md) |
 | [v0.2.2](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.2) | 2026-10-07 | Collections material fixes and Canvas selection/performance improvements | [Release notes](v0.2.2.md) |
 | [v0.2.1](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.1) | 2026-10-05 | Notes bulk-delete confirmation and captured selection | [Release notes](v0.2.1.md) |

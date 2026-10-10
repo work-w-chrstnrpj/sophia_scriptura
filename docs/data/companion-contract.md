@@ -15,6 +15,21 @@ behavior is in the [Companion screen specification](../design/companion-screen-s
 - The composition root registers supported adapters and supplies repositories. Views do not
   select concrete providers or read credentials directly.
 
+## Shared route and Hugging Face
+
+`CompanionSnapshot` may store optional `defaultProviderConfigID` and `defaultModelID`.
+Snapshots that omit them keep the previous new-chat behavior: the first saved configuration
+that has a key, and that configuration's model. An explicit shared route is used for new
+chats. Existing conversation and quiz records keep their stored provider and model. Quiz
+uses its own saved defaults when those are present; only absent quiz defaults inherit the
+shared route. Removing the selected route's key does not silently switch to another provider.
+
+Hugging Face adapter id is `huggingface`. Chat requests use
+`https://router.huggingface.co/v1/chat/completions` with a Bearer token. Connection testing
+sends a one-token completion for the selected model id, including any `:provider` suffix.
+A successful model list is not treated as proof of inference. Hugging Face models are not
+labeled free, and none is selected automatically.
+
 ## Provider-neutral contract
 
 `LLMProviderAdapter` exposes provider identity, model discovery when supported, advertised
@@ -177,3 +192,20 @@ remain unrecorded. Untimed quizzes track active question time as well as timed q
 - Studying linkage stores no answer/score duplication and survives source quiz deletion.
 
 Compatibility note for v0.3.0: Companion retains the existing `reviewingLinks`, `recordReviewing` and `reviewingLinkID` stored field names. They are historical wire names, not an Activity mode. Activity classifies all imported Quiz Me links as Studying, migrates existing Reviewing records/goals to Studying, and preserves quiz-session identity, suppression and source-deletion behavior.
+
+
+## Sophy integration (SP-029)
+
+Sophy reuses the explicit shared provider/model binding and Keychain credentials without
+adding her turns to Companion conversations. Deleted explicit bindings fail closed.
+Sophy turns, selected text, reviewed excerpts and pending plans are memory-only; action
+History contains type/status/time/count and result IDs. General requests attach no note
+bodies. Local lookup excludes protected Notes, protected Collections/ancestry and mixed
+memberships even when unlocked. Sending eligible excerpts requires Review Context.
+Selected protected text has a separate per-request enhancement consent boundary.
+
+Sophy history and non-replayable receipts use independent checked current/previous JSON
+generations. Full backup's optional `sophyHistory` field carries validated summaries only;
+absence preserves local History. Restore invalidates pending requests and never imports
+execution receipts. See the [implementation guide](../design/sophy-implementation-guide.md)
+and [review evidence/remaining gates](../testing/sp029-sophy-review.md).

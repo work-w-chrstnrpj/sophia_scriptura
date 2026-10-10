@@ -12,7 +12,10 @@ final class CollectionsStore: ObservableObject {
     @Published private(set) var notice: String?
     private let repository: (any CollectionsRepository)?
     var protection = ItemProtectionSession.shared
+    private(set) var recoveredOlderGeneration = false
     private var revision = 0
+    @Published var sophyOpenCollectionID: UUID?
+    private var sophyCommitInFlight = false
     private var linkedNoteIDs = Set<UUID>()
     private var linkedNoteBindings: [UUID: UUID] = [:]
     private var writeChain: Task<Void, Never>?
@@ -188,6 +191,8 @@ final class CollectionsStore: ObservableObject {
         } catch { if case ItemLockError.cancelled = error {} else { notice = error.localizedDescription } }
     }
     func setProtected(_ id: UUID, enabled: Bool) async {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard let original = collection(id: id), !original.isUnfiled else { return }
         do {
             if let parent = original.parentID { await requestAccess(parent); guard !isLocked(parent) else { throw ItemLockError.locked } }
@@ -200,6 +205,7 @@ final class CollectionsStore: ObservableObject {
             }
             try protection.require([original.protectionID ?? protection.credential?.id], in: .collections)
             guard let i = collections.firstIndex(where: { $0.id == id }), collections[i].protectionID == original.protectionID else { return }
+            guard !rejectWhileSophyCommits() else { return }
             collections[i].protectionID = enabled ? protection.credential?.id : nil
             touch(id); enqueueWrite(); await flush()
         } catch { if case ItemLockError.cancelled = error {} else { notice = error.localizedDescription } }
@@ -274,6 +280,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func toggleMembership(artifactID: UUID, collectionID: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
         guard allowChanges([collectionID]) else { return }
         guard let folder = collection(id: collectionID), !folder.isUnfiled else { return }
         guard knownItem(artifactID) else { return }
@@ -289,6 +296,7 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func createCollection(name: String, detail: String, parentID: UUID?, accent: CollectionAccent, icon: CollectionIcon = .folder) -> UUID? {
+        guard !rejectWhileSophyCommits() else { return nil }
         if let parentID { guard allowChanges([parentID]) else { return nil } }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
@@ -314,6 +322,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func updateAccent(id: UUID, accent: CollectionAccent) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard allowChanges([id]) else { return }
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         collections[index].accent = accent
@@ -323,6 +333,8 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent, icon: CollectionIcon? = nil) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+
         guard allowChanges([id]) else { return false }
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return false }
         if collections[index].isUnfiled { return false }
@@ -340,6 +352,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func addMembership(artifactID: UUID, collectionID: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard allowChanges([collectionID]) else { return }
         guard let folder = collection(id: collectionID), !folder.isUnfiled, knownItem(artifactID) else { return }
         guard memberships.insert(CollectionMembership(collectionID: collectionID, artifactID: artifactID)).inserted else { return }
@@ -350,6 +364,8 @@ final class CollectionsStore: ObservableObject {
     /// Adds the destination before removing the source so the item is never left without a home.
     @discardableResult
     func move(artifactID: UUID, from source: UUID?, to destination: UUID) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+
         guard allowChanges(Set([source, destination].compactMap { $0 })) else { return false }
         guard let folder = collection(id: destination), !folder.isUnfiled, knownItem(artifactID) else {
             notice = "The item or destination is no longer available."; return false
@@ -367,6 +383,8 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func setMemberships(artifactID: UUID, collectionIDs: Set<UUID>) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+
         let current = self.collectionIDs(containing: artifactID)
         let proposed = collectionIDs.subtracting([StudyCollection.unfiledID])
         let changed = proposed.symmetricDifference(current)
@@ -453,6 +471,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func archiveCollection(id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         protection.cancel(affecting: [.collections])
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         collections[index].archivedAt = Date()
@@ -461,6 +481,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func unarchiveCollection(id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
         collections[index].archivedAt = nil
         touch(id)
@@ -480,6 +502,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func moveCollectionToTrash(id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         protection.cancel(affecting: [.collections])
         guard let index = collections.firstIndex(where: { $0.id == id }), !collections[index].isUnfiled else { return }
         let promotedParent = collections[index].parentID
@@ -493,6 +517,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func restoreCollectionFromTrash(id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
         collections[index].trashedAt = nil
         touch(id)
@@ -500,6 +526,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func permanentlyDeleteCollection(id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         protection.cancel(affecting: [.collections])
         guard let removed = collection(id: id), !removed.isUnfiled else { return }
         let promotedParent = removed.parentID
@@ -517,6 +545,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func purgeExpiredTrash(now: Date = Date()) {
+        guard !rejectWhileSophyCommits() else { return }
+
         let expired = trashedCollections.filter { collection in
             guard let trashedAt = collection.trashedAt else { return false }
             return TrashRetention.isExpired(trashedAt, now: now)
@@ -526,6 +556,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeArtifact(_ artifactID: UUID, from collectionID: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard noteAccessAllows(artifactID) else { return }
         guard allowChanges([collectionID]) else { return }
         guard collection(id: collectionID)?.isUnfiled != true else { return }
@@ -536,6 +568,8 @@ final class CollectionsStore: ObservableObject {
 
     @discardableResult
     func addPassage(_ passage: SavedPassage) -> UUID {
+        guard !rejectWhileSophyCommits() else { return passage.id }
+
         if passage.kind == .bookmark,
            let existing = passages.first(where: {
                $0.kind == .bookmark && $0.bookID == passage.bookID && $0.chapter == passage.chapter
@@ -550,12 +584,16 @@ final class CollectionsStore: ObservableObject {
     }
 
     func updateInsight(id: UUID, insight: String) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard let index = passages.firstIndex(where: { $0.id == id && $0.kind == .gleaning }) else { return }
         passages[index].insight = String(insight.prefix(2_000))
         enqueueWrite()
     }
 
     func deletePassage(_ id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard passages.contains(where: { $0.id == id }) else { return }
         passages.removeAll { $0.id == id }
         memberships = memberships.filter { $0.artifactID != id }
@@ -563,6 +601,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeAllCollections() {
+        guard !rejectWhileSophyCommits() else { return }
+
         protection.lock([.collections])
         let folderIDs = collections.filter { !$0.isUnfiled }.map(\.id)
         for id in folderIDs { permanentlyDeleteCollection(id: id) }
@@ -571,11 +611,15 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeAllPassages(kind: SavedPassageKind) {
+        guard !rejectWhileSophyCommits() else { return }
+
         let ids = passages.filter { $0.kind == kind }.map(\.id)
         for id in ids { deletePassage(id) }
     }
 
     func removeAllLinks() {
+        guard !rejectWhileSophyCommits() else { return }
+
         let ids = links.map(\.id)
         for id in ids { deleteLink(id) }
     }
@@ -589,6 +633,7 @@ final class CollectionsStore: ObservableObject {
         guard let repository else { return }
         do {
             let result = try await repository.load()
+            recoveredOlderGeneration = result.recovered
             apply(result.snapshot)
             purgeExpiredTrash()
             notice = result.recovered ? "Recovered the previous Collections revision." : nil
@@ -675,6 +720,14 @@ final class CollectionsStore: ObservableObject {
     }
 
     func upsertCompanionConversation(_ conversation: StudyConversation) {
+        if sophyCommitInFlight {
+            Task { @MainActor in
+                while self.sophyCommitInFlight { await Task.yield() }
+                self.upsertCompanionConversation(conversation)
+            }
+            return
+        }
+
         conversations.removeAll { $0.id == StudyConversation.placeholderID && !conversation.isPlaceholder }
         if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
             conversations[index] = conversation
@@ -685,6 +738,14 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeCompanionConversation(_ id: UUID) {
+        if sophyCommitInFlight {
+            Task { @MainActor in
+                while self.sophyCommitInFlight { await Task.yield() }
+                self.removeCompanionConversation(id)
+            }
+            return
+        }
+
         conversations.removeAll { $0.id == id }
         enqueueWrite()
     }
@@ -692,6 +753,8 @@ final class CollectionsStore: ObservableObject {
     /// Stores a web link. A blank title uses the site name. Only http and https addresses are accepted.
     @discardableResult
     func addLink(title: String, url: String, verse: VerseID? = nil, editionID: String? = nil) -> UUID? {
+        guard !rejectWhileSophyCommits() else { return nil }
+
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed),
               let scheme = parsed.scheme?.lowercased(),
@@ -707,6 +770,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func deleteLink(_ id: UUID) {
+        guard !rejectWhileSophyCommits() else { return }
+
         guard links.contains(where: { $0.id == id }) else { return }
         links.removeAll { $0.id == id }
         for edge in memberships.filter({ $0.artifactID == id }) {
@@ -759,6 +824,8 @@ final class CollectionsStore: ObservableObject {
     }
 
     func restoreBackupSnapshot(_ snapshot: CollectionsSnapshot) async {
+        guard !rejectWhileSophyCommits() else { return }
+
         do {
             try protection.require(collections.map(\.protectionID), in: .collections)
             guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
@@ -792,7 +859,107 @@ final class CollectionsStore: ObservableObject {
         )
     }
 
+    /// Creates every folder in one snapshot and publishes it only after the repository save succeeds.
+    func createTreeFromSophy(_ nodes: [SophyFolderCommit], destinationID: UUID?) async -> SophyCommitOutcome {
+        guard !sophyCommitInFlight else { return .rejected(.busy) }
+        sophyCommitInFlight = true
+        defer { sophyCommitInFlight = false }
+        await flush()
+        guard !nodes.isEmpty, nodes.count <= 100 else { return .rejected(.invalidArguments) }
+        guard Set(nodes.map(\.id)).count == nodes.count else { return .rejected(.invalidArguments) }
+        if nodes.contains(where: { node in collections.contains { $0.id == node.id } || node.id == StudyCollection.unfiledID }) {
+            let present = nodes.map(\.id).filter { id in collections.contains { $0.id == id } }
+            return present.count == nodes.count ? .alreadyCommitted(resultIDs: nodes.map(\.id)) : .rejected(.stalePlan)
+        }
+        if let destinationID {
+            guard let destination = collection(id: destinationID), !destination.isUnfiled, destination.isActiveInLibrary else {
+                return .rejected(.stalePlan)
+            }
+            if sophyFolderIsProtected(destinationID) { return .rejected(.accessDenied) }
+        }
+        var parentByID: [UUID: UUID?] = [:]
+        for node in nodes {
+            let name = node.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name.count <= 120, node.detail.count <= 2_000 else { return .rejected(.invalidArguments) }
+            guard name.localizedCaseInsensitiveCompare("No Folder") != .orderedSame else { return .rejected(.invalidArguments) }
+            let parent = node.parentID ?? destinationID
+            if let parent {
+                let parentIsNew = nodes.contains { $0.id == parent }
+                if !parentIsNew {
+                    guard let existing = collection(id: parent), !existing.isUnfiled, existing.isActiveInLibrary else { return .rejected(.stalePlan) }
+                    if sophyFolderIsProtected(parent) { return .rejected(.accessDenied) }
+                }
+            }
+            let siblings = collections.filter { $0.parentID == parent && !$0.isUnfiled && $0.isActiveInLibrary }
+            let newSiblings = nodes.filter { ($0.parentID ?? destinationID) == parent && $0.id != node.id }
+            let names = siblings.map(\.name) + newSiblings.map(\.name)
+            if names.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).localizedCaseInsensitiveCompare(name) == .orderedSame }) && !node.allowDuplicateName {
+                return .rejected(.invalidArguments)
+            }
+            parentByID[node.id] = parent
+        }
+        if treeHasCycle(parentByID) { return .rejected(.invalidArguments) }
+        var snapshot = exportSnapshot()
+        let now = Date()
+        for node in nodes {
+            snapshot.collections.append(StudyCollection(
+                id: node.id,
+                name: node.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                detail: node.detail.trimmingCharacters(in: .whitespacesAndNewlines),
+                parentID: parentByID[node.id] ?? nil,
+                accent: .preset,
+                icon: .folder,
+                modifiedAt: now
+            ))
+        }
+        if let repository {
+            do {
+                let saved = try await repository.save(snapshot, expectedRevision: revision)
+                apply(saved)
+                return .committed(resultIDs: nodes.map(\.id))
+            } catch CollectionsError.stale {
+                return .rejected(.stalePlan)
+            } catch {
+                return .uncertain(resultIDs: nodes.map(\.id))
+            }
+        }
+        snapshot.revision = revision
+        apply(snapshot)
+        return .committed(resultIDs: nodes.map(\.id))
+    }
+
+    private func rejectWhileSophyCommits() -> Bool {
+        guard sophyCommitInFlight else { return false }
+        notice = SophySafeError.busy.message
+        return true
+    }
+
+    func sophyFolderIsProtected(_ id: UUID) -> Bool {
+        var current: UUID? = id
+        var seen = Set<UUID>()
+        while let next = current {
+            guard seen.insert(next).inserted, let folder = collection(id: next) else { return true }
+            if folder.protectionID != nil { return true }
+            current = folder.parentID
+        }
+        return false
+    }
+
+    private func treeHasCycle(_ parents: [UUID: UUID?]) -> Bool {
+        func visit(_ id: UUID, trail: Set<UUID>) -> Bool {
+            guard let parent = parents[id] ?? nil else { return false }
+            if trail.contains(parent) { return true }
+            if parents[parent] != nil { return visit(parent, trail: trail.union([id])) }
+            return false
+        }
+        return parents.keys.contains { visit($0, trail: []) }
+    }
+
     private func enqueueWrite() {
+        guard !sophyCommitInFlight else {
+            notice = SophySafeError.busy.message
+            return
+        }
         guard repository != nil else { return }
         let previous = writeChain
         writeChain = Task { @MainActor in

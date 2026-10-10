@@ -10,13 +10,16 @@ final class MusicSession: ObservableObject {
 
     private let engine = BackgroundMusicEngine()
     private let coordinator = StudyAudioCoordinator()
+    private let nowPlaying = MusicNowPlayingCoordinator()
     private let userLibrary: UserMusicLibraryStore
     private var loaded = false
+    private var canAdvance = false
 
     init(userLibrary: UserMusicLibraryStore = .default()) {
         self.userLibrary = userLibrary
         engine.delegate = self
         engine.installObservers()
+        nowPlaying.attach(handler: self)
     }
 
     var tracks: [MusicTrackDefinition] {
@@ -54,6 +57,11 @@ final class MusicSession: ObservableObject {
         }
     }
 
+    func setPictureInPictureActive(_ active: Bool) {
+        engine.keepsAudioSessionForPiP = active
+        if !active { engine.releaseAudioSessionIfIdle() }
+    }
+
     func setShowFloatingControl(_ visible: Bool) {
         var next = preferences
         next.showFloatingControl = visible
@@ -83,6 +91,7 @@ final class MusicSession: ObservableObject {
                 snapshot.phase = .idle
                 snapshot.hasStartedPlayback = false
                 MusicPreferencesStore.save(preferences)
+                syncNowPlaying()
             }
             loadError = nil
         } catch {
@@ -111,6 +120,16 @@ final class MusicSession: ObservableObject {
         } catch {
             loadError = importErrorMessage(for: error)
         }
+    }
+
+    func containsApprovedTrack(_ id: String) -> Bool {
+        track(id: id) != nil
+    }
+
+    func selectApprovedTrack(_ id: String) -> Bool {
+        guard track(id: id) != nil else { return false }
+        selectTrack(id, autoplay: false)
+        return true
     }
 
     func handle(_ command: MusicCommand) {
@@ -150,37 +169,48 @@ final class MusicSession: ObservableObject {
         snapshot.selectedTrackID = id
         snapshot.phase = .idle
         MusicPreferencesStore.save(preferences)
-        if autoplay { play(takeover: true) }
+        refreshAdvanceEligibility()
+        if autoplay { play(takeover: true) } else { syncNowPlaying() }
     }
 
     private func play(takeover: Bool) {
         guard let track = currentTrack, let url = fileURL(for: track) else { return }
         coordinator.willStartMusic(takeover: takeover)
         do {
-            try engine.prepare(url: url)
+            if engine.preparedFileURL != url || !engine.hasPreparedPlayer {
+                try engine.prepare(url: url)
+            }
             try engine.play(takeover: takeover)
             snapshot.hasStartedPlayback = true
             snapshot.phase = .playing
             loadError = nil
+            refreshAdvanceEligibility()
+            syncNowPlaying()
         } catch {
             loadError = "Playback failed: \(error.localizedDescription)"
             snapshot.phase = .paused
+            syncNowPlaying()
         }
     }
 
     private func pause(userInitiated: Bool) {
         engine.pause()
         snapshot.phase = userInitiated ? .paused : .interrupted
+        syncNowPlaying()
     }
 
     private func advanceTrack() {
         guard let currentID = snapshot.selectedTrackID else { return }
+        let wasPlaying = snapshot.phase == .playing
         if let nextID = MusicTrackDefinition.nextTrackID(in: tracks, after: currentID, loopAll: snapshot.loopAll) {
-            selectTrack(nextID, autoplay: snapshot.phase == .playing)
-            if snapshot.phase == .playing { play(takeover: false) }
+            selectTrack(nextID, autoplay: false)
+            refreshAdvanceEligibility()
+            if wasPlaying { play(takeover: false) } else { syncNowPlaying() }
         } else {
             engine.stop()
             snapshot.phase = .paused
+            canAdvance = false
+            syncNowPlaying()
         }
     }
 
@@ -189,6 +219,32 @@ final class MusicSession: ObservableObject {
         preferences.selectedTrackID = nil
         snapshot = MusicPlaybackSnapshot(selectedTrackID: nil, loopAll: preferences.loopAll, phase: .idle, hasStartedPlayback: false)
         MusicPreferencesStore.save(preferences)
+        canAdvance = false
+        nowPlaying.clearMetadata()
+    }
+
+    private func refreshAdvanceEligibility() {
+        guard let currentID = snapshot.selectedTrackID else { canAdvance = false; return }
+        canAdvance = MusicTrackDefinition.nextTrackID(in: tracks, after: currentID, loopAll: snapshot.loopAll) != nil
+    }
+
+    private func syncNowPlaying() {
+        guard snapshot.hasStartedPlayback, let track = currentTrack else {
+            nowPlaying.clearMetadata()
+            return
+        }
+        let duration = engine.duration
+        let elapsed = duration > 0 ? min(engine.currentTime, duration) : engine.currentTime
+        let playing = snapshot.phase == .playing && engine.isPlaying
+        nowPlaying.apply(MusicNowPlayingSnapshot(
+            title: track.title,
+            duration: duration,
+            elapsed: elapsed,
+            rate: playing ? 1 : 0,
+            canPlay: snapshot.phase != .playing,
+            canPause: snapshot.phase == .playing,
+            canNext: canAdvance
+        ))
     }
 
     func pauseForNarration() {
@@ -215,15 +271,24 @@ extension MusicSession: BackgroundMusicEngineDelegate {
     func backgroundMusicEngineDidFinishTrack(_ engine: BackgroundMusicEngine) {
         if let currentID = snapshot.selectedTrackID,
            let nextID = MusicTrackDefinition.nextTrackID(in: tracks, after: currentID, loopAll: snapshot.loopAll) {
-            selectTrack(nextID, autoplay: true)
+            selectTrack(nextID, autoplay: false)
             play(takeover: false)
         } else {
             engine.stop()
             snapshot.phase = .paused
+            canAdvance = false
+            syncNowPlaying()
         }
     }
 
     func backgroundMusicEngineWasInterrupted(_ engine: BackgroundMusicEngine) {
         snapshot.phase = .interrupted
+        syncNowPlaying()
+    }
+}
+
+extension MusicSession: MusicNowPlayingCommandHandling {
+    func handleNowPlayingCommand(_ command: MusicCommand) {
+        handle(command)
     }
 }

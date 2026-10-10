@@ -3,6 +3,9 @@ import SwiftUI
 struct ActivityView: View {
     @Environment(\.appTheme) private var theme
     @ObservedObject var store: ActivityStore
+    @ObservedObject var sophy: SophySession
+    @ObservedObject var companion: CompanionSession
+    var liveActivityStatus: ActivityLiveActivityPresentationStatus = .unavailable
     var books: [ScriptureBook]
     var editionID: String?
     var referenceSystemID: String
@@ -28,6 +31,7 @@ struct ActivityView: View {
     @State private var verseError: String?
     @State private var meditateOnPassage = false
     @State private var meditateEndVerse = 1
+    @State private var sophySetupGeneration = UUID()
     @State private var customName = ""
     @State private var showingStart = false
     @State private var showingAddChooser = false
@@ -42,6 +46,7 @@ struct ActivityView: View {
     @State private var showingExport = false
     @State private var showingAnalyticsExport = false
     @State private var showingImport = false
+    @State private var showingInsights = false
     @State private var archiveDocument: ActivityArchiveDocument?
     @State private var analyticsDocument: ActivityPNGDocument?
     @State private var analyticsPeriod: ActivityAnalyticsPeriod = .week
@@ -60,11 +65,23 @@ struct ActivityView: View {
         }
         return active
     }
+    private var contemplationRecords: [ActivityRecord] {
+        store.records.filter { $0.modeID == ActivityModeID.meditating.id }
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 commandBar
+                if store.draft != nil, let notice = liveActivityNotice {
+                    Text(notice)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 4)
+                        .accessibilityIdentifier("activity.liveActivityNotice")
+                }
                 List {
                 Section {
                     ActivityAnalyticsView(store: store, period: $analyticsPeriod,
@@ -88,16 +105,16 @@ struct ActivityView: View {
                     }
                 }
                 Section {
-                    contemplationCard
-                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 12, trailing: 20))
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                } header: {
-                    Text("Scripture Contemplation")
-                        .font(.system(.title2, design: .serif).weight(.semibold))
-                        .foregroundStyle(Color(theme.palette.ink)).textCase(nil)
-                }
-                Section {
+                    ActivityPrimaryActionButton(
+                        title: "Add or start a new activity",
+                        systemImage: "plus",
+                        action: { showingAddChooser = true },
+                        accessibilityID: "activity.history.add"
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .disabled(!store.isReady)
                     if store.records.isEmpty {
                         Text("No activities recorded yet.")
                             .foregroundStyle(Color(theme.palette.secondary))
@@ -123,25 +140,41 @@ struct ActivityView: View {
                     }
                 }
                 Section {
-                    Button { openReminder(nil) } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "plus")
-                                .font(.title3.weight(.semibold))
-                                .frame(width: 42, height: 42)
-                                .background(Color(theme.palette.accent).opacity(0.11), in: RoundedRectangle(cornerRadius: 12))
-                            Text("Add new reminder")
-                                .font(.system(.headline, design: .serif).weight(.semibold))
-                            Spacer()
-                        }
-                        .foregroundStyle(Color(theme.palette.accent))
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color(theme.palette.accent), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+                    ActivityPrimaryActionButton(
+                        title: "Start new scripture contemplation",
+                        systemImage: "sparkles",
+                        action: prepareContemplationStart,
+                        accessibilityID: "activity.contemplation.start"
+                    )
+                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .disabled(!store.isReady || store.draft != nil)
+                    ForEach(Array(contemplationRecords.prefix(5))) { record in
+                        historyRow(record)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("activity.reminder.new")
+                } header: {
+                    HStack {
+                        Text("Scripture Contemplation")
+                            .font(.system(.title2, design: .serif).weight(.semibold))
+                            .foregroundStyle(Color(theme.palette.ink))
+                        Spacer()
+                        NavigationLink("View all") {
+                            ActivityHistoryView(store: store, books: books, open: { selectedRecord = $0 },
+                                edit: { prepareCorrection($0) }, delete: { recordToDelete = $0 },
+                                modeFilter: ActivityModeID.meditating.id, onStartNew: prepareContemplationStart)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .textCase(nil)
+                    }
+                }
+                Section {
+                    ActivityPrimaryActionButton(
+                        title: "Add new reminder",
+                        systemImage: "plus",
+                        action: { openReminder(nil) },
+                        accessibilityID: "activity.reminder.new"
+                    )
                     .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -198,6 +231,10 @@ struct ActivityView: View {
                     anchor: analyticsAnchor, modeID: analyticsModeID)
             }
             .sheet(isPresented: $showingManual) { manualSheet }
+            .sheet(isPresented: $showingInsights) {
+                ActivityInsightsSheet(store: store, sophy: sophy, companion: companion)
+                    .environment(\.appTheme, theme)
+            }
             .sheet(isPresented: $showingFinish) { finishSheet }
             .sheet(isPresented: $showingModes) { modesSheet }
             .sheet(isPresented: $showingReminders, onDismiss: { reminderToEdit = nil }) {
@@ -292,12 +329,25 @@ struct ActivityView: View {
             .onChange(of: store.startRequestID) { _, request in
                 if request != nil { showingStart = true; store.clearStartRequest() }
             }
+            .onChange(of: store.sophyContemplationRequest) { _, request in
+                guard let request else { return }
+                Task { await prepareSophyContemplation(request) }
+            }
             .onAppear {
                 if store.finishRequestID != nil { prepareFinish(); store.clearFinishRequest() }
                 if store.startRequestID != nil { showingStart = true; store.clearStartRequest() }
             }
         }
         .background(Color(theme.palette.paper).ignoresSafeArea())
+    }
+
+    private var liveActivityNotice: String? {
+        switch liveActivityStatus {
+        case .disabled: "Live Activities are turned off. Your timer still runs in Sophia."
+        case .denied: "Live Activity unavailable. Your timer still runs in Sophia."
+        case .failed: "Live Activity could not update. Your timer still runs in Sophia."
+        default: nil
+        }
     }
 
     private var commandBar: some View {
@@ -320,33 +370,9 @@ struct ActivityView: View {
         .padding(.bottom, 4)
     }
 
-    private var contemplationCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(store.automaticContemplationWorkflow
-                 ? "Begin the same guided passages and reflection workflow."
-                 : "Record contemplation time freely. The guided workflow is off in Settings.")
-                .font(.subheadline).foregroundStyle(Color(theme.palette.secondary))
-            Button("Start Scripture Contemplation", systemImage: "sparkles") {
-                prepareStart(); modeID = ActivityModeID.meditating.id
-            }
-            .buttonStyle(.bordered)
-            .disabled(!store.isReady || store.draft != nil)
-            .accessibilityIdentifier("activity.contemplation.start")
-            NavigationLink("View contemplation history") {
-                ActivityHistoryView(store: store, books: books, open: { selectedRecord = $0 },
-                    edit: { prepareCorrection($0) }, delete: { recordToDelete = $0 },
-                    modeFilter: ActivityModeID.meditating.id)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityIdentifier("activity.contemplation.history")
-        }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20))
-    }
-
     private var auxiliaryCard: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 175), spacing: 12)], spacing: 12) {
-            auxiliaryButton("Add Manual", icon: "plus.square") { prepareManual() }
+            auxiliaryButton("Insights", icon: "chart.line.uptrend.xyaxis") { showingInsights = true }
             auxiliaryButton("Custom Modes", icon: "square.grid.2x2") { showingModes = true }
             auxiliaryButton("Export Data", icon: "archivebox") {
                 Task {
@@ -477,6 +503,11 @@ struct ActivityView: View {
         showingStart = true
     }
 
+    private func prepareContemplationStart() {
+        prepareStart()
+        modeID = ActivityModeID.meditating.id
+    }
+
     private func prepareManual() {
         editingID = nil; title = ""; details = ""; usesEndTime = false
         minutes = 10; clockStart = Date(); clockEnd = clockStart.addingTimeInterval(600)
@@ -509,6 +540,38 @@ struct ActivityView: View {
             endVerse: end,
             referenceSystemID: referenceSystemID
         )
+    }
+
+    @MainActor
+    private func prepareSophyContemplation(_ request: SophyContemplationRequest) async {
+        let generation = UUID(); sophySetupGeneration = generation
+        defer { if generation == sophySetupGeneration { store.sophyContemplationRequest = nil } }
+        guard store.draft == nil else { store.errorMessage = "Finish your current activity first."; return }
+        guard store.automaticContemplationWorkflow else {
+            store.errorMessage = "Enable the guided Contemplation workflow in Activity before opening it with Sophy."
+            return
+        }
+        if let passage = request.passage {
+            guard let selectedBook = books.first(where: { $0.id == passage.book }),
+                  (1...selectedBook.chapterCount).contains(passage.chapter), passage.startVerse > 0,
+                  (0...1).contains(passage.endVerse - passage.startVerse) else {
+                store.errorMessage = "Choose one or two verses in a valid chapter for Contemplation."; return
+            }
+            do {
+                let verses = try await availableVerses(passage.book, passage.chapter, editionID)
+                guard generation == sophySetupGeneration, store.draft == nil else { return }
+                guard verses.contains(passage.startVerse), verses.contains(passage.endVerse) else {
+                    store.errorMessage = "The requested verses are unavailable. Choose an available passage in Activity."; return
+                }
+            } catch { store.errorMessage = "The requested passage could not be loaded. Choose an available passage in Activity."; return }
+        }
+        guard generation == sophySetupGeneration, store.draft == nil else { return }
+        modeID = ActivityModeID.meditating.id; title = request.title
+        if let passage = request.passage {
+            meditateOnPassage = true; book = passage.book; chapter = passage.chapter
+            verse = passage.startVerse; meditateEndVerse = passage.endVerse
+        } else { meditateOnPassage = false }
+        showingStart = true
     }
 
     private var meditationEndVerseOptions: [Int] {

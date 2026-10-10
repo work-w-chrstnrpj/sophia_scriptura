@@ -301,14 +301,7 @@ final class ShellNavigationUITests: XCTestCase {
         waitForVisible(app.buttons["tab.activity"])
         app.buttons["tab.activity"].tap()
         let content = app.descendants(matching: .any).matching(identifier: "activity.content").firstMatch
-        let add = app.buttons["activity.auxiliary.addmanual"]
-        for _ in 0..<6 where !add.isHittable { content.swipeUp() }
-        waitForVisible(add)
-        add.tap()
-        let title = app.textFields["Title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5))
-        title.tap(); title.typeText("Daily reading")
-        app.buttons["Save"].tap()
+        addManualActivity(app: app, content: content, title: "Daily reading")
         for _ in 0..<6 { content.swipeDown() }
         let distribution = app.buttons["activity.analytics.distribution"]
         waitForVisible(distribution)
@@ -336,18 +329,8 @@ final class ShellNavigationUITests: XCTestCase {
         handle.tap()
         waitForVisible(app.buttons["tab.activity"])
         app.buttons["tab.activity"].tap()
-        let add = app.buttons["activity.auxiliary.addmanual"]
         let content = app.descendants(matching: .any).matching(identifier: "activity.content").firstMatch
-        for _ in 0..<8 {
-            if add.isHittable && add.frame.maxY < app.buttons["tab.activity"].frame.minY - 8 { break }
-            content.swipeUp()
-        }
-        waitForVisible(add)
-        add.tap()
-        let title = app.textFields["Title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5))
-        title.tap(); title.typeText("Evening study")
-        app.buttons["Save"].tap()
+        addManualActivity(app: app, content: content, title: "Evening study")
         let record = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'activity.record.'")).firstMatch
         XCTAssertTrue(record.waitForExistence(timeout: 5))
         record.tap()
@@ -355,5 +338,19 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Edit"].exists)
         XCTAssertTrue(app.buttons["Delete"].exists)
         capture(app, "Activity record detail")
+    }
+
+    private func addManualActivity(app: XCUIApplication, content: XCUIElement, title: String) {
+        let add = app.buttons["activity.history.add"]
+        for _ in 0..<8 where !add.isHittable { content.swipeUp() }
+        waitForVisible(add)
+        add.tap()
+        waitForVisible(app.buttons["activity.add.manual"])
+        app.buttons["activity.add.manual"].tap()
+        let titleField = app.textFields["Title"]
+        XCTAssertTrue(titleField.waitForExistence(timeout: 5))
+        titleField.tap()
+        titleField.typeText(title)
+        app.buttons["Save"].tap()
     }
 }

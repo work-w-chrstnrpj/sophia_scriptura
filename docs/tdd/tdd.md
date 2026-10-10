@@ -675,6 +675,31 @@ must return inspectable evidence; otherwise the UI states that no external sourc
 retrieved. Keys are stored per provider/account in Keychain and excluded from records, logs,
 diagnostics and exports.
 
+### 12.5 Sophy / Lady Wisdom — v0.4.0 approved planning, not implemented
+
+The [normative execution guide](../design/sophy-implementation-guide.md) specifies
+proposed action schemas, lifecycle/recovery, source filtering, shared routing, UI handoffs
+and verification packages. These are implementation requirements, not shipped behavior.
+
+[SP-029](../../tickets/SP-029-v040-sophy-lady-wisdom.md) defines a distinct, quiet
+illustrated companion sharing Companion's BYOK provider/model choice, with Hugging Face
+added to provider support. Sophy proposes typed, validated, allowlisted actions against
+existing feature commands; saved changes require an editable approval preview. Music
+responds to clear requests; Quiz Me, Contemplation and preset chat open configured
+setup/draft screens for the owner's normal Start/Send action.
+
+Sophy keeps conversational context in memory and persists action summaries only in a
+separate History. The corrected interface uses an adaptive chat sheet with a stable
+composer, separate History navigation and a dedicated enhancement review. Eligible local
+lookup excerpts require explicit Review Context before transmission. General retrieval excludes protected Notes/Collections even while
+unlocked, including protected ancestor routes. The explicit exception is selected text
+from an accessible protected Note, sent for enhancement only after per-request provider
+consent; surrounding content is excluded and access expiry cancels sensitive results.
+Notes enhancement requires review and an undoable, stale-selection-safe replacement.
+Activity insights use locally calculated aggregates. No background autonomy, arbitrary
+scripting, destructive agent commands, divine-authority claims or protected-content search
+is introduced. Implementation, recovery, verification and device gates are in SP-029.
+
 ## 13. Audio, Activity, Settings
 
 - Audio: human narration preferred where permitted; on-device `AVSpeechSynthesizer`
@@ -1058,3 +1083,16 @@ lives in the [Notes contract](../data/notes-contract.md#v030-sp-025--compound-ca
 The owner selected all remaining lock tickets together and explicitly chose app access locks with unchanged content/backup formats on 2026-10-07/08. The implementation uses a shared device-only salted password verifier, independent Notes/Collections grants, category-specific genuine activity, 600-second idle deadlines, fresh-launch locking and a snapshot cover. Combined Settings controls affect only records with protection already configured. Collection ancestors gate routes without protecting member Notes. Native accepted edits save before concealment; command boundaries guard settings/membership/export/restore as well as UI visibility.
 
 The authoritative guarantees, recovery limits, schema 4/2 downgrade behavior, source ownership and physical acceptance boundaries are [item protection](../security/item-protection.md). Device-only credentials are not portable in backups; unknown bindings remain locked and cannot be reset unauthenticated. This feature is not content encryption.
+
+### SP-031 floating study player — selected follow-up
+
+The [PiP follow-up](../../tickets/SP-031-study-picture-in-picture.md) presents music and/or
+generic Activity elapsed time using AVKit sample-buffer PiP. The owner opts in from a
+visible preview. Settings → Floating Player → Allow Picture in Picture persists in local
+shell preferences (default on for compatibility). Disabling hides its launcher, closes any
+preview/PiP and blocks entry and late commands, without stopping music or Activity.
+System Play/Pause routes to music if present, otherwise Activity; Return
+to App provides separate controls. Existing sessions own state and persistence. PiP is a
+system-controlled floating window, not a permanent iPad Home-screen notch. Rendering is
+limited to preview/active presentation and does not own timer accounting. Device background
+and lifecycle acceptance are tracked independently of build success.

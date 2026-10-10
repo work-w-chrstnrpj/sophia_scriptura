@@ -17,7 +17,8 @@ struct ProviderRegistry: Sendable {
             OpenAICompatibleProviderAdapter.nvidia(),
             OpenAICompatibleProviderAdapter.cerebras(),
             OpenAICompatibleProviderAdapter.groq(),
-            OpenAICompatibleProviderAdapter.mistral()
+            OpenAICompatibleProviderAdapter.mistral(),
+            OpenAICompatibleProviderAdapter.huggingface()
         ])
     }
 

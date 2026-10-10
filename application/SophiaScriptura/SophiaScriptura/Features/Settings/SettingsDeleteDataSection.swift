@@ -10,6 +10,7 @@ enum SettingsDeletionKind: Identifiable {
     case bookmarks
     case links
     case quizHistory
+    case sophyHistory
 
     var id: String {
         switch self {
@@ -22,6 +23,7 @@ enum SettingsDeletionKind: Identifiable {
         case .bookmarks: "bookmarks"
         case .links: "links"
         case .quizHistory: "quizHistory"
+        case .sophyHistory: "sophyHistory"
         }
     }
 
@@ -36,6 +38,7 @@ enum SettingsDeletionKind: Identifiable {
         case .bookmarks: "Clear bookmarks"
         case .links: "Clear all links"
         case .quizHistory: "Clear quiz history"
+        case .sophyHistory: "Clear Sophy history"
         }
     }
 
@@ -50,6 +53,7 @@ enum SettingsDeletionKind: Identifiable {
         case .bookmarks: "Clear all bookmarks?"
         case .links: "Clear all links?"
         case .quizHistory: "Clear quiz history?"
+        case .sophyHistory: "Clear Sophy history?"
         }
     }
 
@@ -73,6 +77,8 @@ enum SettingsDeletionKind: Identifiable {
             "Every saved web link will be removed."
         case .quizHistory:
             "Every Quiz Me session, score, and archived quiz will be removed. Provider keys and quiz defaults are kept."
+        case .sophyHistory:
+            "Sophy’s command history on this iPad will be removed. Notes, folders, and reminders she already saved stay."
         }
     }
 }
@@ -83,11 +89,12 @@ struct SettingsDeleteDataHubView: View {
     @ObservedObject var collections: CollectionsStore
     @ObservedObject var companion: CompanionSession
     @ObservedObject var activity: ActivityStore
+    @ObservedObject var sophy: SophySession
 
     @State private var pendingDeletion: SettingsDeletionKind?
 
     private let kinds: [SettingsDeletionKind] = [
-        .conversations, .quizHistory, .notes, .collections, .reminders, .activities, .gleanings, .bookmarks, .links
+        .conversations, .quizHistory, .notes, .collections, .reminders, .activities, .gleanings, .bookmarks, .links, .sophyHistory
     ]
 
     var body: some View {
@@ -175,6 +182,8 @@ struct SettingsDeleteDataHubView: View {
             collections.removeAllPassages(kind: .bookmark)
         case .links:
             collections.removeAllLinks()
+        case .sophyHistory:
+            Task { await sophy.clearHistory() }
         }
     }
 }

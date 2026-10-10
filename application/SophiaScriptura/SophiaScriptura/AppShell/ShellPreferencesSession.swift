@@ -7,6 +7,13 @@ import Foundation
         preferences = ShellPreferencesStore.load()
     }
 
+    func setAllowPictureInPicture(_ enabled: Bool) {
+        var next = preferences
+        next.allowPictureInPicture = enabled
+        preferences = next
+        ShellPreferencesStore.save(next)
+    }
+
     func setShowTabActionButtons(_ visible: Bool) {
         var next = preferences
         next.showTabActionButtons = visible

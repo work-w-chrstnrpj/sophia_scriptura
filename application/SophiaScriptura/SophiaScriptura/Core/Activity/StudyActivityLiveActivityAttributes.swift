@@ -1,0 +1,24 @@
+import ActivityKit
+import Foundation
+
+struct StudyActivityLiveActivityAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable {
+        var accumulatedSeconds: TimeInterval
+        var runningSince: Date?
+        var revision: UInt64
+    }
+
+    var draftID: UUID
+}
+
+enum StudyActivityDeepLink {
+    static let scheme = "sophiascriptura"
+    static let activityHost = "activity"
+
+    static var activityURL: URL { URL(string: "\(scheme)://\(activityHost)")! }
+
+    static func isActivityDeepLink(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == scheme && url.host?.lowercased() == activityHost && url.path.isEmpty
+            && url.query == nil && url.fragment == nil
+    }
+}

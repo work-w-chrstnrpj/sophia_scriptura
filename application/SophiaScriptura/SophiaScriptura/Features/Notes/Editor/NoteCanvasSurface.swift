@@ -1057,7 +1057,20 @@ private final class NoteInkCanvas: PKCanvasView {
         }
     }
     func textViewDidBeginEditing(_ textView: UITextView) { hideTools(); palette.isHidden = true }
-    func textViewDidChangeSelection(_ textView: UITextView) { if textView === bodyText { session.bodySelection = textView.selectedRange } }
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        if textView === bodyText { session.bodySelection = textView.selectedRange }
+        else if let id = objectID(textView) { session.sophyCanvasSelection = (id, textView.selectedRange) }
+    }
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        guard range.length > 0, session.onSophyEnhance != nil else { return UIMenu(children: suggestedActions) }
+        let id = textView === bodyText ? nil : objectID(textView)
+        guard textView === bodyText || id != nil else { return UIMenu(children: suggestedActions) }
+        let enhance = UIAction(title: "Enhance with Sophy", image: UIImage(systemName: "sparkles")) { [weak self] _ in
+            guard let self, let selection = self.session.sophySelection(range: range, objectID: id) else { return }
+            self.session.onSophyEnhance?(selection)
+        }
+        return UIMenu(children: suggestedActions + [enhance])
+    }
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         let limit = textView === bodyText ? 100_000 : 20_000
         guard textView.text.count - range.length + text.count <= limit else { return false }

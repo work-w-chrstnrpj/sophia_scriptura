@@ -74,7 +74,12 @@ struct CompanionModelRoutingBar: View {
                         Text("Model")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        if modelOptions.isEmpty {
+                        if ProviderModelCatalog.allowsManualModelEntry(adapterID: adapterID) {
+                            TextField("Exact model id", text: $modelID)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .accessibilityIdentifier("\(accessibilityPrefix).manualModel")
+                        } else if modelOptions.isEmpty {
                             Text("—")
                                 .foregroundStyle(.secondary)
                         } else if modelOptions.count > 24 {
@@ -128,6 +133,7 @@ struct CompanionModelRoutingBar: View {
         }
         .onChange(of: modelID) { _, newValue in
             guard !newValue.isEmpty else { return }
+            if ProviderModelCatalog.allowsManualModelEntry(adapterID: adapterID) { return }
             if !modelOptions.contains(where: { $0.modelID == newValue }), !modelOptions.isEmpty {
                 alignModelSelection()
             }
@@ -264,6 +270,7 @@ struct CompanionInlineRoutingBar: View {
         }
         .onChange(of: modelID) { _, newValue in
             guard !newValue.isEmpty else { return }
+            if ProviderModelCatalog.allowsManualModelEntry(adapterID: adapterID) { return }
             if !modelOptions.contains(where: { $0.modelID == newValue }), !modelOptions.isEmpty {
                 modelID = modelOptions[0].modelID
             }
@@ -300,7 +307,12 @@ struct CompanionInlineRoutingBar: View {
 
     @ViewBuilder
     private var modelControl: some View {
-        if modelOptions.isEmpty {
+        if ProviderModelCatalog.allowsManualModelEntry(adapterID: adapterID) {
+            TextField("Model", text: $modelID)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.subheadline)
+        } else if modelOptions.isEmpty {
             menuValueLabel("—")
         } else {
             Menu {

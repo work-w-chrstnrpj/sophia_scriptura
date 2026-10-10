@@ -13,7 +13,11 @@ The [installer](../../scripts/install-ipad.sh) defaults to `iPad ni Paj`. It bui
 the current checkout as signed Debug using the project's existing team, verifies
 the signature and `com.personal.SophiaScriptura` identity, installs over the existing
 app, and launches it with a string-only environment so inherited test variables are
-not passed through. Current `devicectl` rejects an empty JSON object. It does not uninstall, reset data, change versions/signing settings, or
+not passed through. **SP-030:** the app embeds `StudyActivityWidgetExtension.appex`
+(`com.personal.SophiaScriptura.StudyActivityWidget`). The first signed build after
+adding the extension may require opening the project in Xcode once so Automatic Signing
+creates the widget provisioning profile; the installer already passes
+`-allowProvisioningUpdates`. Current `devicectl` rejects an empty JSON object. It does not uninstall, reset data, change versions/signing settings, or
 invoke translation sync. New release version bumps remain a separate step; a weekly
 re-sign of the same source does not require changing the version.
 
@@ -509,3 +513,18 @@ device and open Sophia Scriptura to complete the physical visual and interaction
 The simulator regression evidence is `build/verse-hub-regression.xcresult` (27 passing
 collection and reader checks), followed by `build/verse-hub-unit-final.xcresult` (14 passing
 focused collection checks) after the final compatibility adjustment.
+
+## New widget extension signing — 2026-10-10
+
+The SP-030 `StudyActivityWidgetExtension` needs its own development profile for
+`com.personal.SophiaScriptura.StudyActivityWidget`, under the same existing Personal
+Team as the app. A cached app profile does not cover the new extension. If xcodebuild
+reports `No Accounts` or missing extension profiles, sign in under Xcode Settings →
+Accounts, select the existing Personal Team and Automatic Signing for both targets,
+and retry with provisioning updates enabled (the installer already enables them).
+Do not change bundle identifiers, remove the extension or uninstall personal data.
+
+App background audio and the extension point are supplied by explicit plist inputs:
+`AppInfoSupplement.plist` and `StudyActivityWidgetInfo.plist`. Verify the built plists,
+not only the build settings. See the [build investigation](../testing/sp030-build-investigation.md)
+for reproduced errors, corrections and verification boundaries.

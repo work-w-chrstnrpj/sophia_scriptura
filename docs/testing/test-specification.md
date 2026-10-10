@@ -887,3 +887,20 @@ Subsequent owner polish, 2026-10-09: remove the Contemplation section's Today du
 Owner authorized commit, push, merge and release. App version 0.3.0/build 20 passed all **265 unit tests** and **four selected UI flows**, zero failures, in `build/v030/release-acceptance.xcresult` (log: `build/v030/release-acceptance.log`). The Activity UI test was rerun here with the final Contemplating label and section layout. Other flows cover independent and combined protection controls, relaunch/password change, shared-note opening/filing retaining a locked membership, and selecting/copying/deleting/pasting one ink stroke with undo. UI duration was 395.559 seconds; unit duration was 23.306 seconds.
 
 The release snapshot was staged and audited before verification. Subsequent changes only align release documentation and evidence. No generated build artifacts, credentials or private study data are staged. `git diff --cached --check` and relative documentation file-link validation pass. Existing orientation and simulator diagnostic-collection warnings did not change the successful test result. Physical Pencil/performance, actual biometrics/idle, full workflows and accessibility remain pending; the authorized personal source release does not mark those gates passed. Local recovery refs/bundle and staged patch are retained under `build/v030/` and the pre-release recovery branch.
+
+## v0.4.0 release snapshot — 2026-10-10
+
+Version 0.4.0/build 21: **341 unit tests passed, zero failures** in
+`build/v040/release-final.xcresult`. The combined run had two UI containment failures;
+diagnostics established XCTest's first Window had an empty frame while application bounds
+were valid. Corrected tests retain full containment using the application frame.
+`build/v040/ui-final.xcresult` passes character relaunch and enhancement; the chat setup
+had an intermittent toggle-tap failure and is rerun separately after an explicit state wait.
+The release notes record the final chat result and physical/provider acceptance boundaries.
+Signed release-version installation and normal launch passed in `build/v040/install-release.log`.
+
+Final chat rerun `build/v040/chat-final.xcresult`: **1 passed, zero failures**. Together
+with relaunch and enhancement in `ui-final.xcresult`, all three selected Sophy UI flows
+have passing final evidence. This does not imply the prior combined run passed or that
+all app UI tests were run. Only test synchronization and docs changed after 341-unit
+app-code verification and final signed iPad installation.

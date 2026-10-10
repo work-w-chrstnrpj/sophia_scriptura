@@ -200,7 +200,7 @@ extension CompanionSession {
         QuizQuestionCacheScope(
             providerConfigurationID: configuration.id,
             adapterID: configuration.adapterID,
-            modelID: quizDefaultModelID ?? configuration.defaultModelID,
+            modelID: resolvedQuizModelID(for: configuration),
             editionID: editionID
         )
     }

@@ -1,6 +1,6 @@
 # SP-038 — v1.0.0 translation acceptance and release gate
 
-Status: draft; planning only, implementation not selected.
+Status: publication selected by owner on 2026-10-13; full acceptance remains open.
 Target: v1.0.0. Created: 2026-10-10.
 Parent: [SP-033](SP-033-v100-multi-source-translation-release.md).
 
@@ -53,3 +53,17 @@ Target API.Bible selection is NASB, NLT and NKJV; NASB replaces NIV. The inspect
 ## Audio release gate
 
 SP-039 AU-01–09 joins TR-01–22 as required evidence. Verify actual BSB playback/highlighting, chosen controls/follow/continuous/offline behavior and system audio ownership on iPad. A1–A3 are approved; recording permission gates must be resolved; unavailable audio on other editions remains explicitly labelled.
+
+## Owner-selected publication — 2026-10-13
+
+Owner instruction: “Release all the changes as v1.0.0”, including commit, push, merge
+and release. Scope is all current worktree changes and version 1.0.0/build 22.
+Publication does not close the unexecuted physical/provider TR/AU acceptance gates
+or certify copied legacy-data upgrade tests. See [release notes](../docs/releases/v1.0.0.md).
+Recovery: `codex/recovery-pre-v1.0.0-20261013` preserves prior main;
+`build/v100/pre-release-refs.bundle` preserves pre-release Git references locally.
+Final app evidence: `build/v100/activity-final.xcresult`; 369 unit tests and the Activity workflow UI test passed.
+Four reader UI tests passed in `build/v100/final-acceptance.xcresult` before the final
+Activity accessibility identifier correction; full UI suite remains incomplete.
+The initial `build/v100/results.xcresult` run failed and was interrupted during UI execution;
+its stale fixtures and contrast regression were corrected. Results are recorded in release notes.

@@ -1,8 +1,6 @@
 import Foundation
 
 extension CompanionSession {
-    private var quizCacheReserveMultiplier: Int { 2 }
-
     func hasCachedQuestions(
         types: [QuizType],
         difficulty: QuizDifficulty,
@@ -62,25 +60,150 @@ extension CompanionSession {
         let difficulties = priorityDifficulty.map { priority in
             [priority] + QuizDifficulty.allCases.filter { $0 != priority }
         } ?? QuizDifficulty.allCases
-        // Make every type playable before spending provider calls on spare sessions.
-        for level in 1...quizCacheReserveMultiplier {
-            for type in types where !Task.isCancelled {
-                for difficulty in difficulties where !Task.isCancelled {
-                    let succeeded = await refillBucket(
-                        scope: scope,
-                        type: type,
-                        difficulty: difficulty,
-                        target: difficulty.questionCount * level,
-                        adapter: adapter,
-                        apiKey: apiKey
-                    )
-                    if !succeeded { return false }
-                    // A newly selected game or a finished quiz takes priority at the next batch boundary.
-                    if quizCacheReconcilePending { return true }
-                }
+        for type in types where !Task.isCancelled {
+            for difficulty in difficulties where !Task.isCancelled {
+                let succeeded = await refillBucket(
+                    scope: scope,
+                    type: type,
+                    difficulty: difficulty,
+                    target: QuizQuestionCachePolicy.bucketTargetCount,
+                    adapter: adapter,
+                    apiKey: apiKey
+                )
+                if !succeeded { return false }
+                if quizCacheReconcilePending { return true }
             }
         }
         return true
+    }
+
+    func hasExamCache(questionCount: Int, editionID: String) -> Bool {
+        guard let configuration = resolvedQuizProviderConfiguration() else { return false }
+        let scope = quizCacheScope(configuration: configuration, editionID: editionID)
+        return cachedQuizQuestions.filter { $0.scope == scope }.count >= questionCount
+    }
+
+    func startExamQuiz(
+        questionCount: Int,
+        editionID: String,
+        timed: Bool,
+        sessionTimeLimitSeconds: Int?,
+        recordReviewing: Bool = true
+    ) async throws -> UUID {
+        let config = resolvedQuizProviderConfiguration()
+        guard let config,
+              let adapter = registry.adapter(id: config.adapterID),
+              let apiKey = try? credentials.readKey(for: config.id), !apiKey.isEmpty else {
+            notice = LLMProviderError.missingCredential.errorDescription
+            throw LLMProviderError.missingCredential
+        }
+        let model = resolvedQuizModelID(for: config)
+        let scope = quizCacheScope(configuration: config, editionID: editionID)
+        let allTypes = QuizType.quizMeSelectable
+        if cachedQuizQuestions.filter({ $0.scope == scope }).count < questionCount {
+            let succeeded = await ensureExamPoolMinimum(
+                questionCount: questionCount,
+                scope: scope,
+                types: allTypes,
+                adapter: adapter,
+                apiKey: apiKey
+            )
+            if !succeeded {
+                throw AIQuizQuestionGenerator.GenerationError.invalid("Could not prepare enough exam questions.")
+            }
+        }
+        guard let reserved = reserveRandomCachedQuestions(count: questionCount, scope: scope) else {
+            throw AIQuizQuestionGenerator.GenerationError.invalid("The question cache could not prepare this exam.")
+        }
+        let quiz = QuizSession(
+            id: UUID(),
+            createdAt: Date(),
+            difficulty: .average,
+            types: allTypes,
+            editionID: editionID,
+            timed: timed,
+            recordReviewing: recordReviewing,
+            providerConfigID: config.id,
+            providerAdapterID: config.adapterID,
+            modelID: model,
+            scoreEarned: 0,
+            scoreAvailable: questionCount,
+            completionState: "active",
+            mode: .exam,
+            configuredQuestionCount: questionCount,
+            sessionTimeLimitSeconds: timed ? sessionTimeLimitSeconds : nil
+        )
+        let generated = AIQuizQuestionGenerator.materialize(reserved, sessionID: quiz.id)
+        quizSessions.insert(quiz, at: 0)
+        quizQuestions.append(contentsOf: generated)
+        activeQuizSessionID = quiz.id
+        scheduleSave()
+        await flush()
+        scheduleQuizCacheWarmup(prioritizedTypes: allTypes)
+        return quiz.id
+    }
+
+    private func ensureExamPoolMinimum(
+        questionCount: Int,
+        scope: QuizQuestionCacheScope,
+        types: [QuizType],
+        adapter: any LLMProviderAdapter,
+        apiKey: String
+    ) async -> Bool {
+        var attempts = 0
+        let maxAttempts = types.count * QuizDifficulty.allCases.count * 12
+        while cachedQuizQuestions.filter({ $0.scope == scope }).count < questionCount,
+              attempts < maxAttempts,
+              !Task.isCancelled {
+            attempts += 1
+            let bucket = quizCacheBucketWithLowestFill(scope: scope, types: types) ?? (
+                type: types[attempts % types.count],
+                difficulty: QuizDifficulty.allCases[attempts % QuizDifficulty.allCases.count]
+            )
+            let succeeded = await refillBucket(
+                scope: scope,
+                type: bucket.type,
+                difficulty: bucket.difficulty,
+                target: QuizQuestionCachePolicy.bucketTargetCount,
+                adapter: adapter,
+                apiKey: apiKey
+            )
+            if !succeeded { return false }
+        }
+        return cachedQuizQuestions.filter { $0.scope == scope }.count >= questionCount
+    }
+
+    private func quizCacheBucketWithLowestFill(
+        scope: QuizQuestionCacheScope,
+        types: [QuizType]
+    ) -> (type: QuizType, difficulty: QuizDifficulty)? {
+        var best: (type: QuizType, difficulty: QuizDifficulty, count: Int)?
+        for type in types {
+            for difficulty in QuizDifficulty.allCases {
+                let count = cachedQuizQuestions.filter {
+                    $0.scope == scope && $0.type == type && $0.difficulty == difficulty
+                }.count
+                if count >= QuizQuestionCachePolicy.bucketTargetCount { continue }
+                if best == nil || count < best!.count {
+                    best = (type, difficulty, count)
+                }
+            }
+        }
+        guard let best else { return nil }
+        return (best.type, best.difficulty)
+    }
+
+    func reserveRandomCachedQuestions(count: Int, scope: QuizQuestionCacheScope) -> [CachedQuizQuestion]? {
+        let available = cachedQuizQuestions.filter { $0.scope == scope }
+        guard available.count >= count else { return nil }
+        let order = ScriptureQuizEngine.shuffledIndices(
+            count: available.count,
+            seed: ScriptureQuizEngine.mixedSeed(sessionID: UUID())
+        )
+        let picked = order.prefix(count).map { available[$0] }
+        let usedIDs = Set(picked.map(\.id))
+        cachedQuizQuestions.removeAll { usedIDs.contains($0.id) }
+        return picked
     }
 
     private func scheduleQuizCacheRetry() {
@@ -179,7 +302,7 @@ extension CompanionSession {
             let count = cachedQuizQuestions.filter {
                 $0.scope == question.scope && $0.type == question.type && $0.difficulty == question.difficulty
             }.count
-            if count < question.difficulty.questionCount * quizCacheReserveMultiplier {
+            if count < QuizQuestionCachePolicy.bucketTargetCount {
                 cachedQuizQuestions.append(question)
             }
         }
@@ -217,19 +340,24 @@ extension CompanionSession {
         let current = cachedQuizQuestions.filter {
             $0.scope == scope && $0.difficulty == difficulty && $0.type == type
         }.count
-        let deficit = max(0, target - current)
-        guard deficit > 0 else { return true }
-        let excluded = excludedQuizPrompts(types: [type], scope: scope)[type, default: []]
+        var remaining = max(0, target - current)
+        guard remaining > 0 else { return true }
         do {
-            let generated = try await quizCacheCoordinator.generate(
-                key: key,
-                count: deficit,
-                excludedPrompts: excluded,
-                adapter: adapter,
-                apiKey: apiKey
-            )
-            mergeCachedQuestions(generated)
-            scheduleSave()
+            while remaining > 0 && !Task.isCancelled {
+                let batch = min(remaining, QuizQuestionCachePolicy.refillBatchSize)
+                let excluded = excludedQuizPrompts(types: [type], scope: scope)[type, default: []]
+                let generated = try await quizCacheCoordinator.generate(
+                    key: key,
+                    count: batch,
+                    excludedPrompts: excluded,
+                    adapter: adapter,
+                    apiKey: apiKey
+                )
+                guard !generated.isEmpty else { return false }
+                mergeCachedQuestions(generated)
+                remaining -= generated.count
+                scheduleSave()
+            }
             return true
         } catch {
             // A refill failure never removes usable cached questions or interrupts a quiz.

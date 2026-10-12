@@ -62,6 +62,7 @@ final class SophySession: ObservableObject {
     var onOpenQuiz: (() -> Void)?
     var onOpenContemplation: (() -> Void)?
     var onOpenChat: (() -> Void)?
+    var onOpenScripture: ((SophyScriptureNavigationRequest) -> Void)?
     var onOpenSource: ((UUID, Bool) -> Void)?
 
     let repository: SophyFileRepository
@@ -77,6 +78,10 @@ final class SophySession: ObservableObject {
     private var attachedSources: [SophyContextSource] = []
     private var sourceSnapshot: [UUID: SophyEligibleRecord] = [:]
     private var bookCatalog = ""
+    private var editionCatalog = ""
+    private var allowedBookIDs = Set<String>()
+    private var allowedEditionAbbreviations = Set<String>()
+    private var lastBooks: [ScriptureBook] = []
     private var previewTimeZone = TimeZone.current.identifier
     var completionOverride: ((String, String) async -> Result<String, SophySafeError>)?
     private var idleQuoteTask: Task<Void, Never>?
@@ -356,13 +361,34 @@ final class SophySession: ObservableObject {
     }
 
     func send(_ text: String, companion: CompanionSession, collections: CollectionsStore, notes: NotesSession,
-              activity: ActivityStore, music: MusicSession, books: [ScriptureBook]) async {
+              activity: ActivityStore, music: MusicSession, books: [ScriptureBook], editionCatalog: String = "") async {
         guard !isWorking else { notice = SophySafeError.busy.message; return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard trimmed.count <= SophyResponseValidator.userInputLimit else { notice = SophySafeError.inputTooLong.message; return }
         syncRoute(companion); notice = nil
         bookCatalog = books.map { "\($0.id)=\($0.title)" }.joined(separator: "; ")
+        self.editionCatalog = editionCatalog
+        lastBooks = books
+        allowedBookIDs = Set(books.map(\.id))
+        allowedEditionAbbreviations = Set(
+            editionCatalog.split(separator: ";").compactMap { pair -> String? in
+                let token = pair.split(separator: "=", maxSplits: 1).first.map(String.init)?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                return token?.isEmpty == false ? token : nil
+            }
+        )
+        if let navigation = SophyScriptureNavigationParser.parse(trimmed, books: books) {
+            append("You", trimmed)
+            append("Sophy", openingScriptureMessage(for: navigation))
+            performScriptureNavigation(navigation)
+            return
+        }
+        if let folderNodes = SophyFolderIntentParser.parse(trimmed) {
+            append("You", trimmed)
+            refreshDestinations(collections: collections, notes: notes)
+            showPreview(message: "Review the folder before saving.", actions: [.createFolders(destinationHandle: nil, nodes: folderNodes)])
+            return
+        }
         if trimmed.caseInsensitiveCompare("Create a Bible folder with books grouped by Testament") == .orderedSame, !books.isEmpty {
             append("You", trimmed)
             refreshDestinations(collections: collections, notes: notes)
@@ -376,7 +402,7 @@ final class SophySession: ObservableObject {
                 append("Sophy", "Unknown command. Use /help for available commands."); phase = .completed; return
             case .help:
                 append("You", trimmed)
-                append("Sophy", "Use /folders, /bible-tree, /reminder, /activity, /music, /quiz, /contemplate, /find, /insights, /chat or /enhance. You can also describe what you need in ordinary language.")
+                append("Sophy", "Use /folders, /bible-tree, /reminder, /activity, /music, /quiz, /contemplate, /find, /insights, /chat or /enhance. You can also ask me to open a book or passage in Scripture.")
                 phase = .completed; return
             case .newSession: newSession(); return
             case .history: historyOpen = true; return
@@ -386,6 +412,16 @@ final class SophySession: ObservableObject {
                 append("You", trimmed)
                 refreshDestinations(collections: collections, notes: notes)
                 showPreview(message: "Review the Bible folder hierarchy and descriptions.", actions: [.createFolders(destinationHandle: nil, nodes: SophyBibleTree.folderDrafts(books: books))]); return
+            case .folders:
+                refreshDestinations(collections: collections, notes: notes)
+                if let nodes = SophyFolderIntentParser.nodes(named: parsed.remainder) ?? SophyFolderIntentParser.parse(parsed.remainder) {
+                    append("You", trimmed)
+                    showPreview(message: "Review the folder before saving.", actions: [.createFolders(destinationHandle: nil, nodes: nodes)])
+                    return
+                }
+                await interpret(parsed.remainder.isEmpty ? trimmed : parsed.remainder, companion: companion, collections: collections,
+                                notes: notes, activity: activity, music: music)
+                return
             case .enhance: stageEnhancement(notes: notes); return
             case .find:
                 showLookup(parsed.remainder, scope: "both", collections: collections, notes: notes); await recordSummary("lookup"); return
@@ -456,6 +492,9 @@ final class SophySession: ObservableObject {
                 }
             } else if response.actions.count == 1, case .music(let op, let track) = response.actions[0] {
                 performMusic(op, track: track, music: music)
+            } else if response.actions.count == 1, case .openScripture = response.actions[0] {
+                append("Sophy", response.message)
+                runHandoffs(response.actions, companion: companion, activity: activity, music: music)
             } else { showPreview(message: response.message, actions: response.actions) }
         case .enhancement: phase = .failed; notice = SophySafeError.malformedPlan.message
         }
@@ -517,7 +556,8 @@ final class SophySession: ObservableObject {
         active == generation && route == routeKey && route == currentRoute(companion)
     }
     private func validated(_ raw: String, context: SophyValidationContext) -> SophyValidatedResponse? {
-        if let parsed = try? SophyResponseValidator.validate(SophyJSON.normalizedPayload(from: raw), context: context) {
+        if let data = try? SophyJSON.normalizedPayload(from: raw),
+           let parsed = try? SophyResponseValidator.validate(data, context: context) {
             return parsed
         }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -565,8 +605,18 @@ final class SophySession: ObservableObject {
         SophyValidationContext(destinationHandles: Set(destinations.map(\.handle)), modeHandles: Set(activity.modes.map(\.id)),
             trackHandles: Set(music.tracks.map(\.id)), presetHandles: Set(companion.presetCatalog.presets.map(\.id)),
             sourceHandles: Set(attachedSources.map(\.handle)), quizTypes: Set(QuizType.quizMeSelectable.map(\.rawValue)),
-            difficulties: Set(QuizDifficulty.allCases.map(\.rawValue)))
+            difficulties: Set(QuizDifficulty.allCases.map(\.rawValue)), bookIDs: allowedBookIDs,
+            bookIDByTitle: Dictionary(uniqueKeysWithValues: lastBooks.map { ($0.title.lowercased(), $0.id) }),
+            editionAbbreviations: allowedEditionAbbreviations)
     }
+    private func includesScriptureCatalog(in text: String) -> Bool {
+        let lower = text.lowercased()
+        if ["scripture", " bible", "passage", "chapter", "verse", "translation", "web", "niv", "nkjv", "nasb", "nlt", "esv", "bsb"].contains(where: { lower.contains($0) }) {
+            return true
+        }
+        return ["take me to", "go to", "open ", "let me view", "show me"].contains { lower.contains($0) }
+    }
+
     private func contextPrompt(_ text: String, activity: ActivityStore, music: MusicSession, companion: CompanionSession) -> String {
         let now = ISO8601DateFormatter().string(from: clock())
         let destinationList: String = destinations.map { "\($0.handle)=\($0.title)" }.joined(separator: "; ")
@@ -580,7 +630,10 @@ final class SophySession: ObservableObject {
         catalog += "\nModes: " + modeList
         catalog += "\nTracks: " + trackList
         catalog += "\nPresets: " + presetList
-        catalog += "\nBible books: " + bookCatalog
+        if includesScriptureCatalog(in: text) {
+            catalog += "\nBible books: " + bookCatalog
+            if !editionCatalog.isEmpty { catalog += "\nTranslations: " + editionCatalog }
+        }
         catalog += "\nQuiz types: " + quizList
         catalog += "\nDifficulties: " + difficultyList
         let listed = attachedSources.map { "\($0.handle): \($0.title) [excerpt]\n\($0.excerpt)" }.joined(separator: "\n\n")
@@ -720,9 +773,33 @@ final class SophySession: ObservableObject {
             case .openChat(let preset, let prompt):
                 guard companion.stageSophyChat(presetID: preset, draft: prompt) else { notice = companion.notice; return }
                 panelOpen = false; onOpenChat?()
+            case .openScripture(let book, let chapter, let verse, let edition):
+                performScriptureNavigation(scriptureNavigationRequest(book: book, chapter: chapter, verse: verse, editionAbbreviation: edition))
             default: break
             }
         }
+    }
+
+    private func scriptureNavigationRequest(book: String, chapter: Int, verse: Int, editionAbbreviation: String?) -> SophyScriptureNavigationRequest {
+        let title = lastBooks.first(where: { $0.id == book })?.title ?? book
+        return SophyScriptureNavigationRequest(
+            book: book,
+            chapter: chapter,
+            verse: verse,
+            editionAbbreviation: editionAbbreviation,
+            referenceLabel: "\(title) \(chapter):\(verse)"
+        )
+    }
+
+    private func openingScriptureMessage(for request: SophyScriptureNavigationRequest) -> String {
+        let translation = request.editionAbbreviation.map { " in \($0)" } ?? ""
+        return "Opening \(request.referenceLabel)\(translation) in Scripture."
+    }
+
+    private func performScriptureNavigation(_ request: SophyScriptureNavigationRequest) {
+        panelOpen = false
+        onOpenScripture?(request)
+        phase = .completed
     }
 
     func folderMatches(for line: SophyPreviewLine, collections: CollectionsStore) -> [StudyCollection] {

@@ -54,6 +54,22 @@ final class SophyResponseTests: XCTestCase {
         }
         let huge = Data(String(repeating: "a", count: 70_000).utf8)
         XCTAssertThrowsError(try SophyResponseValidator.validate(huge, context: context))
+
+        let looseProvider = """
+        {"version":"1","kind":"Plan","message":"Review","questions":[],"actions":[{"type":"createFolders","arguments":{"destinationHandle":"","nodes":[{"key":"bible","parentKey":"","name":"Bible","description":null}]}}],"sourceHandles":[],"notes":"ignored"}
+        """
+        let relaxed = try SophyResponseValidator.validate(Data(looseProvider.utf8), context: context)
+        guard case .createFolders(let destination, let nodes) = relaxed.actions.first else {
+            return XCTFail("Expected relaxed folder plan")
+        }
+        XCTAssertNil(destination)
+        XCTAssertEqual(nodes.first?.name, "Bible")
+
+        let lowercasedType = """
+        {"version":1,"kind":"plan","message":"Review","questions":[],"actions":[{"type":"createfolders","arguments":{"nodes":[{"key":"a","parentKey":null,"name":"Prayer","description":""}]}}],"sourceHandles":[]}
+        """
+        let lowered = try SophyResponseValidator.validate(Data(lowercasedType.utf8), context: context)
+        XCTAssertEqual(lowered.actions.first?.typeName, "createFolders")
     }
 
     func testReplyCannotAuthorizeActionsAndClarificationDoesNotMutate() throws {

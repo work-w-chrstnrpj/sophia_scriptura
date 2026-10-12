@@ -8,6 +8,9 @@ struct SophyValidationContext: Equatable, Sendable {
     var sourceHandles: Set<String> = []
     var quizTypes: Set<String> = []
     var difficulties: Set<String> = []
+    var bookIDs: Set<String> = []
+    var bookIDByTitle: [String: String] = [:]
+    var editionAbbreviations: Set<String> = []
 }
 
 enum SophyResponseValidator {
@@ -19,9 +22,10 @@ enum SophyResponseValidator {
         let object = try SophyJSON.object(from: data)
         let keys = Set(object.keys)
         let required: Set<String> = ["version", "kind", "message", "questions", "actions", "sourceHandles"]
-        guard keys == required else { throw SophySafeError.malformedPlan }
-        guard jsonInt(object["version"]) == 1 else { throw SophySafeError.malformedPlan }
-        guard let kind = (object["kind"] as? String).flatMap(SophyResponseKind.init(rawValue:)), kind != .enhancement else {
+        guard required.isSubset(of: keys) else { throw SophySafeError.malformedPlan }
+        guard jsonVersion(object["version"]) == 1 else { throw SophySafeError.malformedPlan }
+        let kindText = (object["kind"] as? String)?.lowercased()
+        guard let kind = kindText.flatMap(SophyResponseKind.init(rawValue:)), kind != .enhancement else {
             throw SophySafeError.malformedPlan
         }
         guard let message = object["message"] as? String, message.count <= messageLimit else { throw SophySafeError.malformedPlan }
@@ -68,10 +72,17 @@ enum SophyResponseValidator {
     private static func questions(_ value: Any?) throws -> [SophyQuestion] {
         guard let rows = value as? [[String: Any]] else { throw SophySafeError.malformedPlan }
         return try rows.map { row in
-            guard Set(row.keys) == ["field", "prompt", "choices"] else { throw SophySafeError.malformedPlan }
+            guard Set(row.keys).isSubset(of: ["field", "prompt", "choices"]) else { throw SophySafeError.malformedPlan }
             guard let field = row["field"] as? String, !field.isEmpty,
-                  let prompt = row["prompt"] as? String, !prompt.isEmpty,
-                  let choices = row["choices"] as? [String], choices.count <= 6 else { throw SophySafeError.invalidArguments }
+                  let prompt = row["prompt"] as? String, !prompt.isEmpty else { throw SophySafeError.invalidArguments }
+            let choices: [String]
+            if row["choices"] == nil || row["choices"] is NSNull {
+                choices = []
+            } else if let listed = row["choices"] as? [String], listed.count <= 6 {
+                choices = listed
+            } else {
+                throw SophySafeError.invalidArguments
+            }
             return SophyQuestion(field: field, prompt: prompt, choices: choices)
         }
     }
@@ -82,31 +93,43 @@ enum SophyResponseValidator {
     }
 
     private static func action(_ row: [String: Any], context: SophyValidationContext) throws -> SophyActionDraft {
-        guard Set(row.keys) == ["type", "arguments"], let type = row["type"] as? String, let arguments = row["arguments"] as? [String: Any] else {
+        guard Set(row.keys).isSubset(of: ["type", "arguments"]), let type = row["type"] as? String else {
             throw SophySafeError.malformedPlan
         }
-        switch type {
-        case "createFolders":
+        let arguments: [String: Any]
+        if let decoded = row["arguments"] as? [String: Any] {
+            arguments = decoded
+        } else if let encoded = row["arguments"] as? String,
+                  let data = encoded.data(using: .utf8),
+                  let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            arguments = parsed
+        } else {
+            throw SophySafeError.malformedPlan
+        }
+        switch type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "createfolders", "createfolder", "folders", "folder":
             return try folders(arguments, context: context)
-        case "createReminder":
+        case "createreminder", "reminder":
             return try reminder(arguments, context: context)
-        case "createActivity":
+        case "createactivity", "activity":
             return try activity(arguments, context: context)
         case "music":
             return try music(arguments, context: context)
-        case "openQuiz":
+        case "openquiz", "quiz":
             return try quiz(arguments, context: context)
-        case "openContemplation":
+        case "opencontemplation", "contemplation", "contemplate":
             return try contemplation(arguments)
-        case "openChat":
+        case "openchat", "chat":
             return try chat(arguments, context: context)
-        case "lookup":
+        case "openscripture", "scripture", "openpassage", "passage":
+            return try openScripture(arguments, context: context)
+        case "lookup", "search", "find":
             return try lookup(arguments)
         case "insights":
             return try insights(arguments, context: context)
         case "enhance":
             return try enhance(arguments)
-        case "deleteNote":
+        case "deletenote":
             throw SophySafeError.unknownAction
         default:
             throw SophySafeError.unknownAction
@@ -117,22 +140,29 @@ enum SophyResponseValidator {
         guard Set(arguments.keys).isSubset(of: ["destinationHandle", "nodes"]), arguments["nodes"] != nil else { throw SophySafeError.invalidArguments }
         let destination = try nullableString(arguments["destinationHandle"])
         if let destination, !context.destinationHandles.contains(destination) { throw SophySafeError.forgedHandle }
-        guard let rows = arguments["nodes"] as? [[String: Any]], (1...100).contains(rows.count) else { throw SophySafeError.invalidArguments }
+        let rowList = try folderNodeRows(arguments["nodes"])
+        guard (1...100).contains(rowList.count) else { throw SophySafeError.invalidArguments }
         var nodes: [SophyFolderNodeDraft] = []
         var keys = Set<String>()
-        for row in rows {
-            guard Set(row.keys).isSubset(of: ["key", "parentKey", "name", "description"]), row["key"] != nil, row["name"] != nil, row["description"] != nil else {
+        for row in rowList {
+            guard Set(row.keys).isSubset(of: ["key", "parentKey", "name", "description"]), row["key"] != nil, row["name"] != nil else {
                 throw SophySafeError.invalidArguments
             }
             guard let key = row["key"] as? String, !key.isEmpty, keys.insert(key).inserted else { throw SophySafeError.invalidArguments }
             let parent = try nullableString(row["parentKey"])
             let name = try bounded((row["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), min: 1, max: 120)
             if name.localizedCaseInsensitiveCompare("No Folder") == .orderedSame { throw SophySafeError.invalidArguments }
-            let description = try bounded(row["description"] as? String, min: 0, max: 2_000)
+            let description = try bounded(optionalString(row["description"]) ?? "", min: 0, max: 2_000)
             nodes.append(SophyFolderNodeDraft(key: key, parentKey: parent, name: name, description: description))
         }
         try validateTree(nodes)
         return .createFolders(destinationHandle: destination, nodes: nodes)
+    }
+
+    private static func folderNodeRows(_ value: Any?) throws -> [[String: Any]] {
+        if let rows = value as? [[String: Any]] { return rows }
+        if let row = value as? [String: Any] { return [row] }
+        throw SophySafeError.invalidArguments
     }
 
     static func validateTree(_ nodes: [SophyFolderNodeDraft]) throws {
@@ -238,6 +268,27 @@ enum SophyResponseValidator {
         return .openChat(presetHandle: preset, prompt: prompt)
     }
 
+    private static func openScripture(_ arguments: [String: Any], context: SophyValidationContext) throws -> SophyActionDraft {
+        guard arguments.keys.allSatisfy(["book", "chapter", "verse", "editionAbbreviation"].contains),
+              let rawBook = arguments["book"] as? String, !rawBook.isEmpty else { throw SophySafeError.invalidArguments }
+        let book = try resolveBookID(rawBook, context: context)
+        let chapter = try optionalInt(arguments["chapter"]) ?? 1
+        let verse = try optionalInt(arguments["verse"]) ?? 1
+        guard (1...200).contains(chapter), (1...200).contains(verse) else { throw SophySafeError.invalidArguments }
+        let edition = try optionalString(arguments["editionAbbreviation"])?.uppercased()
+        if let edition, !edition.isEmpty, !context.editionAbbreviations.isEmpty,
+           !context.editionAbbreviations.contains(edition) { throw SophySafeError.forgedHandle }
+        return .openScripture(book: book, chapter: chapter, verse: verse, editionAbbreviation: edition?.isEmpty == false ? edition : nil)
+    }
+
+    private static func resolveBookID(_ raw: String, context: SophyValidationContext) throws -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if context.bookIDs.contains(trimmed) { return trimmed }
+        if let id = context.bookIDs.first(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) { return id }
+        if let id = context.bookIDByTitle[trimmed.lowercased()] { return id }
+        throw SophySafeError.forgedHandle
+    }
+
     private static func lookup(_ arguments: [String: Any]) throws -> SophyActionDraft {
         guard Set(arguments.keys) == ["query", "scope"] else { throw SophySafeError.invalidArguments }
         let query = try bounded((arguments["query"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), min: 1, max: 1_000)
@@ -323,21 +374,20 @@ enum SophyResponseValidator {
     }
 
     private static func bounded(_ value: String?, min: Int, max: Int) throws -> String {
+        if min == 0, value == nil || value?.isEmpty == true { return value ?? "" }
         guard let value, value.count >= min, value.count <= max else { throw SophySafeError.invalidArguments }
         return value
     }
 
     private static func optionalString(_ value: Any?) throws -> String? {
-        if value == nil { return nil }
-        if value is NSNull { throw SophySafeError.invalidArguments }
+        if value == nil || value is NSNull { return nil }
         guard let string = value as? String else { throw SophySafeError.invalidArguments }
-        return string
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func nullableString(_ value: Any?) throws -> String? {
-        if value == nil || value is NSNull { return nil }
-        guard let string = value as? String else { throw SophySafeError.invalidArguments }
-        return string
+        try optionalString(value)
     }
 
     private static func optionalBool(_ value: Any?) throws -> Bool? {
@@ -348,9 +398,9 @@ enum SophyResponseValidator {
     }
 
     private static func optionalInt(_ value: Any?) throws -> Int? {
-        if value == nil { return nil }
-        if value is NSNull { throw SophySafeError.invalidArguments }
-        return jsonInt(value)
+        if value == nil || value is NSNull { return nil }
+        guard let int = jsonInt(value) else { throw SophySafeError.invalidArguments }
+        return int
     }
 
     private static func dateString(_ value: Any?) throws -> String {
@@ -389,9 +439,16 @@ enum SophyResponseValidator {
     }
 
     private static func jsonInt(_ value: Any?) -> Int? {
-        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
-        let int = number.intValue
-        return number.doubleValue == Double(int) ? int : nil
+        if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            let int = number.intValue
+            return number.doubleValue == Double(int) ? int : nil
+        }
+        if let text = value as? String, let int = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) { return int }
+        return nil
+    }
+
+    private static func jsonVersion(_ value: Any?) -> Int? {
+        jsonInt(value) ?? (value as? String).flatMap { jsonInt($0) }
     }
 }
 
@@ -404,15 +461,15 @@ enum SophyJSON {
             else { text = text.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "") }
         }
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.first != "{" || text.last != "}" {
-            guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") , start < end else {
-                throw SophySafeError.malformedPlan
-            }
-            text = String(text[start...end])
+        if let extracted = extractJSONObject(from: text) {
+            text = extracted
+        } else if text.first != "{" || text.last != "}" {
+            throw SophySafeError.malformedPlan
         }
         guard text.utf8.count <= SophyResponseValidator.rawLimit else { throw SophySafeError.malformedPlan }
-        try rejectDuplicateKeys(Data(text.utf8))
-        return Data(text.utf8)
+        let data = Data(text.utf8)
+        try rejectDuplicateKeys(data)
+        return data
     }
 
     static func object(from data: Data) throws -> [String: Any] {
@@ -422,6 +479,30 @@ enum SophyJSON {
         let parsed = try JSONSerialization.jsonObject(with: payload)
         guard let object = parsed as? [String: Any] else { throw SophySafeError.malformedPlan }
         return object
+    }
+
+    /// First balanced `{...}` slice, respecting quoted strings (more reliable than last-`}` trimming).
+    static func extractJSONObject(from text: String) -> String? {
+        guard let start = text.firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for index in text.indices[start...] {
+            let character = text[index]
+            if inString {
+                if escaped { escaped = false; continue }
+                if character == "\\" { escaped = true; continue }
+                if character == "\"" { inString = false }
+                continue
+            }
+            if character == "\"" { inString = true; continue }
+            if character == "{" { depth += 1 }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { return String(text[start...index]) }
+            }
+        }
+        return nil
     }
 
     private static func fencedJSON(in text: String) -> String? {
@@ -474,7 +555,12 @@ enum SophyJSON {
                 try consume(":")
                 try parseValue()
                 skipWhitespace()
-                if peek() == "," { try consume(","); continue }
+                if peek() == "," {
+                    try consume(",")
+                    skipWhitespace()
+                    if peek() == "}" { try consume("}"); return }
+                    continue
+                }
                 try consume("}")
                 return
             }
@@ -487,7 +573,12 @@ enum SophyJSON {
             while true {
                 try parseValue()
                 skipWhitespace()
-                if peek() == "," { try consume(","); continue }
+                if peek() == "," {
+                    try consume(",")
+                    skipWhitespace()
+                    if peek() == "]" { try consume("]"); return }
+                    continue
+                }
                 try consume("]")
                 return
             }

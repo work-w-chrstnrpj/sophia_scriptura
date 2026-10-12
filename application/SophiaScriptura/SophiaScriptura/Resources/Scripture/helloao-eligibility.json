@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-10-10",
+  "editions": [
+    {
+      "providerEditionID": "BSB",
+      "appEditionID": "helloao.BSB",
+      "name": "Berean Standard Bible",
+      "abbreviation": "BSB",
+      "language": "eng",
+      "expectedBookCount": 66,
+      "rightsEvidenceURLs": [
+        "https://berean.bible/",
+        "https://bible.helloao.org/docs/"
+      ],
+      "licenseSummary": "Public domain (Berean Bible translation).",
+      "attribution": "Scripture quotations marked BSB are from the Berean Standard Bible (BSB), used by permission. Public domain.",
+      "permittedOperations": {
+        "install": true,
+        "offlineRead": true,
+        "copy": true,
+        "share": true,
+        "saveQuote": true,
+        "aiContext": true
+      }
+    },
+    {
+      "providerEditionID": "eng_kjv",
+      "appEditionID": "helloao.eng_kjv",
+      "name": "King James Version",
+      "abbreviation": "KJV",
+      "language": "eng",
+      "expectedBookCount": 66,
+      "rightsEvidenceURLs": [
+        "https://www.cambridge.org/gb/bibles/about/rights-and-permissions",
+        "https://bible.helloao.org/docs/"
+      ],
+      "licenseSummary": "Public domain in the United States.",
+      "attribution": "King James Version (KJV), public domain.",
+      "permittedOperations": {
+        "install": true,
+        "offlineRead": true,
+        "copy": true,
+        "share": true,
+        "saveQuote": true,
+        "aiContext": true
+      }
+    },
+    {
+      "providerEditionID": "eng_asv",
+      "appEditionID": "helloao.eng_asv",
+      "name": "American Standard Version",
+      "abbreviation": "ASV",
+      "language": "eng",
+      "expectedBookCount": 66,
+      "rightsEvidenceURLs": [
+        "https://ebible.org/find/details.php?id=eng-asv",
+        "https://bible.helloao.org/docs/"
+      ],
+      "licenseSummary": "Public domain.",
+      "attribution": "American Standard Version (ASV), public domain.",
+      "permittedOperations": {
+        "install": true,
+        "offlineRead": true,
+        "copy": true,
+        "share": true,
+        "saveQuote": true,
+        "aiContext": true
+      }
+    },
+    {
+      "providerEditionID": "eng_lsv",
+      "appEditionID": "helloao.eng_lsv",
+      "name": "Literal Standard Version",
+      "abbreviation": "LSV",
+      "language": "eng",
+      "expectedBookCount": 66,
+      "rightsEvidenceURLs": [
+        "https://literalword.com/lsv/",
+        "https://creativecommons.org/licenses/by-sa/4.0/",
+        "https://bible.helloao.org/docs/"
+      ],
+      "licenseSummary": "Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0).",
+      "attribution": "Literal Standard Version (LSV), © Covenant Press / Literal Word. Used under CC BY-SA 4.0.",
+      "permittedOperations": {
+        "install": true,
+        "offlineRead": true,
+        "copy": true,
+        "share": true,
+        "saveQuote": true,
+        "aiContext": true
+      }
+    },
+    {
+      "providerEditionID": "eng_webu",
+      "appEditionID": "helloao.eng_webu",
+      "name": "World English Bible Updated",
+      "abbreviation": "WEBU",
+      "language": "eng",
+      "expectedBookCount": 81,
+      "rightsEvidenceURLs": [
+        "https://ebible.org/Scriptures/details.php?id=engwebu",
+        "https://bible.helloao.org/api/eng_webu/books.json",
+        "https://bible.helloao.org/docs/"
+      ],
+      "licenseSummary": "Public domain text with publisher attribution requirements.",
+      "attribution": "World English Bible Updated (WEBU), public domain. Distinct from bundled WEBP.",
+      "permittedOperations": {
+        "install": true,
+        "offlineRead": true,
+        "copy": true,
+        "share": true,
+        "saveQuote": true,
+        "aiContext": true
+      }
+    }
+  ]
+}

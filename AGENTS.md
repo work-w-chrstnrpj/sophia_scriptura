@@ -58,7 +58,7 @@ through a provider-agnostic bring-your-own-key adapter without leaking secrets.
 
 - Application/runtime: `SwiftUI on iPadOS 17+ (Swift 5.9+, Xcode 16+)`
 - Service/API layer: no runtime backend. SP-010 implements a direct on-device API.Bible
-  client and encrypted licensed-content sync for the owner-approved NIV11, NLT and NKJV IDs.
+  client and encrypted licensed-content sync for the owner-approved NASB, NLT and NKJV IDs.
 - Current runtime stores: SP-006 retains an isolated atomic JSON experiment fixture;
   SP-013 adds validated Notes generations with ink/images and Notes-only recovery.
   SP-009 implements bundled read-only SQLite plus local-only SwiftData reader state.
@@ -196,6 +196,19 @@ simulator exists. Set DEVELOPER_DIR per command where the Mac selects Command Li
 Keep result bundles in ignored `build/` and summarize evidence in the ticket.
 Documentation-only changes require relevant link/path and `git diff --check` validation;
 do not rerun native tests without a code change or unresolved verification need.
+
+## SP-033 structure update
+
+`Core/Scripture/ScriptureReferenceIdentity.swift` and `TranslationSourceContracts.swift` own
+source-neutral edition identity, rights policy and operation authorization boundaries.
+`Infrastructure/Scripture/MultiSourceTranslationLibrary.swift` coordinates bundled WEBP,
+existing `OfflineTranslationLibrary` (API.Bible) and `Infrastructure/Scripture/HelloAO/`
+(catalog, parser, generation store and edition repository). `Features/Scripture/ReaderSession.swift`
+`ScriptureTranslationPickerView.swift` (read-only edition choice) and `ScriptureTranslationDownloadsView.swift` (AO/API download management) replace the combined Versions sheet; Settings opens downloads directly
+and API.Bible sync separately. SP-039 adds `Core/Scripture/ScriptureNarrationValues.swift`,
+`ScriptureNarrationTiming.swift`, `Features/Scripture/ScriptureNarrationSession.swift` and
+Hello AO chapter narration transport wired through `StudyAudioCoordinator`. SP-038 acceptance
+and v1.0.0 publication remain separate gates.
 
 ## SP-012 structure update
 

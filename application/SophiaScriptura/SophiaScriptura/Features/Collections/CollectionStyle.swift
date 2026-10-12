@@ -68,6 +68,7 @@ extension CollectionArtifactKind {
     var tint: Color {
         switch self {
         case .scripture, .bookmark: return CollectionAccent.oxblood.color
+        case .annotation: return CollectionAccent.plum.color
         case .note: return CollectionAccent.sage.color
         case .conversation: return CollectionAccent.slate.color
         case .link, .gleaning: return CollectionAccent.gold.color

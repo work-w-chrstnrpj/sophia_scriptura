@@ -57,6 +57,20 @@ final class SophyProductTests: XCTestCase {
 
     func testSlashAliasesAndUnknownCommandStayLocal() {
         XCTAssertEqual(SophyCommandParser.slashCommand(in: "/bible-tree")?.command, .bibleTree)
+        let books = [ScriptureBook(id: "JAS", title: "James", testament: "NT", order: 59, chapterCount: 5),
+                     ScriptureBook(id: "GEN", title: "Genesis", testament: "OT", order: 1, chapterCount: 50)]
+        let james = SophyScriptureNavigationParser.parse("Take me to the book of James in Scripture", books: books)
+        XCTAssertEqual(james?.book, "JAS")
+        let genesis = SophyScriptureNavigationParser.parse("Let me view Genesis 2:13 WEB translation in Scripture's tab", books: books)
+        XCTAssertEqual(genesis?.book, "GEN")
+        XCTAssertEqual(genesis?.chapter, 2)
+        XCTAssertEqual(genesis?.verse, 13)
+        XCTAssertEqual(genesis?.editionAbbreviation, "WEB")
+        XCTAssertTrue(ScriptureVerseText.shouldInsertSpace(after: ";", before: "f"))
+        let folder = SophyFolderIntentParser.parse("Create a folder called Prayer")
+        XCTAssertEqual(folder?.first?.name, "Prayer")
+        XCTAssertTrue(SophySlashCommandStyle.showsHighlightedOverlay(for: "/folders Bible"))
+        XCTAssertFalse(SophySlashCommandStyle.showsHighlightedOverlay(for: "Create a folder"))
         XCTAssertEqual(SophyCommandParser.slashCommand(in: "/search grace")?.command, .find)
         XCTAssertEqual(SophyCommandParser.slashCommand(in: "/not-a-command")?.command, .unknown("not-a-command"))
     }

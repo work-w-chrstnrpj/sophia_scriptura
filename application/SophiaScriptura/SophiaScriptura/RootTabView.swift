@@ -35,6 +35,8 @@ struct RootTabView: View {
     @StateObject private var companion = CompanionSession.live()
     @StateObject private var activity = ActivityStore()
     @StateObject private var music = MusicSession()
+    @State private var studyAudio = StudyAudioCoordinator()
+    @State private var scriptureNarration = ScriptureNarrationSession()
     @StateObject private var studyPiP = StudyPiPPlayer()
     @State private var showStudyPiP = false
     @StateObject private var activityLiveActivity = ActivityLiveActivityCoordinator()
@@ -48,7 +50,7 @@ struct RootTabView: View {
     @State private var shellFABEngagedUntil = Date.distantPast
     @State private var showShellNewCollection = false
     @State private var showShellNoteKindPicker = false
-    @State private var reader = ReaderSession(content:BundledScriptureRepository(),state:Self.makeStateStore(),library:OfflineTranslationLibrary())
+    @State private var reader = ReaderSession(content:BundledScriptureRepository(),state:Self.makeStateStore(),library:MultiSourceTranslationLibrary())
     private static func makeStateStore() -> ReaderStateStore? {
         #if DEBUG
         if let raw = ProcessInfo.processInfo.environment["SP009_TEST_STORE"], let id = UUID(uuidString:raw) {
@@ -88,8 +90,18 @@ struct RootTabView: View {
     private var tabContent: some View {
         GeometryReader { geometry in
                 ZStack {
-                    ScriptureView(session:reader, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
-                    CollectionsView(store:collections, notes:notes, openNote: { id, collectionID in notes.open(id, from: collectionID); selection = .notes; chrome.reveal() }, openPassage: openPassage, openCompanion: { selection = .companion; chrome.reveal() }, createConversation: { companion.createConversation() }).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    ScriptureView(session:reader, narration:scriptureNarration, annotations:annotations, notes:notes, collections:collections, companion:companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() }, openCompanion: { selection = .companion; chrome.reveal() }, active: selection == .scripture).tabPresentation(.scripture, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    CollectionsView(
+                        store: collections,
+                        notes: notes,
+                        openNote: { id, collectionID in notes.open(id, from: collectionID); selection = .notes; chrome.reveal() },
+                        openPassage: openPassage,
+                        openAnnotation: openAnnotation,
+                        annotationSnapshot: annotations.loaded ? annotations.snapshot : nil,
+                        bookTitleForCode: { code in reader.books.first { $0.id == code }?.title ?? code },
+                        openCompanion: { selection = .companion; chrome.reveal() },
+                        createConversation: { companion.createConversation() }
+                    ).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
@@ -112,9 +124,13 @@ struct RootTabView: View {
                         )
                     }, availableVerses: { book, chapter, editionID in
                         try await reader.availableVerses(book: book, chapter: chapter, editionID: editionID)
+                    }, currentReaderLocation: {
+                        guard let document = reader.document else { return nil }
+                        return (document.book, document.chapter)
                     }).tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     SettingsView(
                         reader: reader,
+                        narration: scriptureNarration,
                         notes: notes,
                         annotations: annotations,
                         collections: collections,
@@ -160,6 +176,7 @@ struct RootTabView: View {
                 books: reader.books,
                 referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
                 editionID: reader.edition?.id,
+                editionCatalog: sophyEditionCatalog(for: reader),
                 scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
             )
         }
@@ -229,6 +246,22 @@ struct RootTabView: View {
             sophy.onOpenContemplation = { selection = .activity; chrome.reveal() }
             sophy.onOpenActivity = { selection = .activity; chrome.reveal() }
             sophy.onOpenChat = { selection = .companion; chrome.reveal() }
+            sophy.onOpenScripture = { request in
+                selection = .scripture
+                chrome.reveal()
+                Task {
+                    if let abbreviation = request.editionAbbreviation,
+                       let editionID = reader.editionID(matchingAbbreviation: abbreviation) {
+                        await reader.selectEdition(editionID)
+                    }
+                    await reader.navigate(
+                        book: request.book,
+                        chapter: request.chapter,
+                        verse: request.verse,
+                        emphasis: [request.verse]
+                    )
+                }
+            }
             sophy.onOpenSource = { id, isCollection in
                 if isCollection { selection = .collections; collections.sophyOpenCollectionID = id }
                 else { notes.open(id); selection = .notes }
@@ -244,6 +277,9 @@ struct RootTabView: View {
             companion.onCollectionsRemove = { collections.removeCompanionConversation($0) }
             music.load()
             shellPreferences.load()
+            studyAudio.narration = scriptureNarration
+            music.attachStudyAudio(studyAudio)
+            scriptureNarration.bind(music: music, reader: reader)
         }
         .task { await notes.load(); await collections.load(); await companion.load();
             let activeIDs = Set(companion.activeConversations.map(\.id))
@@ -378,6 +414,20 @@ struct RootTabView: View {
         }
     }
 
+    private func sophyEditionCatalog(for reader: ReaderSession) -> String {
+        var entries: [String] = []
+        if let edition = reader.edition {
+            entries.append("\(edition.abbreviation.uppercased())=\(edition.id)")
+        }
+        for status in reader.translations {
+            entries.append("\(status.translation.abbreviation.uppercased())=\(status.translation.editionID)")
+        }
+        for status in reader.helloAOEditions where status.isAvailable {
+            entries.append("\(status.eligible.abbreviation.uppercased())=\(status.appEditionID)")
+        }
+        return entries.joined(separator: "; ")
+    }
+
     private func shellCapsuleFAB(title: String, systemImage: String, id: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
@@ -399,6 +449,20 @@ struct RootTabView: View {
                 await reader.selectEdition(passage.editionID)
             }
             await reader.navigate(book: passage.bookID, chapter: passage.chapter, verse: passage.startVerse, spans: passage.spans)
+        }
+    }
+
+    private func openAnnotation(_ saved: SavedAnnotation) {
+        selection = .scripture
+        chrome.reveal()
+        Task {
+            if reader.edition?.id != saved.source.editionID {
+                await reader.selectEdition(saved.source.editionID)
+            }
+            await reader.navigate(book: saved.source.book, chapter: saved.source.chapter)
+            await annotations.open(reader.document)
+            guard let document = reader.document else { return }
+            await annotations.activateSavedLayer(groupID: saved.groupID, layerID: saved.id, document: document, reader: reader)
         }
     }
     private var navigationDock: some View {

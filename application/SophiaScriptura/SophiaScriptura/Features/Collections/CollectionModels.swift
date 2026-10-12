@@ -2,6 +2,7 @@ import Foundation
 
 enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiable {
     case scripture
+    case annotation
     case note
     case conversation
     case link
@@ -13,6 +14,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
     var title: String {
         switch self {
         case .scripture: return "Scripture"
+        case .annotation: return "Annotations"
         case .note: return "Notes"
         case .conversation: return "Conversations"
         case .link: return "Links"
@@ -24,6 +26,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
     var symbolName: String {
         switch self {
         case .scripture: return "book.closed"
+        case .annotation: return "square.3.layers.3d"
         case .note: return "note.text"
         case .conversation: return "bubble.left.and.bubble.right"
         case .link: return "link"
@@ -402,6 +405,15 @@ struct PassageSpan: Codable, Hashable {
     var length: Int
 }
 
+struct SavedAnnotation: Codable, Identifiable, Hashable {
+    let id: UUID
+    var groupID: UUID
+    var source: AnnotationSource
+    var bookTitle: String
+    var layerName: String
+    var savedAt: Date
+}
+
 struct SavedPassage: Codable, Identifiable, Hashable {
     let id: UUID
     var bookID: String
@@ -463,20 +475,32 @@ struct CollectionsSnapshot: Codable, Equatable {
     var revision = 0
     var collections: [StudyCollection] = []
     var passages: [SavedPassage] = []
+    var savedAnnotations: [SavedAnnotation] = []
     var links: [SavedLink] = []
     var conversations: [StudyConversation] = []
     var memberships: [CollectionMembership] = []
     var unfiledAccent: CollectionAccent = .stone
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, revision, collections, passages, links, conversations, memberships, unfiledAccent
+        case schemaVersion, revision, collections, passages, savedAnnotations, links, conversations, memberships, unfiledAccent
     }
 
-    init(schemaVersion: Int = 1, revision: Int = 0, collections: [StudyCollection] = [], passages: [SavedPassage] = [], links: [SavedLink] = [], conversations: [StudyConversation] = [], memberships: [CollectionMembership] = [], unfiledAccent: CollectionAccent = .stone) {
+    init(
+        schemaVersion: Int = 1,
+        revision: Int = 0,
+        collections: [StudyCollection] = [],
+        passages: [SavedPassage] = [],
+        savedAnnotations: [SavedAnnotation] = [],
+        links: [SavedLink] = [],
+        conversations: [StudyConversation] = [],
+        memberships: [CollectionMembership] = [],
+        unfiledAccent: CollectionAccent = .stone
+    ) {
         self.schemaVersion = schemaVersion
         self.revision = revision
         self.collections = collections
         self.passages = passages
+        self.savedAnnotations = savedAnnotations
         self.links = links
         self.conversations = conversations
         self.memberships = memberships
@@ -489,6 +513,7 @@ struct CollectionsSnapshot: Codable, Equatable {
         revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 0
         collections = try container.decodeIfPresent([StudyCollection].self, forKey: .collections) ?? []
         passages = try container.decodeIfPresent([SavedPassage].self, forKey: .passages) ?? []
+        savedAnnotations = try container.decodeIfPresent([SavedAnnotation].self, forKey: .savedAnnotations) ?? []
         links = try container.decodeIfPresent([SavedLink].self, forKey: .links) ?? []
         conversations = try container.decodeIfPresent([StudyConversation].self, forKey: .conversations) ?? []
         memberships = try container.decodeIfPresent([CollectionMembership].self, forKey: .memberships) ?? []
@@ -515,6 +540,7 @@ enum CollectionLibrarySort: String, CaseIterable, Identifiable {
 enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
     case all
     case scripture
+    case annotation
     case note
     case bookmark
     case gleaning
@@ -527,6 +553,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return "All"
         case .scripture: return "Scripture"
+        case .annotation: return "Annotations"
         case .note: return "Notes"
         case .bookmark: return "Bookmarks"
         case .gleaning: return "Gleanings"
@@ -539,6 +566,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return nil
         case .scripture: return .scripture
+        case .annotation: return .annotation
         case .note: return .note
         case .conversation: return .conversation
         case .link: return .link

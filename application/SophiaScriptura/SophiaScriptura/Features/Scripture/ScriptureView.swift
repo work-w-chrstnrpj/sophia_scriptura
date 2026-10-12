@@ -3,6 +3,7 @@ import SwiftUI
 struct ScriptureView: View {
     @ObservedObject private var protection = ItemProtectionSession.shared
     @Bindable var session: ReaderSession
+    @Bindable var narration: ScriptureNarrationSession
     @Bindable var annotations: AnnotationSession
     var notes: NotesSession
     @ObservedObject var collections: CollectionsStore
@@ -25,6 +26,7 @@ struct ScriptureView: View {
     @State private var wideLayout = false
     @State private var landscapeLayout = false
     @State private var confirmDeleteLayer = false
+    @State private var showNarrationPlayer = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -33,6 +35,15 @@ struct ScriptureView: View {
     private var palette: ReaderPalette { session.preferences.palette(for:appearance,colorScheme:colorScheme) }
     private var bookButtonWidth: CGFloat { wideLayout ? 190 : 150 }
     private var selectedBookTitle: String { session.currentBook?.title ?? session.title }
+    private var combinedEmphasisVerses: [Int] {
+        if let playback = session.playbackHighlightVerse { return [playback] }
+        return session.emphasisVerses
+    }
+
+    private var scrollReaderWithNarration: Bool {
+        narration.isNarrationActive && session.playbackHighlightVerse != nil
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing:0) {
@@ -88,13 +99,7 @@ struct ScriptureView: View {
                     Text(session.edition?.name ?? session.abbreviation)
                         .font(ScriptureFonts.interface(appearance,size:13)).foregroundStyle(Color(palette.secondary))
                 }.padding(.top,10).padding(.horizontal,24)
-                AnnotationControls(annotations: annotations, reader: session, width: contentWidth,
-                                   confirmDeleteLayer: $confirmDeleteLayer, openChapterHub: {
-                    hubChapter = CompanionChapterAnchor(
-                        bookID: document.book, chapter: document.chapter, editionID: document.editionID,
-                        referenceLabel: "\(session.currentBook?.title ?? document.book) Chapter \(document.chapter) (\(session.abbreviation))"
-                    )
-                })
+                annotationControls(for: document)
                 if let group = annotations.group {
                     if annotations.layoutAvailable && group.source == AnnotationSource(document) {
                         annotatedReader(document, group: group)
@@ -182,15 +187,10 @@ struct ScriptureView: View {
             annotations.toolsVisible = false
         }
         .onChange(of: session.preferences) { old, new in
-            if annotations.selected != nil && annotations.mode != .hidden &&
-               (old.typeface != new.typeface || old.sizeStep != new.sizeStep || old.appearancePreset != new.appearancePreset),
-               let document = session.document {
-                Task { await annotations.appearanceChanged(to: new, document: document, width: contentWidth) }
-            }
+            applyAnnotationAppearanceChange(from: old, to: new)
         }
-        .onChange(of:scenePhase) { _, phase in
-            if phase != .active { Task { await annotations.save() }; session.suspendLicensedContent() }
-            else { Task { await session.resume() } }
+        .onChange(of: scenePhase) { _, phase in
+            handleScenePhaseChange(phase)
         }
         .sheet(item:$picker) { item in pickerSheet(item) }
         .background(GeometryReader { geometry in
@@ -227,9 +227,16 @@ struct ScriptureView: View {
             if let link = collections.link(id: card.id) { StudyLinkSheet(link: link) }
         }
         .sheet(item: $hubShare) { share in ScriptureActivitySheet(text: share.text) }
+        .sheet(isPresented: $showNarrationPlayer) {
+            ScriptureNarrationPlayerSheet(session: narration, chapterTitle: session.title)
+        }
+        .onChange(of: session.navigationID) { _, _ in
+            guard showNarrationPlayer else { return }
+            narration.syncWithReaderChapterIfNeeded()
+        }
         .sheet(isPresented: Binding(
             get: { !wideLayout && companion.scripturePanelConversationID != nil },
-            set: { _ in }
+            set: { if !$0 { companion.scripturePanelConversationID = nil } }
         )) {
             if let id = companion.scripturePanelConversationID,
                let conversation = companion.conversations.first(where: { $0.id == id }) {
@@ -339,7 +346,8 @@ struct ScriptureView: View {
                                   saveBookmark: { saveExcerpt($0, kind: .bookmark) }, saveGleaning: { saveExcerpt($0, kind: .gleaning) },
                                   askCompanion: askCompanion(from:),
                                   analyzeOriginalLanguage: analyzeOriginalLanguage(from:),
-                                  emphasisVerses: session.emphasisVerses, emphasisSpans: session.emphasisSpans)
+                                  emphasisVerses: combinedEmphasisVerses, emphasisSpans: session.emphasisSpans,
+                                  scrollToNarrationVerse: scrollReaderWithNarration)
                     .frame(maxWidth:760).frame(maxWidth:.infinity)
     }
     private func hubBinding(wide: Bool) -> Binding<VerseID?> {
@@ -540,10 +548,44 @@ struct ScriptureView: View {
                 }
             }.presentationDetents([.medium,.large])
     }
+    @ViewBuilder
+    private func annotationControls(for document: ChapterDocument) -> some View {
+        AnnotationControls(
+            annotations: annotations,
+            reader: session,
+            collections: collections,
+            width: contentWidth,
+            confirmDeleteLayer: $confirmDeleteLayer,
+            openChapterHub: {
+            hubChapter = CompanionChapterAnchor(
+                bookID: document.book,
+                chapter: document.chapter,
+                editionID: document.editionID,
+                referenceLabel: "\(session.currentBook?.title ?? document.book) Chapter \(document.chapter) (\(session.abbreviation))"
+            )
+            },
+            notes: notes
+        )
+    }
+
+    private func applyAnnotationAppearanceChange(from old: ReaderPreferences, to new: ReaderPreferences) {
+        guard annotations.selected != nil, annotations.mode != .hidden,
+              old.typeface != new.typeface || old.sizeStep != new.sizeStep || old.appearancePreset != new.appearancePreset,
+              let document = session.document else { return }
+        Task { await annotations.appearanceChanged(to: new, document: document, width: contentWidth) }
+    }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        if phase != .active {
+            Task { await annotations.save() }
+            session.suspendLicensedContent()
+        } else {
+            Task { await session.resume() }
+        }
+    }
+
     private func collectionNames(for artifactID: UUID) -> [String] {
-        collections.collectionIDs(containing: artifactID)
-            .compactMap { collections.collection(id: $0)?.name }
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        collections.collectionNames(containing: artifactID)
     }
     private func showHubMessage(_ message: String) {
         withAnimation { hubMessage = message }
@@ -658,7 +700,7 @@ struct ScriptureView: View {
     }
 
     private var readerBookVersionPicker: some View {
-        HStack(spacing: 0) {
+        let bookVersionCapsule = HStack(spacing: 0) {
             Button { picker = .book } label: {
                 Text(selectedBookTitle)
                     .lineLimit(1)
@@ -680,6 +722,29 @@ struct ScriptureView: View {
         .background(Color(palette.paper), in: Capsule())
         .overlay(Capsule().stroke(Color(palette.rule), lineWidth: 1))
         .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+
+        let audioButton = ScriptureAudioIconButton(
+            narration: narration,
+            editionID: session.document?.editionID,
+            palette: palette,
+            isEnabled: session.document != nil,
+            onOpen: openScriptureAudioPlayer
+        )
+
+        return HStack(spacing: 10) {
+            if landscapeLayout {
+                audioButton
+                bookVersionCapsule
+            } else {
+                bookVersionCapsule
+                audioButton
+            }
+        }
+    }
+
+    private func openScriptureAudioPlayer() {
+        showNarrationPlayer = true
+        narration.prepareCurrentChapter()
     }
 
     private func saveToNote(_ selection: ChapterTextMap.Selection) {
@@ -704,7 +769,7 @@ struct ScriptureView: View {
             .presentationCornerRadius(28)
             .presentationDragIndicator(.visible)
         case .version:
-            ScriptureVersionsView(session:session)
+            ScriptureTranslationPickerView(session: session, narration: narration)
                 .presentationBackground(Color(palette.paper))
                 .presentationCornerRadius(28)
                 .presentationDragIndicator(.visible)

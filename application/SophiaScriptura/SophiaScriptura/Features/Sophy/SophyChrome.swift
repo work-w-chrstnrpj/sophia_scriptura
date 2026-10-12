@@ -11,6 +11,7 @@ struct SophyChrome: View {
     var books: [ScriptureBook]
     var referenceSystemID: String
     var editionID: String?
+    var editionCatalog: String
     var scriptureRepositoryProvider: (String?) async throws -> any ScriptureContentRepository
     @Environment(\.appTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -177,7 +178,9 @@ struct SophyChrome: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(sophy.character.welcomeGreeting)
                 .font(.title3.weight(.semibold))
-            Text("\(sophy.character.subtitle). Try a slash command or ask about folders, study habits, or a quiz.")
+            (Text("\(sophy.character.subtitle). Try ")
+                + Text("/help").fontWeight(.semibold).foregroundStyle(Color(theme.palette.accent))
+                + Text(" or ask about folders, study habits, or a quiz."))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -190,8 +193,9 @@ struct SophyChrome: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(isUser ? "You" : sophy.character.displayName).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Group {
-                    if isUser { Text(turn.text) }
-                    else { Text(.init(turn.text)) }
+                    if isUser {
+                        Text(SophySlashCommandStyle.attributedText(turn.text, accent: theme.palette.accent, ink: theme.palette.ink))
+                    } else { Text(.init(turn.text)) }
                 }.textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(14)
@@ -217,15 +221,31 @@ struct SophyChrome: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
                         ForEach(["/folders", "/bible-tree", "/reminder", "/activity", "/quiz", "/contemplate", "/find", "/insights", "/chat", "/music", "/enhance", "/help"].filter { sophy.composer.trimmingCharacters(in: .whitespaces).isEmpty || $0.hasPrefix(sophy.composer.trimmingCharacters(in: .whitespaces)) || sophy.composer.contains(" ") }, id: \.self) { command in
-                            Button(command) { sophy.composer = command + " " }.buttonStyle(.bordered).font(.caption)
+                            Button(command) { sophy.composer = command + " " }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color(theme.palette.accent))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color(theme.palette.accent).opacity(0.14), in: Capsule())
                         }
                     }
                 }
             }
             HStack(alignment: .bottom, spacing: 12) {
                 Button { sophy.composer = "/" } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Sophy commands")
-                TextField("Ask Sophy…", text: $sophy.composer, axis: .vertical).lineLimit(1...5)
-                    .accessibilityIdentifier("sophy.composer").disabled(sophy.isWorking)
+                ZStack(alignment: .topLeading) {
+                    if SophySlashCommandStyle.showsHighlightedOverlay(for: sophy.composer) {
+                        Text(SophySlashCommandStyle.attributedText(sophy.composer, accent: theme.palette.accent, ink: theme.palette.ink))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .allowsHitTesting(false)
+                    }
+                    TextField("Ask Sophy…", text: $sophy.composer, axis: .vertical)
+                        .lineLimit(1...5)
+                        .foregroundStyle(SophySlashCommandStyle.showsHighlightedOverlay(for: sophy.composer) ? .clear : Color(theme.palette.ink))
+                        .tint(Color(theme.palette.accent))
+                        .accessibilityIdentifier("sophy.composer")
+                        .disabled(sophy.isWorking)
+                }
                 if sophy.isWorking {
                     Button { sophy.cancel() } label: { Image(systemName: "stop.circle.fill").font(.title2) }
                         .disabled(sophy.phase == .committing).accessibilityLabel("Stop request")
@@ -243,7 +263,10 @@ struct SophyChrome: View {
     }
     private func send() {
         let text = sophy.composer; sophy.composer = ""
-        Task { await sophy.send(text, companion: companion, collections: collections, notes: notes, activity: activity, music: music, books: books) }
+        Task {
+            await sophy.send(text, companion: companion, collections: collections, notes: notes, activity: activity,
+                             music: music, books: books, editionCatalog: editionCatalog)
+        }
     }
     /// Keeps the character anchored from the bottom while leaving room above for the speech bubble.
     private func bottomPadding(in size: CGSize, safe: EdgeInsets) -> CGFloat {

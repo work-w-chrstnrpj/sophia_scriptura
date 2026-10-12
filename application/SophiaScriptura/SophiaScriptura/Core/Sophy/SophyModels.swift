@@ -111,6 +111,7 @@ enum SophyActionDraft: Equatable, Sendable {
     case openQuiz(types: [String]?, difficulty: String?, timed: Bool?)
     case openContemplation(title: String?, passage: SophyPassageDraft?)
     case openChat(presetHandle: String, prompt: String)
+    case openScripture(book: String, chapter: Int, verse: Int, editionAbbreviation: String?)
     case lookup(query: String, scope: String)
     case insights(period: String, anchorDate: String?, modeHandle: String?)
     case enhance(operation: String, tone: String?, ratingTarget: String?)
@@ -124,6 +125,7 @@ enum SophyActionDraft: Equatable, Sendable {
         case .openQuiz: return "openQuiz"
         case .openContemplation: return "openContemplation"
         case .openChat: return "openChat"
+        case .openScripture: return "openScripture"
         case .lookup: return "lookup"
         case .insights: return "insights"
         case .enhance: return "enhance"

@@ -283,6 +283,7 @@ struct StudyArchivedCollectionsView: View {
 struct StudyArchivedConversationsView: View {
     @Environment(\.appTheme) private var theme
     @ObservedObject var session: CompanionSession
+    var onClose: (() -> Void)? = nil
     @State private var search = ""
     @State private var searchPresented = false
     @State private var selection = StudySelectionSession()
@@ -355,6 +356,14 @@ struct StudyArchivedConversationsView: View {
         .padding(.top, 12)
         .navigationTitle("Conversations archive")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let onClose {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Chat history", systemImage: "chevron.backward", action: onClose)
+                        .accessibilityIdentifier("companion.archive.back")
+                }
+            }
+        }
         .appSurface()
         .alert("Move \(pendingTrashIDs.count) conversations to Trash?", isPresented: $confirmTrash) {
             Button("Move to Trash", role: .destructive) {

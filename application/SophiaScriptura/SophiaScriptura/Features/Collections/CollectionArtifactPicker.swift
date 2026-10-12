@@ -5,6 +5,8 @@ struct CollectionArtifactPicker: View {
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
     var notes: NotesSession
+    var annotationSnapshot: AnnotationSnapshot?
+    var bookTitleForCode: (String) -> String = { $0 }
     var openNote: (UUID) -> Void = { _ in }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
@@ -19,8 +21,19 @@ struct CollectionArtifactPicker: View {
 
     private var accent: CollectionAccent { store.collection(id: collectionID)?.accent ?? .slate }
 
+    private var catalog: [CollectionArtifact] {
+        if let annotationSnapshot {
+            return store.pickableArtifacts(
+                notes: notes.snapshot.notes,
+                annotationSnapshot: annotationSnapshot,
+                bookTitleForCode: bookTitleForCode
+            )
+        }
+        return store.presentedArtifacts(notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
+    }
+
     private var filteredArtifacts: [CollectionArtifact] {
-        store.presentedArtifacts(notes: notes.snapshot.notes).filter { artifact in
+        catalog.filter { artifact in
             searchText.isEmpty ||
                 artifact.title.localizedCaseInsensitiveContains(searchText) ||
                 artifact.subtitle.localizedCaseInsensitiveContains(searchText)
@@ -65,8 +78,8 @@ struct CollectionArtifactPicker: View {
                         }
                         .accessibilityIdentifier("collections.newLink")
                     }
-                } footer: {
-                    Text("Active notes, conversations, bookmarks, gleanings, and links can all live here.")
+                }                 footer: {
+                    Text("Include notes, conversations, bookmarks, gleanings, links, and Scripture annotation layers.")
                 }
                 .listRowBackground(Color(theme.palette.soft))
 
@@ -74,6 +87,9 @@ struct CollectionArtifactPicker: View {
                 let included = store.contains(artifact.id, in: collectionID)
                 Button {
                     store.link(notes: notes.snapshot.notes)
+                    if artifact.kind == .annotation, let annotationSnapshot {
+                        registerAnnotationLayer(artifactID: artifact.id, snapshot: annotationSnapshot)
+                    }
                     store.toggleMembership(artifactID: artifact.id, collectionID: collectionID)
                 } label: {
                     HStack(spacing: 12) {
@@ -81,7 +97,7 @@ struct CollectionArtifactPicker: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(artifact.title)
                                 .foregroundStyle(Color(theme.palette.ink))
-                            Text(artifact.kind == .bookmark ? "Bookmark" : artifact.kind == .gleaning ? "Gleaning" : artifact.subtitle)
+                            Text(artifact.kind == .bookmark ? "Bookmark" : artifact.kind == .gleaning ? "Gleaning" : artifact.kind == .annotation ? "Annotation layer" : artifact.subtitle)
                                 .font(.caption)
                                 .foregroundStyle(Color(theme.palette.secondary))
                                 .lineLimit(1)
@@ -119,6 +135,19 @@ struct CollectionArtifactPicker: View {
                 }
             }
         }
+    }
+
+    private func registerAnnotationLayer(artifactID: UUID, snapshot: AnnotationSnapshot) {
+        guard let resolved = AnnotationCollectionCatalog.resolveLayer(layerID: artifactID, in: snapshot) else { return }
+        let group = snapshot.groups.first { $0.id == resolved.groupID }
+        guard let source = group?.source else { return }
+        store.registerAnnotation(
+            layerID: artifactID,
+            groupID: resolved.groupID,
+            source: source,
+            bookTitle: bookTitleForCode(source.book),
+            layerName: resolved.layer.name
+        )
     }
 
     private func createLink() {

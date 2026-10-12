@@ -256,6 +256,52 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(reopened.link(id: id)?.editionID, "web.engwebp")
     }
 
+    func testSavedAnnotationMembershipAndPersistence() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("collections-" + UUID().uuidString, isDirectory: true)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await store.load()
+        let folder = try XCTUnwrap(store.createCollection(name: "Ink", detail: "", parentID: nil, accent: .plum))
+        let doc = try await BundledScriptureRepository(bundle: Bundle(for: ReaderSession.self)).chapter(book: "GEN", number: 1)
+        let source = AnnotationSource(doc)
+        let layerID = UUID()
+        let groupID = UUID()
+        store.registerAnnotation(layerID: layerID, groupID: groupID, source: source, bookTitle: "Genesis", layerName: "Annotation 1")
+        store.addMembership(artifactID: layerID, collectionID: folder)
+        await store.flush()
+
+        var snapshot = AnnotationSnapshot()
+        snapshot.groups = [
+            AnnotationGroup(
+                id: groupID,
+                source: source,
+                layout: AnnotationLayout(
+                    fontName: "Georgia",
+                    fontResourceHash: "hash",
+                    fontSize: 25,
+                    width: 800,
+                    textWidth: 600,
+                    height: 1200,
+                    inset: 0,
+                    marginStart: 0,
+                    lineSpacing: 0,
+                    paragraphSpacing: 0,
+                    signature: "sig"
+                ),
+                layers: [AnnotationLayer(id: layerID, name: "Annotation 1", drawing: Data())],
+                selectedLayerID: layerID
+            )
+        ]
+        let artifact = try XCTUnwrap(store.presentedArtifacts(notes: [], annotationSnapshot: snapshot).first { $0.id == layerID })
+        XCTAssertEqual(artifact.kind, .annotation)
+        XCTAssertTrue(artifact.title.contains("Genesis"))
+        XCTAssertTrue(store.contains(layerID, in: folder))
+
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await reopened.load()
+        XCTAssertEqual(reopened.savedAnnotation(id: layerID)?.layerName, "Annotation 1")
+        XCTAssertTrue(reopened.contains(layerID, in: folder))
+    }
+
     private func samplePassage(kind: SavedPassageKind, insight: String, endVerse: Int) -> SavedPassage {
         SavedPassage(
             id: UUID(),

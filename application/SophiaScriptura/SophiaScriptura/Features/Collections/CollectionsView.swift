@@ -8,6 +8,9 @@ struct CollectionsView: View {
     var notes: NotesSession
     var openNote: (UUID, UUID) -> Void
     var openPassage: (SavedPassage) -> Void
+    var openAnnotation: (SavedAnnotation) -> Void = { _ in }
+    var annotationSnapshot: AnnotationSnapshot?
+    var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
     @State private var sophyFolder: StudyCollection?
@@ -38,8 +41,8 @@ struct CollectionsView: View {
             return candidates.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .itemCount:
             return candidates.sorted {
-                store.membershipCount(for: $0.id, includingDescendants: true, notes: notes.snapshot.notes) >
-                    store.membershipCount(for: $1.id, includingDescendants: true, notes: notes.snapshot.notes)
+                store.membershipCount(for: $0.id, includingDescendants: true, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot) >
+                    store.membershipCount(for: $1.id, includingDescendants: true, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
             }
         }
     }
@@ -73,11 +76,12 @@ struct CollectionsView: View {
                                     folderLink(collection) {
                                         CollectionCard(
                                             collection: collection,
-                                            itemCount: store.membershipCount(for: collection.id, includingDescendants: true, notes: notes.snapshot.notes),
+                                            itemCount: store.membershipCount(for: collection.id, includingDescendants: true, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot),
                                             subfolderCount: store.children(of: collection.id).count,
                                             kindHints: store.membershipKindHints(
                                                 for: collection.id,
-                                                notes: notes.snapshot.notes
+                                                notes: notes.snapshot.notes,
+                                                annotationSnapshot: annotationSnapshot
                                             ),
                                             inheritedLocked: store.isLocked(collection.id)
                                         )
@@ -117,8 +121,18 @@ struct CollectionsView: View {
             }
             .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
             .navigationDestination(item: $sophyFolder) { folder in
-                CollectionDetailView(store: store, collectionID: folder.id, notes: notes, openNote: openNote,
-                    openPassage: openPassage, openCompanion: openCompanion, createConversation: createConversation)
+                CollectionDetailView(
+                    store: store,
+                    collectionID: folder.id,
+                    notes: notes,
+                    openNote: openNote,
+                    openPassage: openPassage,
+                    openAnnotation: openAnnotation,
+                    annotationSnapshot: annotationSnapshot,
+                    bookTitleForCode: bookTitleForCode,
+                    openCompanion: openCompanion,
+                    createConversation: createConversation
+                )
             }
             .onChange(of: store.sophyOpenCollectionID) { _, id in
                 guard let id, !store.sophyFolderIsProtected(id), let folder = store.collection(id: id), folder.isActiveInLibrary else { return }
@@ -142,6 +156,9 @@ struct CollectionsView: View {
                 notes: notes,
                 openNote: openNote,
                 openPassage: openPassage,
+                openAnnotation: openAnnotation,
+                annotationSnapshot: annotationSnapshot,
+                bookTitleForCode: bookTitleForCode,
                 openCompanion: openCompanion,
                 createConversation: createConversation
             )
@@ -176,8 +193,8 @@ struct CollectionsView: View {
     }
 
     private func noFolderCard(_ collection: StudyCollection) -> some View {
-        let count = store.unfiledCount(notes: notes.snapshot.notes)
-        let hints = store.membershipKindHints(for: collection.id, notes: notes.snapshot.notes)
+        let count = store.unfiledCount(notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
+        let hints = store.membershipKindHints(for: collection.id, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
         let subtitle = count == 0
             ? "Everything is filed."
             : "Notes, bookmarks, and gleanings waiting to be filed."

@@ -28,7 +28,12 @@ final class ScriptureReaderUITests: XCTestCase {
         XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout:20))
         showTabs(app)
         app.buttons["tab.settings"].tap()
-        XCTAssertTrue(app.buttons["preset.midnightLibrary"].isSelected)
+        let restoredPreset = app.buttons["preset.midnightLibrary"]
+        XCTAssertTrue(restoredPreset.waitForExistence(timeout: 5))
+        let selected = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in restoredPreset.isSelected }, object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed)
         app.buttons["preset.oldPaper"].tap()
         showTabs(app)
         app.buttons["tab.scripture"].tap()

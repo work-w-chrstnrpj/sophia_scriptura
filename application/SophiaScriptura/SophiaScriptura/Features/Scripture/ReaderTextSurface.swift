@@ -20,6 +20,8 @@ struct ReaderTextSurface: UIViewRepresentable {
     var analyzeOriginalLanguage: ((ChapterTextMap.Selection) -> Void)? = nil
     var emphasisVerses: [Int] = []
     var emphasisSpans: [PassageSpan] = []
+    /// Scrolls the active narration verse into view when emphasis updates during playback.
+    var scrollToNarrationVerse = false
 
     func makeUIView(context: Context) -> ContinuousReaderTextView {
         let view = ContinuousReaderTextView()
@@ -94,6 +96,18 @@ struct ReaderTextSurface: UIViewRepresentable {
             coordinator.pendingEmphasis = emphasisVerses
             coordinator.pendingSpans = emphasisSpans
         }
+        let emphasisSignature = emphasisVerses.map(String.init).joined(separator: ",")
+        if coordinator.appliedEmphasisSignature != emphasisSignature, emphasisSpans.isEmpty {
+            coordinator.appliedEmphasisSignature = emphasisSignature
+            if emphasisVerses.isEmpty {
+                view.clearFocus()
+            } else {
+                view.focus(verses: emphasisVerses, holds: true)
+                if scrollToNarrationVerse, let verse = emphasisVerses.last, let range = coordinator.map?.range(for: verse) {
+                    view.reveal(range)
+                }
+            }
+        }
         view.setNeedsLayout()
     }
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -104,6 +118,7 @@ struct ReaderTextSurface: UIViewRepresentable {
         var pendingVerse: Int?
         var pendingEmphasis: [Int] = []
         var pendingSpans: [PassageSpan] = []
+        var appliedEmphasisSignature = ""
         init(_ parent: ReaderTextSurface) { self.parent = parent }
         func restoreIfNeeded(_ view: ContinuousReaderTextView?) {
             guard let view, let verse = pendingVerse, let range = map?.range(for:verse) else { return }

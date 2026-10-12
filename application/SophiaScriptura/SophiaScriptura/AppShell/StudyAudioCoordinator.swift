@@ -1,6 +1,6 @@
 import Foundation
 
-/// M7 narration will adopt this surface; SP-021 uses a no-op stub until narration ships.
+/// Shared music/narration arbitration surface (SP-021 music, SP-039 narration).
 protocol ScriptureNarrationControlling: AnyObject {
     var isNarrationActive: Bool { get }
     func pauseNarrationForMusic()

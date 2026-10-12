@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var reader: ReaderSession
+    @Bindable var narration: ScriptureNarrationSession
     var notes: NotesSession
     var annotations: AnnotationSession
     @ObservedObject var collections: CollectionsStore
@@ -14,7 +15,7 @@ struct SettingsView: View {
     @Binding var showMusicLibrary: Bool
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
-    @State private var showVersions = false
+    @State private var showTranslationDownloads = false
     @StateObject private var settingsToast = SettingsToastCenter()
 
     private func preference<Value>(_ path: WritableKeyPath<ReaderPreferences, Value>) -> Binding<Value> {
@@ -36,8 +37,8 @@ struct SettingsView: View {
                     ladyWisdomSection
                     appearanceSection
                     readingSection
-                    activityWorkflowsSection
                     offlineSection
+                    scriptureAudioSection
                     translationsSection
                     providerSection
                     musicSection
@@ -71,7 +72,11 @@ struct SettingsView: View {
             SettingsTransientToast(message: settingsToast.message)
                 .animation(.easeOut(duration: 0.2), value: settingsToast.message)
         }
-        .sheet(isPresented: $showVersions) { ScriptureVersionsView(session: reader) }
+        .sheet(isPresented: $showTranslationDownloads) {
+            NavigationStack {
+                ScriptureTranslationDownloadsView(session: reader, narration: narration)
+            }
+        }
     }
 
     private var profileSection: some View {
@@ -140,24 +145,6 @@ struct SettingsView: View {
                 ))
                 .accessibilityIdentifier("settings.shellTabActionsVisible")
             }
-        }
-    }
-
-    private var activityWorkflowsSection: some View {
-        settingsCard {
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeading("Activity workflows")
-                Toggle("Automatically start Reading workflow", isOn: Binding(
-                    get: { activity.automaticReadingWorkflow },
-                    set: { activity.setAutomaticWorkflow($0, for: ActivityModeID.reading.id) }
-                )).accessibilityIdentifier("settings.activity.readingWorkflow")
-                Toggle("Automatically start Scripture Contemplation workflow", isOn: Binding(
-                    get: { activity.automaticContemplationWorkflow },
-                    set: { activity.setAutomaticWorkflow($0, for: ActivityModeID.meditating.id) }
-                )).accessibilityIdentifier("settings.activity.contemplationWorkflow")
-                Text("When off, starting the activity only starts its timer. Reading will not open Scripture or require a passage, and Scripture Contemplation will not open the guided journey. Changes apply to new activities.")
-                    .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
-            }.disabled(!activity.isReady)
         }
     }
 
@@ -357,12 +344,20 @@ struct SettingsView: View {
                         preferences.appearancePreset = appearance.rawValue
                         reader.updatePreferences(preferences)
                     } label: {
+                        let accent = Color(palette.accent)
+                        let selectionFill = colorScheme == .dark ? 0.16 : 0.24
+                        let selectionStroke = colorScheme == .dark ? 0.62 : 0.92
                         HStack(spacing: 16) {
                             Text("Aa")
                                 .font(Font(ScriptureFonts.font(appearance.readingFamily, size: 28)))
                                 .frame(width: 54, height: 54)
                                 .background(Color(palette.paper), in: RoundedRectangle(cornerRadius: 12))
                                 .foregroundStyle(Color(palette.ink))
+                                .overlay(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(accent)
+                                        .frame(width: 5)
+                                }
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(palette.rule)))
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(appearance.title).font(.headline)
@@ -374,7 +369,7 @@ struct SettingsView: View {
                             Spacer()
                             if selected {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color(theme.palette.accent))
+                                    .foregroundStyle(accent)
                                     .accessibilityHidden(true)
                             }
                         }
@@ -382,11 +377,11 @@ struct SettingsView: View {
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(selected ? Color(theme.palette.accent).opacity(0.12) : Color.clear)
+                                .fill(selected ? accent.opacity(selectionFill) : Color.clear)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(selected ? Color(theme.palette.accent).opacity(0.55) : Color.clear, lineWidth: 1.5)
+                                .stroke(selected ? accent.opacity(selectionStroke) : Color.clear, lineWidth: 2)
                         )
                         .contentShape(Rectangle())
                     }
@@ -418,6 +413,36 @@ struct SettingsView: View {
         }
     }
 
+    private var scriptureAudioSection: some View {
+        settingsCard {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionHeading("Scripture audio (BSB)")
+                Text("Berean Standard Bible narration from AO Lab. Saved files on this iPad are always used when available.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                Picker("Playback", selection: Binding(
+                    get: { narration.preferences.deliveryMode },
+                    set: { narration.setDeliveryMode($0) }
+                )) {
+                    ForEach(ScriptureNarrationDeliveryMode.allCases, id: \.self) { mode in
+                        Text(mode.settingsLabel).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.narration.delivery")
+                if narration.preferences.deliveryMode == .streaming {
+                    Text("Streams chapter audio over the network when you have not downloaded that chapter.")
+                        .font(.footnote)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                } else {
+                    Text("Downloads each chapter to this iPad when you play or use Download all BSB audio in Translation downloads.")
+                        .font(.footnote)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                }
+            }
+        }
+    }
+
     private var offlineSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: 8) {
@@ -436,10 +461,16 @@ struct SettingsView: View {
 
     private var translationsSection: some View {
         settingsCard {
-            Button("Manage offline Bibles") { showVersions = true }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Color(theme.palette.accent))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 8) {
+                sectionHeading("Translations")
+                Text("Download or sync AO Lab and API.Bible editions. Choosing what you read stays in the Scripture reader.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                Button("Translation downloads") { showTranslationDownloads = true }
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color(theme.palette.accent))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -459,6 +490,14 @@ struct SettingsView: View {
                     settingsLinkRow("Quiz Me defaults")
                 }
                 .accessibilityIdentifier("settings.quizDefaults")
+                Toggle("Exam mode in Quiz Me", isOn: Binding(
+                    get: { companion.examModeEnabled },
+                    set: { companion.setExamModeEnabled($0) }
+                ))
+                .accessibilityIdentifier("settings.quizExamMode")
+                Text("When on, Companion opens Exam setup (25, 50, or 100 random questions from the prepared pool) instead of the usual Quiz Me chooser.")
+                    .font(.footnote)
+                    .foregroundStyle(Color(theme.palette.secondary))
             }
         }
     }

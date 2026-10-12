@@ -142,8 +142,9 @@ question history retains the generated key and provenance disclosure for review.
 
 SP-019 stores prepared quiz questions in Companion snapshot schema v3. Each cached item is
 independent of a session and is scoped to one provider configuration, adapter, model,
-edition, difficulty, game type and prompt-contract version. The target is 20 Easy, 10
-Average and 6 Difficult items per selectable type (two complete quizzes). On quiz start, the session takes the
+edition, difficulty, game type and prompt-contract version. The target is 100 prepared
+items per selectable type and difficulty bucket (18 buckets per provider/model/edition scope).
+Refill requests questions in batches of 10. On quiz start, the session takes the
 required items from the cache and creates session-specific question records in the same
 in-memory mutation before the next serialized generation save. Prior v1/v2 snapshots
 decode with an empty cache; existing quiz history is not rewritten. Deleting a provider

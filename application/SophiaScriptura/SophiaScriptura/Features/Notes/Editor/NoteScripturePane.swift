@@ -38,7 +38,7 @@ struct NoteScripturePane: View {
                 pickBook = false; Task { await reader.navigate(book: book, chapter: chapter, verse: verse) }
             }
         }
-        .sheet(isPresented: $pickVersion) { ScriptureVersionsView(session: reader) }
+        .sheet(isPresented: $pickVersion) { ScriptureTranslationPickerView(session: reader) }
         .confirmationDialog("Add passage to this note", isPresented: Binding(get: { verse != nil }, set: { if !$0 { verse = nil } }), titleVisibility: .visible) {
             Button("Insert verse and citation") {
                 if let verse, let document = reader.document {

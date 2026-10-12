@@ -114,7 +114,7 @@ final class LicensedTranslationTests: XCTestCase {
     }
     @MainActor func testReaderEditionSwitchAndRestore() async throws {
         let api = FixtureAPI(), keys = InMemorySecureStore()
-        let library = OfflineTranslationLibrary(api:api,canonical:FixtureCanonical(),url:try location(),keychain:keys)
+        let library = MultiSourceTranslationLibrary(api:api,canonical:FixtureCanonical(),url:try location(),keychain:keys)
         try await library.setCredential("synthetic-key")
         try await library.sync(FixtureAPI.id) { _,_ in }
         let state = try ReaderStateStore(inMemory:true)
@@ -122,15 +122,15 @@ final class LicensedTranslationTests: XCTestCase {
         await reader.start()
         await reader.selectEdition(FixtureAPI.edition.id)
         XCTAssertEqual(reader.document?.editionID,FixtureAPI.edition.id)
-        XCTAssertEqual(reader.edition?.abbreviation,"NIV")
+        XCTAssertEqual(reader.edition?.abbreviation,"NASB")
         XCTAssertEqual(reader.document?.verse(1).referenceSystemID,FixtureAPI.edition.referenceSystemID)
-        let restored = ReaderSession(content:FixtureCanonical(),state:state,library:library)
+        let restored = ReaderSession(content:FixtureCanonical(),state:state,library: library)
         await restored.start()
         XCTAssertEqual(restored.document?.editionID,FixtureAPI.edition.id)
     }
     @MainActor func testResumeNeverStartsLicensedSync() async {
         let library = ManualSyncLibrary()
-        let reader = ReaderSession(content:FixtureCanonical(),state:nil,library:library)
+        let reader = ReaderSession(content:FixtureCanonical(),state:nil,translationLibrary:library)
         await reader.start()
         await reader.resume()
         let syncCount = await library.syncCount()
@@ -154,15 +154,15 @@ private actor ManualSyncLibrary: TranslationLibrary {
 }
 
 private actor FixtureAPI: BibleAPI {
-    static let id = "78a9f6124f344018-01"
-    static let edition = ScriptureEdition(id:"api.bible." + id,referenceSystemID:"org.sophia.api.bible." + id,contentRevision:"fixture",name:"Synthetic",abbreviation:"NIV11",attribution:"Synthetic attribution")
+    static let id = LicensedTranslation.approved[0].id
+    static let edition = ScriptureEdition(id:"api.bible." + id,referenceSystemID:"org.sophia.api.bible." + id,contentRevision:"fixture",name:"Synthetic",abbreviation:"NASB",attribution:"Synthetic attribution")
     private var failure = false
     private var revoked = false
     func fail(_ value: Bool) { failure = value }
     func revoke() { revoked = true }
     func editions(key: String) throws -> (editions:[APIEdition],date:Date) {
         if revoked { throw LicensedContentError.accessDenied }
-        return ([APIEdition(id:Self.id,name:"Synthetic",abbreviation:"NIV11",copyright:"Synthetic attribution",updatedAt:"fixture")],Date())
+        return ([APIEdition(id:Self.id,name:"Synthetic",abbreviation:"NASB",copyright:"Synthetic attribution",updatedAt:"fixture")],Date())
     }
     func books(id: String, key: String) -> [APIBook] {
         [APIBook(id:"GEN",name:"Genesis",chapters:(1...2).map { APIChapterSummary(id:"GEN.\($0)",number:String($0),bookId:"GEN") })]

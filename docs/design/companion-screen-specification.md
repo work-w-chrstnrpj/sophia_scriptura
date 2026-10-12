@@ -180,8 +180,10 @@ Activity stores duration, date, mode, title and quiz-session ID only; quiz answe
 remain owned by Companion. Deleting quiz history leaves a linked Activity record with a
 source-deleted state.
 
-Quiz Me prepares up to 20 Easy, 10 Average and 6 Difficult questions per selectable type,
-enough for two consecutive single-type quizzes once fully warm.
+Quiz Me prepares up to 100 questions per selectable type and difficulty bucket (replenished in
+batches of 10). Settings can switch Companion to Exam mode: 25, 50, or 100 random questions from
+that pool with an optional whole-exam timer (5, 10, or 15 minutes). Standard Quiz Me still uses
+type and difficulty selection with per-question timing when enabled.
 A warm session opens from the local cache; a first or depleted session waits for the selected
 provider to generate the missing set. In-app replenishment is requested after consumption
 and again after completion or quit. The first playable set takes priority over spares. Each

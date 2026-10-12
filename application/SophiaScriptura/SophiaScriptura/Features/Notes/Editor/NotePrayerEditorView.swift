@@ -339,34 +339,25 @@ struct NotePrayerEditorView: View {
                     .font(.subheadline)
                     .foregroundStyle(Color(theme.palette.secondary))
             } else {
-                let updates = prayer?.updates ?? []
-                List {
-                    ForEach(updates) { update in
+                VStack(spacing: 12) {
+                    ForEach(prayer?.updates ?? []) { update in
                         PrayerUpdateRow(update: update, theme: theme)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    confirmDeleteUpdate = update
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                .tint(.red)
+                            .contextMenu {
                                 Button {
                                     editingUpdate = update
                                     editingUpdateBody = update.body
                                 } label: {
                                     Label("Edit", systemImage: "pencil")
                                 }
-                                .tint(Color(theme.palette.accent))
+                                Button(role: .destructive) {
+                                    confirmDeleteUpdate = update
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                     }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .scrollDisabled(true)
-                .frame(height: CGFloat(updates.count) * 92 + 8)
+                .padding(.top, 2)
             }
         }
     }

@@ -4,7 +4,9 @@ import Observation
 @MainActor @Observable final class ReaderSession {
     private var content: any ScriptureContentRepository
     private let bundled: any ScriptureContentRepository
-    let library: (any TranslationLibrary)?
+    private let multiSourceLibrary: MultiSourceTranslationLibrary?
+    private let legacyTranslationLibrary: (any TranslationLibrary)?
+    var library: (any TranslationLibrary)? { multiSourceLibrary ?? legacyTranslationLibrary }
     private let state: (any ReaderStateRepository)?
     private var snapshot = ReaderSnapshot()
     private var saveTask: Task<Void, Never>?
@@ -20,24 +22,59 @@ import Observation
     private(set) var targetVerse = 1
     private(set) var emphasisVerses: [Int] = []
     private(set) var emphasisSpans: [PassageSpan] = []
+    private(set) var playbackHighlightVerse: Int?
     private(set) var navigationID = UUID()
     private(set) var restorationLocation: ReadingLocation?
     var beforeNavigation: (@MainActor () async -> Bool)?
     var hubVerse: VerseID?
     private(set) var translations: [TranslationStatus] = []
+    private(set) var helloAOEditions: [HelloAOEditionStatus] = []
     private(set) var syncMessage: String?
     private(set) var syncing = false
     private(set) var syncFraction = 0.0
     private var lastSyncSucceeded = false
+    private(set) var helloAODownloadID: String?
+
     var abbreviation: String { edition?.abbreviation ?? "WEB" }
     var isLicensed: Bool { edition?.id.hasPrefix("api.bible.") == true }
 
     var currentBook: ScriptureBook? { books.first { $0.id == document?.book } }
     var title: String { "\(currentBook?.title ?? "Scripture") \(document.map { String($0.chapter) } ?? "")" }
 
-    init(content: any ScriptureContentRepository, state: (any ReaderStateRepository)?, library: (any TranslationLibrary)? = nil) {
-        self.content = content; self.bundled = content; self.state = state; self.library = library
+    init(content: any ScriptureContentRepository, state: (any ReaderStateRepository)?, library: MultiSourceTranslationLibrary? = nil) {
+        self.content = content
+        self.bundled = content
+        self.state = state
+        self.multiSourceLibrary = library
+        self.legacyTranslationLibrary = nil
         if state == nil { notice = ScriptureError.persistence.localizedDescription; stateWritable = false }
+    }
+
+    /// Preserves legacy test doubles that are not `MultiSourceTranslationLibrary` (Hello AO commands stay unavailable).
+    init(content: any ScriptureContentRepository, state: (any ReaderStateRepository)?, translationLibrary: any TranslationLibrary) {
+        self.content = content
+        self.bundled = content
+        self.state = state
+        if let multi = translationLibrary as? MultiSourceTranslationLibrary {
+            self.multiSourceLibrary = multi
+            self.legacyTranslationLibrary = nil
+        } else {
+            self.multiSourceLibrary = nil
+            self.legacyTranslationLibrary = translationLibrary
+        }
+        if state == nil { notice = ScriptureError.persistence.localizedDescription; stateWritable = false }
+    }
+
+    private func contentRepository(forEditionID editionID: String) async throws -> any ScriptureContentRepository {
+        switch ScriptureReferenceIdentity.translationSourceID(forEditionID: editionID) {
+        case .bundledWeb:
+            return bundled
+        case .apiBible, .helloAO:
+            guard let library else { throw ScriptureError.editionUnavailable }
+            return try await library.repository(editionID: editionID)
+        case nil:
+            throw ScriptureError.editionUnavailable
+        }
     }
 
     func start() async {
@@ -53,9 +90,7 @@ import Observation
         }
         do {
             let desired = snapshot.location?.editionID ?? preferences.preferredEdition
-            if desired.hasPrefix("api.bible."), let library {
-                content = try await library.repository(editionID:desired)
-            }
+            content = try await contentRepository(forEditionID: desired)
             edition = try await content.edition()
             books = try await content.books()
             let location = snapshot.location
@@ -116,10 +151,7 @@ import Observation
 
     func availableVerses(book: String, chapter: Int, editionID: String?) async throws -> [Int] {
         guard let editionID, editionID != edition?.id else { return try await availableVerses(book: book, chapter: chapter) }
-        let repository: any ScriptureContentRepository
-        if editionID == "web.engwebp" { repository = bundled }
-        else if let library { repository = try await library.repository(editionID: editionID) }
-        else { throw ScriptureError.editionUnavailable }
+        let repository = try await contentRepository(forEditionID: editionID)
         return try await repository.chapter(book: book, number: chapter).verseNumbers
     }
 
@@ -127,6 +159,11 @@ import Observation
         guard navigationID == id else { return }
         emphasisVerses = []
         emphasisSpans = []
+    }
+
+    func setPlaybackHighlight(_ verse: Int?) {
+        guard playbackHighlightVerse != verse else { return }
+        playbackHighlightVerse = verse
     }
 
     func stepChapter(_ delta: Int) async {
@@ -156,6 +193,85 @@ import Observation
         guard let library else { return }
         do { translations = try await library.statuses() }
         catch { syncMessage = error.localizedDescription }
+        await refreshHelloAOLocalStatuses()
+    }
+
+    func refreshHelloAOLocalStatuses() async {
+        guard let multiSourceLibrary else { return }
+        helloAOEditions = await multiSourceLibrary.helloAOEditionStatuses()
+    }
+
+    func installedHelloAOChapterIDs(providerEditionID: String) async -> [String]? {
+        await multiSourceLibrary?.installedHelloAOChapterIDs(providerEditionID: providerEditionID)
+    }
+
+    func refreshHelloAOCatalog() async {
+        guard let multiSourceLibrary else { return }
+        do {
+            try await multiSourceLibrary.refreshHelloAOCatalog()
+            await refreshHelloAOLocalStatuses()
+            syncMessage = "AO Lab catalog refreshed."
+        } catch {
+            syncMessage = error.localizedDescription
+        }
+    }
+
+    func downloadHelloAO(_ providerEditionID: String) async {
+        guard let multiSourceLibrary else {
+            syncMessage = "AO Lab downloads are unavailable in this session."
+            return
+        }
+        guard !syncing else {
+            syncMessage = "Another download is already running."
+            return
+        }
+        syncing = true
+        syncFraction = 0
+        helloAODownloadID = providerEditionID
+        defer {
+            syncing = false
+            helloAODownloadID = nil
+        }
+        syncMessage = "Downloading from AO Lab… Keep Sophia open."
+        do {
+            try await multiSourceLibrary.downloadHelloAO(providerEditionID: providerEditionID) { [weak self] done, total in
+                Task { @MainActor in
+                    self?.syncFraction = Double(done) / Double(max(1, total))
+                    self?.syncMessage = "Downloaded \(done) of \(total) chapters from AO Lab."
+                }
+            }
+            await refreshHelloAOLocalStatuses()
+            syncMessage = "AO Lab download complete."
+            if let appID = HelloAOEligibility.edition(providerID: providerEditionID)?.appEditionID,
+               edition?.id == appID || snapshot.location?.editionID == appID {
+                await selectEdition(appID)
+            }
+        } catch {
+            syncMessage = error.localizedDescription
+            await refreshHelloAOLocalStatuses()
+        }
+    }
+
+    func cancelHelloAODownload() async {
+        await multiSourceLibrary?.cancelHelloAODownload()
+        helloAODownloadID = nil
+        syncing = false
+        syncMessage = "AO Lab download cancelled."
+        await refreshHelloAOLocalStatuses()
+    }
+
+    func deleteHelloAODownload(_ providerEditionID: String) async {
+        guard let multiSourceLibrary else { return }
+        do {
+            try await multiSourceLibrary.deleteHelloAODownload(providerEditionID: providerEditionID)
+            if edition?.id == HelloAOEligibility.edition(providerID: providerEditionID)?.appEditionID {
+                await selectEdition(ScriptureReferenceIdentity.bundledEditionID)
+            }
+            await refreshHelloAOLocalStatuses()
+            syncMessage = "AO Lab download removed."
+        } catch {
+            syncMessage = error.localizedDescription
+        }
     }
     func configureProvider(key: String) async {
         do { try await library?.setCredential(key); syncMessage = "Key saved securely on this device." }
@@ -165,10 +281,7 @@ import Observation
         if let beforeNavigation, !(await beforeNavigation()) { return }
         let token = UUID(); requestID = token
         do {
-            let repository: any ScriptureContentRepository
-            if id == "web.engwebp" { repository = bundled }
-            else if let library { repository = try await library.repository(editionID:id) }
-            else { throw ScriptureError.editionUnavailable }
+            let repository = try await contentRepository(forEditionID: id)
             let newEdition = try await repository.edition()
             let newBooks = try await repository.books()
             let book = document?.book ?? snapshot.location?.verse.book ?? "GEN"
@@ -251,9 +364,21 @@ import Observation
     }
     func contentRepository(editionID: String?) async throws -> any ScriptureContentRepository {
         guard let editionID, edition?.id != editionID else { return content }
-        if editionID == "web.engwebp" { return bundled }
-        guard let library else { throw ScriptureError.editionUnavailable }
-        return try await library.repository(editionID: editionID)
+        return try await contentRepository(forEditionID: editionID)
+    }
+
+    func editionID(matchingAbbreviation query: String) -> String? {
+        let token = query.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !token.isEmpty else { return nil }
+        if token == "WEB" || token == "WEBP" { return ScriptureReferenceIdentity.bundledEditionID }
+        if edition?.abbreviation.uppercased() == token { return edition?.id }
+        if let match = translations.first(where: { $0.translation.abbreviation.uppercased() == token }) {
+            return match.translation.editionID
+        }
+        if let match = helloAOEditions.first(where: { $0.eligible.abbreviation.uppercased() == token }) {
+            return match.appEditionID
+        }
+        return nil
     }
 
     func save() {

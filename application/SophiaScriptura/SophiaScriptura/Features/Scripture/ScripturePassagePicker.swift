@@ -10,6 +10,15 @@ struct ScripturePassagePicker: View {
     private var appearance: ScriptureAppearance { session.preferences.appearance }
     private var palette: ReaderPalette { session.preferences.palette(for:appearance,colorScheme:colorScheme) }
 
+    private var testamentSections: [(id: String, title: String)] {
+        var sections: [(String, String)] = [("OT", "Old Testament")]
+        if session.books.contains(where: { $0.testament == "DC" }) {
+            sections.append(("DC", "Apocrypha / Deuterocanonical"))
+        }
+        sections.append(("NT", "New Testament"))
+        return sections
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -21,9 +30,14 @@ struct ScripturePassagePicker: View {
                 TextField("Find a book",text:$query).textFieldStyle(.roundedBorder)
                     .padding(.horizontal).accessibilityIdentifier("reader.bookSearch")
                 List {
-                    ForEach(["OT","NT"],id:\.self) { testament in
-                        Section(testament == "OT" ? "Old Testament" : "New Testament") {
-                            ForEach(session.books.filter { $0.testament == testament && (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query)) }) { book in
+                    ForEach(testamentSections, id: \.id) { section in
+                        let books = session.books.filter {
+                            $0.testament == section.id &&
+                                (query.isEmpty || $0.title.localizedCaseInsensitiveContains(query))
+                        }
+                        if !books.isEmpty {
+                        Section(section.title) {
+                            ForEach(books) { book in
                                 NavigationLink {
                                     chapters(book)
                                 } label: {
@@ -37,6 +51,7 @@ struct ScripturePassagePicker: View {
                                 }
                                 .listRowBackground(Color(palette.paper))
                             }
+                        }
                         }
                     }
                 }

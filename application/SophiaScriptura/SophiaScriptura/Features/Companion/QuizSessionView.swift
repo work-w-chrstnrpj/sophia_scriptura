@@ -11,6 +11,7 @@ struct QuizSessionView: View {
     @State private var answerText = ""
     @State private var choiceIndex: Int?
     @State private var questionTimer: QuizQuestionTimer?
+    @State private var examSessionTimer: QuizQuestionTimer?
     @State private var questionTimeStartedAt: Date?
     @State private var questionElapsedSeconds: TimeInterval = 0
     @State private var timerTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -68,7 +69,7 @@ struct QuizSessionView: View {
         }
         .background(Color(theme.palette.paper).ignoresSafeArea())
         .foregroundStyle(Color(theme.palette.ink))
-        .navigationTitle("Quiz Me")
+        .navigationTitle(quiz?.mode == .exam ? "Exam" : "Quiz Me")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color(theme.palette.paper), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -150,7 +151,15 @@ struct QuizSessionView: View {
                 .font(.system(.title3, design: .serif))
                 .fixedSize(horizontal: false, vertical: true)
 
-            if quiz?.timed == true, let questionTimer {
+            if quiz?.mode == .exam, quiz?.timed == true, let examSessionTimer, phase != .summary {
+                HStack(spacing: 8) {
+                    Image(systemName: "timer")
+                    Text(examTimerLabel(examSessionTimer.remainingSeconds))
+                        .font(.title3.weight(.semibold).monospacedDigit())
+                }
+                .foregroundStyle(Color(theme.palette.accent))
+                .accessibilityIdentifier("quiz.examTimer")
+            } else if quiz?.mode != .exam, quiz?.timed == true, let questionTimer {
                 HStack(spacing: 8) {
                     Image(systemName: "timer")
                     Text("\(questionTimer.remainingSeconds)s")
@@ -311,9 +320,16 @@ struct QuizSessionView: View {
     }
 
     private func tickTimer() {
+        guard quiz?.timed == true, scenePhase == .active else { return }
+        if quiz?.mode == .exam, var examTimer = examSessionTimer {
+            examTimer.tick()
+            examSessionTimer = examTimer
+            if examTimer.isExpired {
+                expireExamSession()
+            }
+            return
+        }
         guard case .answering = phase,
-              quiz?.timed == true,
-              scenePhase == .active,
               var timer = questionTimer,
               let question = current else { return }
         timer.tick()
@@ -321,6 +337,22 @@ struct QuizSessionView: View {
         if timer.isExpired {
             submit(question, timedOut: true)
         }
+    }
+
+    private func examTimerLabel(_ remainingSeconds: Int) -> String {
+        let minutes = remainingSeconds / 60
+        let seconds = remainingSeconds % 60
+        return String(format: "%d:%02d remaining", minutes, seconds)
+    }
+
+    private func expireExamSession() {
+        pauseTimerTracking()
+        examSessionTimer = nil
+        if case .answering = phase, let question = current {
+            submit(question, timedOut: true)
+        }
+        questionIndex = questions.count
+        phase = .summary
     }
 
     private func pauseTimerTracking() {
@@ -335,9 +367,18 @@ struct QuizSessionView: View {
         questionTimeStartedAt = scenePhase == .active ? Date() : nil
         guard let quiz, quiz.timed else {
             questionTimer = nil
+            examSessionTimer = nil
             return
         }
-        questionTimer = QuizQuestionTimer(limitSeconds: quiz.difficulty.timerSeconds)
+        if quiz.mode == .exam, let limit = quiz.sessionTimeLimitSeconds {
+            if examSessionTimer == nil {
+                examSessionTimer = QuizQuestionTimer(limitSeconds: limit)
+            }
+            questionTimer = nil
+        } else {
+            examSessionTimer = nil
+            questionTimer = QuizQuestionTimer(limitSeconds: quiz.difficulty.timerSeconds)
+        }
     }
 
     private func recordTimerConsumption() {

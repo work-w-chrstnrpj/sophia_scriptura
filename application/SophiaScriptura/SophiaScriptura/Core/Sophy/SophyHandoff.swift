@@ -31,6 +31,7 @@ enum SophyPrompt {
     openQuiz: {types?:[string],difficulty?:string,timed?:bool}
     openContemplation: {title?:string,passage?:{book:string,chapter:int,startVerse:int,endVerse:int}}
     openChat: {presetHandle:string,prompt:string}
+    openScripture: {book:string,chapter?:int,verse?:int,editionAbbreviation?:string}
     lookup: {query:string,scope:"notes"|"collections"|"both"}
     insights: {period:"day"|"week"|"month"|"year",anchorDate?:"YYYY-MM-DD",modeHandle?:string}
     enhance: {operation:"grammar"|"tone"|"organize"|"expound"|"rate",tone?:"casual"|"professional"|"creative"|"academic"|"devotional",ratingTarget?:"grammar"|"idea"|"both"}
@@ -43,6 +44,12 @@ enum SophyPrompt {
     sources; the owner reviews sources before any text is sent. sourceHandles may only
     reference attached sources. Do not infer content from catalog metadata or create URLs.
     Never mix lookup/insights/enhance with saved actions: resolve read-only needs first.
+    When the owner asks to open, go to, or view a Bible book/chapter/verse in Scripture,
+    return kind:"plan" with one openScripture action. Use Bible book IDs from the catalog
+    (for example JAS, EPH, GEN). Omit chapter or verse only when the owner asked for a
+    whole book; default chapter 1 and verse 1 in that case. editionAbbreviation must match
+    the supplied translation catalog when the owner names a translation (WEB, NIV, NKJV,
+    NASB, NLT, ESV, BSB). Do not combine openScripture with saved folder/reminder actions.
     """
 
     static let repair = response + "\nYour previous response failed validation. Return a fresh valid response to the original request, using only the supplied contract and catalog."

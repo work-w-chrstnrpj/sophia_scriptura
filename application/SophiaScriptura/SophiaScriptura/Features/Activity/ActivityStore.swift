@@ -206,14 +206,15 @@ import Combine
         catch { errorMessage = "Activity restore failed. Existing data was kept: \(error.localizedDescription)" }
     }
 
-    func start(mode: ActivityMode, title: String, readingStart: VerseID? = nil, editionID: String? = nil, now: Date = Date()) {
+    func start(mode: ActivityMode, title: String, readingStart: VerseID? = nil, editionID: String? = nil,
+               guidedWorkflow: Bool = false, now: Date = Date()) {
         guard !rejectWhileSophyCommits() else { return }
 
         guard loaded else { errorMessage = "Activity data is not available."; return }
         errorMessage = nil
         guard snapshot.draft == nil else { errorMessage = "Finish the current activity before starting another."; return }
         snapshot.draft = ActivityDraft(id: UUID(), title: title, modeID: mode.id, modeLabel: mode.name,
-            startedAt: now, runningSince: now, intervals: [], description: "", readingStart: readingStart, editionID: editionID, guidedWorkflow: launchesWorkflow(for: mode.id))
+            startedAt: now, runningSince: now, intervals: [], description: "", readingStart: readingStart, editionID: editionID, guidedWorkflow: guidedWorkflow)
         persist()
     }
 
@@ -232,11 +233,13 @@ import Combine
         persist()
     }
 
-    func finish(title: String, description: String, readingEnd: VerseID? = nil, bookOrder: [String: Int] = [:], now: Date = Date()) {
+    func finish(title: String, description: String, readingStart: VerseID? = nil, readingEnd: VerseID? = nil,
+               bookOrder: [String: Int] = [:], now: Date = Date()) {
         guard !rejectWhileSophyCommits() else { return }
 
         guard var draft = snapshot.draft else { return }
         errorMessage = nil
+        if let readingStart { draft.readingStart = readingStart }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { errorMessage = "Enter an activity title."; return }
         if draft.readingStart != nil && readingEnd == nil { errorMessage = "Choose the ending verse."; return }

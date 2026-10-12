@@ -54,14 +54,17 @@ ranges are separate activity records in the first delivery.
    starting verse. The focus highlight fades without changing annotation visibility or ink.
 5. A compact timer item appears in the shared shell control. It can be expanded, paused,
    resumed, or finished from any tab. Paused duration is excluded from active duration.
-6. Finish opens a final-verse picker. The inclusive start-to-end reading range, title and
-   computed duration are reviewed before save. The chosen design requires an end verse.
-   Dismissing review preserves the session as unfinished so the user can return to it.
-7. Settings → Activity workflows independently controls automatic Reading and Scripture Contemplation starts. Both default on for existing behavior. When Reading is off, start only the timer, without a passage selector, Scripture navigation or required ending verse. When Contemplation is off, start only the timer, without a guided journey, passage requirement or automatic music-control reveal. Changing these settings applies to new activities; it does not restart an active workflow. Other modes support a title, timer and optional description.
+6. Finish opens **Start** and **End** passage sections for guided Reading. **Start** shows the
+   stored starting book/chapter/verse and stays editable. **End** defaults to the Scripture
+   reader’s current chapter (verse 1 when the chapter is after the start chapter; otherwise at
+   least the starting verse). If the reader is in another book or an earlier chapter than the
+   start, **End** falls back to the start passage. Title, description, and duration are reviewed
+   before save. Dismissing review preserves the session as unfinished.
+7. Start Activity for **Reading** or **Contemplating** includes a bottom toggle for the guided workflow. When off, only the timer starts (no passage picker, Scripture navigation, ending verse, or contemplation journey). When on, the extra passage fields appear above the toggle. The last choice for each mode is remembered for the next start. Other modes support a title, timer and optional description.
 
 ## Scripture Contemplation (SP-022)
 
-Activity has a separate **Scripture Contemplation** section with its own Start action and filtered history. Its activity type is **Contemplating**; the section does not show a separate today-duration line. The mode also remains available in the general mode picker. With its automatic workflow enabled, starting it asks whether to contemplate a **specific passage**
+Activity has a separate **Scripture Contemplation** section with its own Start action and filtered history. Its activity type is **Contemplating**; the section does not show a separate today-duration line. The mode also remains available in the general mode picker. With the guided workflow toggle on, starting it asks whether to contemplate a **specific passage**
 (same chapter, at most two consecutive verses) or to use **seven curated passages** from a bundled
 seed catalog. The timer starts immediately; finishing the journey does not finish the Activity
 session.

@@ -192,7 +192,7 @@ struct OpenAICompatibleProviderAdapter: LLMProviderAdapter {
     static func completionBody(for request: LLMCompletionRequest) throws -> Data {
         var messages: [[String: String]] = [["role": "system", "content": request.systemInstruction]]
         messages += request.turns.map { ["role": $0.role.rawValue, "content": $0.content] }
-        var body: [String: Any] = ["model": request.modelID, "messages": messages, "stream": true]
+        var body: [String: Any] = ["model": request.modelID, "messages": messages, "stream": true, "max_tokens": 4096]
         if request.preferJSONObject {
             body["response_format"] = ["type": "json_object"]
         }

@@ -62,7 +62,8 @@ struct OpenAIProviderAdapter: LLMProviderAdapter {
         var body: [String: Any] = [
             "model": request.modelID,
             "messages": messages,
-            "stream": true
+            "stream": true,
+            "max_tokens": 4096
         ]
         if request.preferJSONObject {
             body["response_format"] = ["type": "json_object"]

@@ -203,6 +203,32 @@ import PencilKit
         changed(); await save()
         restoreSelectedAppearance(reader: reader)
     }
+
+    /// Opens a saved collection link: selects the layer, restores appearance, and shows ink in Read Visible.
+    func activateSavedLayer(groupID: UUID, layerID: UUID, document: ChapterDocument, reader: ReaderSession) async {
+        guard loaded else { return }
+        guard await prepareForNavigation() else { return }
+        if let resolved = snapshot.groups.first(where: { $0.id == groupID }),
+           resolved.layers.contains(where: { $0.id == layerID && $0.deletedAt != nil }) {
+            await restoreLayer(layerID, document: document)
+        }
+        guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }),
+              snapshot.groups[g].layers.contains(where: { $0.id == layerID && $0.deletedAt == nil }) else {
+            notice = "This annotation layer is no longer available."
+            mode = .hidden
+            layoutAvailable = false
+            return
+        }
+        self.groupID = groupID
+        snapshot.groups[g].selectedLayerID = layerID
+        refreshLayout(for: document)
+        mode = .visible
+        toolsVisible = false
+        paletteCollapsed = false
+        changed()
+        await save()
+        restoreSelectedAppearance(reader: reader)
+    }
     private var pendingAppearanceRestore: ReaderPreferences?
     func restoreSelectedAppearance(reader: ReaderSession) {
         guard let appearance = selected?.appearance else { return }

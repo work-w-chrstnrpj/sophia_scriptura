@@ -74,6 +74,7 @@ struct AnnotationControls: View {
     @Environment(\.appTheme) private var theme
     @Bindable var annotations: AnnotationSession
     let reader: ReaderSession
+    @ObservedObject var collections: CollectionsStore
     let width: Double
     @Binding var confirmDeleteLayer: Bool
     var openChapterHub: (() -> Void)? = nil
@@ -82,6 +83,9 @@ struct AnnotationControls: View {
     @State private var showLayers = false
     @State private var showModes = false
     @State private var showDeleted = false
+    @State private var layerInfoChoice: AnnotationSession.LayerChoice?
+    @State private var filingArtifact: CollectionArtifact?
+    var notes: NotesSession = NotesSession()
     @State private var exported: AnnotationArchiveDocument?
     @State private var exporting = false
     @State private var importing = false
@@ -144,6 +148,39 @@ struct AnnotationControls: View {
             }
             Button("Cancel", role: .cancel) { replacement = nil }
         } message: { Text("This replaces all Scripture annotations, including deleted layers. A recovery copy is retained. This is an ink-only backup; Bible text and other app data are excluded.") }
+        .sheet(item: $layerInfoChoice) { choice in
+            AnnotationLayerInfoSheet(choice: choice, collectionNames: collections.collectionNames(containing: choice.id))
+        }
+        .sheet(item: $filingArtifact) { artifact in
+            CollectionDestinationPicker(store: collections, artifact: artifact, mode: .assign, notes: notes)
+        }
+    }
+
+    private func selectedLayerChoice(in document: ChapterDocument) -> AnnotationSession.LayerChoice? {
+        guard let selected = annotations.selected else { return nil }
+        return annotations.layers(for: document).first { $0.id == selected.id }
+    }
+
+    private func prepareFilingArtifact(in document: ChapterDocument) -> CollectionArtifact? {
+        guard let group = annotations.group,
+              let layer = annotations.selected,
+              group.source == AnnotationSource(document) else { return nil }
+        let layout = layer.layout ?? group.layout
+        let bookTitle = reader.currentBook?.title ?? document.book
+        collections.registerAnnotation(
+            layerID: layer.id,
+            groupID: group.id,
+            source: group.source,
+            bookTitle: bookTitle,
+            layerName: layer.name
+        )
+        return AnnotationCollectionCatalog.artifact(
+            groupID: group.id,
+            layer: layer,
+            layout: layout,
+            bookTitle: bookTitle,
+            source: group.source
+        )
     }
     private func controlLabel(_ title: String, icon: String, compact: Bool) -> some View {
         Group {
@@ -242,7 +279,23 @@ struct AnnotationControls: View {
                                 .foregroundStyle(Color(theme.palette.paper))
                         }
                         .buttonStyle(.borderedProminent)
-                        if annotations.selected != nil {
+                        if annotations.selected != nil, let document = reader.document {
+                            Button {
+                                showLayers = false
+                                layerInfoChoice = selectedLayerChoice(in: document)
+                            } label: {
+                                layerActionLabel("Layer information", icon: "info.circle")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(selectedLayerChoice(in: document) == nil)
+                            Button {
+                                showLayers = false
+                                filingArtifact = prepareFilingArtifact(in: document)
+                            } label: {
+                                layerActionLabel("Add to collections", icon: "folder.badge.plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(selectedLayerChoice(in: document) == nil)
                             Button { showLayers = false; name = ""; rename = true } label: {
                                 layerActionLabel("Rename layer", icon: "pencil")
                             }

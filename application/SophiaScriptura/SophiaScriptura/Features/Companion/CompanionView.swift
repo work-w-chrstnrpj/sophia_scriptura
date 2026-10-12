@@ -38,16 +38,23 @@ struct CompanionView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 8)
 
-                List(selection: Binding(get: { session.selectedConversationID }, set: { session.selectConversation($0) })) {
+                List(selection: Binding(
+                    get: { session.selectedConversationID },
+                    set: { id in
+                        leaveArchivedConversations()
+                        session.selectConversation(id)
+                    }
+                )) {
                 Section {
                     Button {
+                        leaveArchivedConversations()
                         _ = session.createConversation()
                     } label: {
                         Label("New conversation", systemImage: "square.and.pencil")
                     }
                     .accessibilityIdentifier("companion.newConversation")
                     Button { showQuizSetup = true } label: {
-                        Label("Quiz Me", systemImage: "questionmark.circle")
+                        Label(session.examModeEnabled ? "Exam" : "Quiz Me", systemImage: "questionmark.circle")
                     }
                     .accessibilityIdentifier("companion.quizMe")
                 }
@@ -76,6 +83,15 @@ struct CompanionView: View {
                                 .font(.caption)
                                 .foregroundStyle(selected ? Color(selectedInk).opacity(0.82) : Color(theme.palette.secondary))
                         }
+                        .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                        .listRowBackground(
+                            Group {
+                                if selected {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(Color(theme.palette.accent))
+                                }
+                            }
+                        )
                         .tag(conversation.id as UUID?)
                         .contextMenu {
                             Button("Rename", systemImage: "pencil") {
@@ -169,6 +185,7 @@ struct CompanionView: View {
                 }
                 }
                 .listStyle(.sidebar)
+                .tint(Color(theme.palette.accent))
                 .scrollContentBackground(.hidden)
                 .appSurface()
                 .overlay(alignment: .trailing) {
@@ -181,7 +198,7 @@ struct CompanionView: View {
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showArchivedConversations) {
-                StudyArchivedConversationsView(session: session)
+                StudyArchivedConversationsView(session: session, onClose: leaveArchivedConversations)
                     .toolbar(.visible, for: .navigationBar)
             }
         } detail: {
@@ -329,6 +346,10 @@ struct CompanionView: View {
         }
     }
 
+    private func leaveArchivedConversations() {
+        showArchivedConversations = false
+    }
+
     private func quizDisplayTitle(_ quiz: QuizSession) -> String {
         let custom = quiz.customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if !custom.isEmpty { return custom }
@@ -338,17 +359,16 @@ struct CompanionView: View {
 }
 
 enum CompanionSelectionContrast {
-    /// Sidebar selection fills with the accent. Pick the palette color farthest from that fill.
+    /// Label color for text on an accent-filled sidebar row.
     static func label(on background: UIColor, palette: ReaderPalette) -> UIColor {
-        func luminance(_ color: UIColor) -> CGFloat {
+        var white: CGFloat = 0
+        guard background.getWhite(&white, alpha: nil) else {
             var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
-            color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-            return (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+            background.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            let luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+            return luminance > 0.55 ? palette.ink : palette.paper
         }
-        let backgroundLuminance = luminance(background)
-        let inkDistance = abs(luminance(palette.ink) - backgroundLuminance)
-        let paperDistance = abs(luminance(palette.paper) - backgroundLuminance)
-        return paperDistance > inkDistance ? palette.paper : palette.ink
+        return white > 0.55 ? palette.ink : palette.paper
     }
 }
 
@@ -690,6 +710,10 @@ private struct CompanionMessageBubble: View {
     @State private var editUserMessage = false
     @State private var editDraft = ""
 
+    private var usesWideAssistantLayout: Bool {
+        message.role == .assistant && CompanionMarkdownTableParser.containsTable(message.content)
+    }
+
     var body: some View {
         HStack(alignment: .top) {
             if message.role == .user { Spacer(minLength: 56) }
@@ -702,7 +726,10 @@ private struct CompanionMessageBubble: View {
                         .accessibilityLabel("Original language analysis request")
                         .accessibilityAddTraits(.isStaticText)
                 } else {
-                CompanionMessageLayout {
+                CompanionMessageLayout(
+                    allowsWideExpansion: message.role == .assistant
+                        && CompanionMarkdownTableParser.containsTable(message.content)
+                ) {
                 Group {
                     if message.content.isEmpty, message.deliveryState == .streaming || message.deliveryState == .sending {
                         CompanionTypingIndicator()
@@ -748,7 +775,7 @@ private struct CompanionMessageBubble: View {
                     .accessibilityIdentifier("companion.editLatestPrompt")
                 }
             }
-            if message.role == .assistant { Spacer(minLength: 56) }
+            if message.role == .assistant, !usesWideAssistantLayout { Spacer(minLength: 56) }
         }
         .frame(maxWidth: .infinity)
         .sheet(isPresented: $showSources) {

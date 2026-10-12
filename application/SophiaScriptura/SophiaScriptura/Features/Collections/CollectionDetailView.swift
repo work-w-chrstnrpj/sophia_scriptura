@@ -15,6 +15,9 @@ struct CollectionDetailView: View {
     var notes: NotesSession
     var openNote: (UUID, UUID) -> Void
     var openPassage: (SavedPassage) -> Void
+    var openAnnotation: (SavedAnnotation) -> Void = { _ in }
+    var annotationSnapshot: AnnotationSnapshot?
+    var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
 
@@ -45,7 +48,8 @@ struct CollectionDetailView: View {
         let filtered = store.presentedArtifacts(
             for: collectionID,
             includingDescendants: includeDescendants,
-            notes: notes.snapshot.notes
+            notes: notes.snapshot.notes,
+            annotationSnapshot: annotationSnapshot
         )
         .filter { kind == nil || $0.kind == kind }
 
@@ -99,7 +103,16 @@ struct CollectionDetailView: View {
     private func collectionSheets(_ collection: StudyCollection) -> some View {
                 collectionContent(collection)
                 .sheet(isPresented: $showingPicker) {
-                    CollectionArtifactPicker(store: store, collectionID: collectionID, notes: notes, openNote: { openNote($0, collectionID) }, openCompanion: openCompanion, createConversation: createConversation)
+                    CollectionArtifactPicker(
+                        store: store,
+                        collectionID: collectionID,
+                        notes: notes,
+                        annotationSnapshot: annotationSnapshot,
+                        bookTitleForCode: bookTitleForCode,
+                        openNote: { openNote($0, collectionID) },
+                        openCompanion: openCompanion,
+                        createConversation: createConversation
+                    )
                 }
                 .sheet(isPresented: $showingEditor) {
                     CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collectionID)
@@ -207,7 +220,7 @@ struct CollectionDetailView: View {
     private func header(_ collection: StudyCollection) -> some View {
         let itemCount = collection.isUnfiled
             ? store.unfiledCount(notes: notes.snapshot.notes)
-            : store.membershipCount(for: collectionID, notes: notes.snapshot.notes)
+            : store.membershipCount(for: collectionID, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
         let subfolderCount = store.children(of: collectionID).count
         let detail = collection.isUnfiled ? StudyCollection.unfiled(accent: collection.accent, modifiedAt: .now).detail : collection.detail
 
@@ -289,7 +302,11 @@ struct CollectionDetailView: View {
                                 notes: notes,
                                 openNote: openNote,
                                 openPassage: openPassage,
-                                openCompanion: openCompanion
+                                openAnnotation: openAnnotation,
+                                annotationSnapshot: annotationSnapshot,
+                                bookTitleForCode: bookTitleForCode,
+                                openCompanion: openCompanion,
+                                createConversation: createConversation
                             )
                         } label: {
                             subfolderTile(child)
@@ -325,7 +342,7 @@ struct CollectionDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(1)
-                Text(store.isLocked(child.id) ? "Locked" : CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes)))
+                Text(store.isLocked(child.id) ? "Locked" : CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)))
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(Color(theme.palette.secondary))
@@ -471,6 +488,10 @@ struct CollectionDetailView: View {
             conversationCard = artifact.id
         case .scripture:
             break
+        case .annotation:
+            if let saved = store.savedAnnotation(id: artifact.id) {
+                openAnnotation(saved)
+            }
         }
     }
 }

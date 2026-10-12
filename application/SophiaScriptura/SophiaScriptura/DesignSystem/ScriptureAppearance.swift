@@ -51,13 +51,13 @@ enum ScriptureAppearance: String, CaseIterable, Identifiable {
             }
         }
         switch self {
-        case .oldPaper: return ReaderPalette(0xffffff, 0x000000, 0x494949)
-        case .midnightLibrary: return ReaderPalette(0xf4f6fa, 0x202633, 0x4a6280)
-        case .quietSage: return ReaderPalette(0xe9f0ee, 0x253535, 0x426966)
-        case .sepiaNotes: return ReaderPalette(0xf5e5c6, 0x382b1d, 0x806039)
-        case .inkAndLinen: return ReaderPalette(0xf7f4fa, 0x2e2538, 0x69527f)
-        case .treeOfKnowledge: return ReaderPalette(0xf7f2e7, 0x382e29, 0x8b4436)
-        case .springLeaf: return ReaderPalette(0xfcfcf9, 0x253b34, 0x315f4c)
+        case .oldPaper: return ReaderPalette(0xffffff, 0x000000, 0x1e5aa8)
+        case .midnightLibrary: return ReaderPalette(0xf4f6fa, 0x202633, 0x2e4a78)
+        case .quietSage: return ReaderPalette(0xe9f0ee, 0x253535, 0x287066)
+        case .sepiaNotes: return ReaderPalette(0xf5e5c6, 0x382b1d, 0x9f5317)
+        case .inkAndLinen: return ReaderPalette(0xf7f4fa, 0x2e2538, 0x6241a8)
+        case .treeOfKnowledge: return ReaderPalette(0xf7f2e7, 0x382e29, 0x9b3828)
+        case .springLeaf: return ReaderPalette(0xfcfcf9, 0x253b34, 0x1b7a4a)
         }
     }
 }

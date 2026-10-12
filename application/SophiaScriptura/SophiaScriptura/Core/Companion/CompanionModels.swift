@@ -140,11 +140,12 @@ struct CompanionUIState: Codable, Sendable {
     var recentQuizFixtureKeys: [String] = []
     var quizDefaultProviderConfigID: UUID?
     var quizDefaultModelID: String?
+    var examModeEnabled: Bool = false
 
     private enum CodingKeys: String, CodingKey {
         case selectedConversationID, scripturePanelConversationID, panelExpandedToTab, showFreeModelsOnly
         case sidebarQuizHistoryExpanded, sidebarChatHistoryExpanded, recentQuizFixtureKeys
-        case quizDefaultProviderConfigID, quizDefaultModelID
+        case quizDefaultProviderConfigID, quizDefaultModelID, examModeEnabled
     }
 
     init(
@@ -156,7 +157,8 @@ struct CompanionUIState: Codable, Sendable {
         sidebarChatHistoryExpanded: Bool = true,
         recentQuizFixtureKeys: [String] = [],
         quizDefaultProviderConfigID: UUID? = nil,
-        quizDefaultModelID: String? = nil
+        quizDefaultModelID: String? = nil,
+        examModeEnabled: Bool = false
     ) {
         self.selectedConversationID = selectedConversationID
         self.scripturePanelConversationID = scripturePanelConversationID
@@ -167,6 +169,7 @@ struct CompanionUIState: Codable, Sendable {
         self.recentQuizFixtureKeys = recentQuizFixtureKeys
         self.quizDefaultProviderConfigID = quizDefaultProviderConfigID
         self.quizDefaultModelID = quizDefaultModelID
+        self.examModeEnabled = examModeEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -180,6 +183,7 @@ struct CompanionUIState: Codable, Sendable {
         recentQuizFixtureKeys = try container.decodeIfPresent([String].self, forKey: .recentQuizFixtureKeys) ?? []
         quizDefaultProviderConfigID = try container.decodeIfPresent(UUID.self, forKey: .quizDefaultProviderConfigID)
         quizDefaultModelID = try container.decodeIfPresent(String.self, forKey: .quizDefaultModelID)
+        examModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .examModeEnabled) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -193,6 +197,7 @@ struct CompanionUIState: Codable, Sendable {
         try container.encode(recentQuizFixtureKeys, forKey: .recentQuizFixtureKeys)
         try container.encodeIfPresent(quizDefaultProviderConfigID, forKey: .quizDefaultProviderConfigID)
         try container.encodeIfPresent(quizDefaultModelID, forKey: .quizDefaultModelID)
+        try container.encode(examModeEnabled, forKey: .examModeEnabled)
     }
 }
 
@@ -344,10 +349,14 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
     var reviewingLinkID: UUID?
     var activeQuestionSeconds: Int = 0
     var customTitle: String = ""
+    var mode: QuizSessionMode = .standard
+    var configuredQuestionCount: Int?
+    var sessionTimeLimitSeconds: Int?
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, completedAt, difficulty, types, editionID, timed, recordReviewing
         case providerConfigID, providerAdapterID, modelID, scoreEarned, scoreAvailable, completionState, reviewingLinkID, activeQuestionSeconds, customTitle
+        case mode, configuredQuestionCount, sessionTimeLimitSeconds
     }
 
     init(
@@ -367,7 +376,10 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         completionState: String,
         reviewingLinkID: UUID? = nil,
         activeQuestionSeconds: Int = 0,
-        customTitle: String = ""
+        customTitle: String = "",
+        mode: QuizSessionMode = .standard,
+        configuredQuestionCount: Int? = nil,
+        sessionTimeLimitSeconds: Int? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -386,6 +398,14 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         self.reviewingLinkID = reviewingLinkID
         self.activeQuestionSeconds = activeQuestionSeconds
         self.customTitle = customTitle
+        self.mode = mode
+        self.configuredQuestionCount = configuredQuestionCount
+        self.sessionTimeLimitSeconds = sessionTimeLimitSeconds
+    }
+
+    var effectiveQuestionCount: Int {
+        if mode == .exam, let configuredQuestionCount { return configuredQuestionCount }
+        return difficulty.questionCount
     }
 
     init(from decoder: Decoder) throws {
@@ -407,6 +427,9 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         reviewingLinkID = try container.decodeIfPresent(UUID.self, forKey: .reviewingLinkID)
         activeQuestionSeconds = try container.decodeIfPresent(Int.self, forKey: .activeQuestionSeconds) ?? 0
         customTitle = try container.decodeIfPresent(String.self, forKey: .customTitle) ?? ""
+        mode = try container.decodeIfPresent(QuizSessionMode.self, forKey: .mode) ?? .standard
+        configuredQuestionCount = try container.decodeIfPresent(Int.self, forKey: .configuredQuestionCount)
+        sessionTimeLimitSeconds = try container.decodeIfPresent(Int.self, forKey: .sessionTimeLimitSeconds)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -425,8 +448,12 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         try container.encode(scoreEarned, forKey: .scoreEarned)
         try container.encode(scoreAvailable, forKey: .scoreAvailable)
         try container.encode(completionState, forKey: .completionState)
+        try container.encode(mode, forKey: .mode)
+        try container.encodeIfPresent(configuredQuestionCount, forKey: .configuredQuestionCount)
+        try container.encodeIfPresent(sessionTimeLimitSeconds, forKey: .sessionTimeLimitSeconds)
         try container.encodeIfPresent(reviewingLinkID, forKey: .reviewingLinkID)
         try container.encode(activeQuestionSeconds, forKey: .activeQuestionSeconds)
+        try container.encode(customTitle, forKey: .customTitle)
     }
 }
 

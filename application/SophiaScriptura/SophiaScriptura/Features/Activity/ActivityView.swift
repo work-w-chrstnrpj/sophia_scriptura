@@ -12,6 +12,7 @@ struct ActivityView: View {
     var startReading: (VerseID) -> Void
     var beginMeditationJourney: (MeditationJourneyLaunch) -> Void
     var availableVerses: (String, Int, String?) async throws -> [Int]
+    var currentReaderLocation: () -> (book: String, chapter: Int)? = { nil }
     @State private var modeID = ActivityModeID.reading.id
     @State private var title = ""
     @State private var details = ""
@@ -29,8 +30,12 @@ struct ActivityView: View {
     @State private var startVerseOptions: [Int] = []
     @State private var endVerseOptions: [Int] = []
     @State private var verseError: String?
+    @State private var finishStartVerseError: String?
+    @State private var finishEndVerseError: String?
     @State private var meditateOnPassage = false
     @State private var meditateEndVerse = 1
+    @State private var startReadingWorkflow = true
+    @State private var startContemplationWorkflow = true
     @State private var sophySetupGeneration = UUID()
     @State private var customName = ""
     @State private var showingStart = false
@@ -164,6 +169,7 @@ struct ActivityView: View {
                                 edit: { prepareCorrection($0) }, delete: { recordToDelete = $0 },
                                 modeFilter: ActivityModeID.meditating.id, onStartNew: prepareContemplationStart)
                         }
+                        .accessibilityIdentifier("activity.contemplation.history")
                         .font(.subheadline.weight(.semibold))
                         .textCase(nil)
                     }
@@ -280,6 +286,7 @@ struct ActivityView: View {
                 if showingAddChooser {
                     StudyCenteredActionOverlay(
                         title: "Add activity",
+                        cardMaxWidth: 272,
                         actions: [
                             .init(id: "activity.add.start", title: "Start Activity", systemImage: "play.fill") {
                                 showingAddChooser = false
@@ -500,6 +507,8 @@ struct ActivityView: View {
         modeID = ActivityModeID.reading.id
         title = ""
         meditateOnPassage = false
+        startReadingWorkflow = store.automaticReadingWorkflow
+        startContemplationWorkflow = store.automaticContemplationWorkflow
         showingStart = true
     }
 
@@ -522,8 +531,16 @@ struct ActivityView: View {
             }
     }
 
+    private var startsGuidedWorkflow: Bool {
+        switch modeID {
+        case ActivityModeID.reading.id: startReadingWorkflow
+        case ActivityModeID.meditating.id: startContemplationWorkflow
+        default: false
+        }
+    }
+
     private var startDisabled: Bool {
-        guard store.launchesWorkflow(for: modeID) else { return false }
+        guard startsGuidedWorkflow else { return false }
         if modeID == ActivityModeID.reading.id { return !startVerseOptions.contains(verse) }
         if modeID == ActivityModeID.meditating.id, meditateOnPassage {
             return !startVerseOptions.contains(verse) || !meditationEndVerseOptions.contains(meditateEndVerse)
@@ -547,10 +564,7 @@ struct ActivityView: View {
         let generation = UUID(); sophySetupGeneration = generation
         defer { if generation == sophySetupGeneration { store.sophyContemplationRequest = nil } }
         guard store.draft == nil else { store.errorMessage = "Finish your current activity first."; return }
-        guard store.automaticContemplationWorkflow else {
-            store.errorMessage = "Enable the guided Contemplation workflow in Activity before opening it with Sophy."
-            return
-        }
+        startContemplationWorkflow = true
         if let passage = request.passage {
             guard let selectedBook = books.first(where: { $0.id == passage.book }),
                   (1...selectedBook.chapterCount).contains(passage.chapter), passage.startVerse > 0,
@@ -602,23 +616,46 @@ struct ActivityView: View {
             )
         }
     }
-    private func versePicker(book: Binding<String>, chapter: Binding<Int>, verse: Binding<Int>, options: Binding<[Int]>, selectedEditionID: String?) -> some View {
+    private func readingSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Color(theme.palette.ink))
+            .textCase(nil)
+    }
+
+    private func versePicker(
+        book: Binding<String>,
+        chapter: Binding<Int>,
+        verse: Binding<Int>,
+        options: Binding<[Int]>,
+        selectedEditionID: String?,
+        loadError: Binding<String?>
+    ) -> some View {
         Group {
             Picker("Book", selection: book) { ForEach(books, id: \.id) { item in Text(item.title).tag(item.id) } }
-            Stepper("Chapter: \(chapter.wrappedValue)", value: chapter, in: 1...max(1, books.first { $0.id == book.wrappedValue }?.chapterCount ?? 150))
+            let chapterCount = max(1, books.first { $0.id == book.wrappedValue }?.chapterCount ?? 150)
+            Picker("Chapter", selection: chapter) {
+                ForEach(1...chapterCount, id: \.self) { number in
+                    Text(String(number)).tag(number)
+                }
+            }
             if options.wrappedValue.isEmpty { ProgressView("Loading verses") }
             else { Picker("Verse", selection: verse) { ForEach(options.wrappedValue, id: \.self) { number in Text(String(number)).tag(number) } } }
-            if let verseError { Text(verseError).foregroundStyle(.red) }
+            if let message = loadError.wrappedValue { Text(message).foregroundStyle(.red) }
+        }
+        .onChange(of: book.wrappedValue) { _, bookID in
+            let count = max(1, books.first { $0.id == bookID }?.chapterCount ?? 150)
+            if chapter.wrappedValue > count { chapter.wrappedValue = count }
         }
         .task(id: "\(selectedEditionID ?? "")-\(book.wrappedValue)-\(chapter.wrappedValue)") {
             options.wrappedValue = []
-            verseError = nil
+            loadError.wrappedValue = nil
             do {
                 let loaded = try await availableVerses(book.wrappedValue, chapter.wrappedValue, selectedEditionID)
                 guard !Task.isCancelled else { return }
                 options.wrappedValue = loaded
                 if !loaded.contains(verse.wrappedValue) { verse.wrappedValue = loaded.first ?? 1 }
-            } catch { verseError = error.localizedDescription }
+            } catch { loadError.wrappedValue = error.localizedDescription }
         }
     }
     private var startSheet: some View {
@@ -626,13 +663,17 @@ struct ActivityView: View {
             Form {
                 modePicker
                 TextField("Title", text: $title)
-                if modeID == ActivityModeID.reading.id, store.automaticReadingWorkflow {
-                    versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions, selectedEditionID: editionID)
+                if modeID == ActivityModeID.reading.id, startReadingWorkflow {
+                    Section {
+                        versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions,
+                                    selectedEditionID: editionID, loadError: $verseError)
+                    } header: { readingSectionHeader("Start") }
                 }
-                if modeID == ActivityModeID.meditating.id, store.automaticContemplationWorkflow {
+                if modeID == ActivityModeID.meditating.id, startContemplationWorkflow {
                     Toggle("Contemplate a specific passage", isOn: $meditateOnPassage)
                     if meditateOnPassage {
-                        versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions, selectedEditionID: editionID)
+                        versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions,
+                                    selectedEditionID: editionID, loadError: $verseError)
                         meditationEndVersePicker
                     } else {
                         Text("Sophia will guide you through seven short passages (up to two verses each).")
@@ -640,9 +681,13 @@ struct ActivityView: View {
                             .foregroundStyle(Color(theme.palette.secondary))
                     }
                 }
-                if (modeID == ActivityModeID.reading.id || modeID == ActivityModeID.meditating.id) && !store.launchesWorkflow(for: modeID) {
-                    Text("Only the activity timer will start. You can enable the guided workflow in Settings.")
-                        .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+                if modeID == ActivityModeID.reading.id {
+                    Toggle("Start Reading workflow", isOn: $startReadingWorkflow)
+                        .accessibilityIdentifier("activity.start.readingWorkflow")
+                }
+                if modeID == ActivityModeID.meditating.id {
+                    Toggle("Start Scripture Contemplation workflow", isOn: $startContemplationWorkflow)
+                        .accessibilityIdentifier("activity.start.contemplationWorkflow")
                 }
             }.navigationTitle("Start Activity")
                 .toolbar {
@@ -650,12 +695,21 @@ struct ActivityView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Start") {
                             let selected = mode
-                            let start = selected.id == ActivityModeID.reading.id && store.automaticReadingWorkflow ? VerseID(referenceSystemID: referenceSystemID, book: book, chapter: chapter, verse: verse) : nil
-                            store.start(mode: selected, title: title.isEmpty ? selected.name : title, readingStart: start, editionID: editionID)
+                            let guided = selected.id == ActivityModeID.reading.id ? startReadingWorkflow
+                                : selected.id == ActivityModeID.meditating.id ? startContemplationWorkflow : false
+                            let start = selected.id == ActivityModeID.reading.id && startReadingWorkflow
+                                ? VerseID(referenceSystemID: referenceSystemID, book: book, chapter: chapter, verse: verse) : nil
+                            store.start(mode: selected, title: title.isEmpty ? selected.name : title, readingStart: start,
+                                        editionID: editionID, guidedWorkflow: guided)
                             guard store.errorMessage == nil else { return }
+                            if selected.id == ActivityModeID.reading.id {
+                                store.setAutomaticWorkflow(startReadingWorkflow, for: ActivityModeID.reading.id)
+                            } else if selected.id == ActivityModeID.meditating.id {
+                                store.setAutomaticWorkflow(startContemplationWorkflow, for: ActivityModeID.meditating.id)
+                            }
                             showingStart = false
                             if let start { startReading(start) }
-                            if selected.id == ActivityModeID.meditating.id, store.automaticContemplationWorkflow {
+                            if selected.id == ActivityModeID.meditating.id, startContemplationWorkflow {
                                 let chosen: PassageRange? = meditateOnPassage ? meditationRange : nil
                                 beginMeditationJourney(MeditationJourneyLaunch(
                                     referenceSystemID: referenceSystemID,
@@ -705,21 +759,44 @@ struct ActivityView: View {
             Form {
                 TextField("Title", text: $title)
                 TextField("Description", text: $details)
-                if store.draft?.readingStart != nil { versePicker(book: $endBook, chapter: $endChapter, verse: $endVerse, options: $endVerseOptions, selectedEditionID: store.draft?.editionID) }
+                if store.draft?.readingStart != nil {
+                    let edition = store.draft?.editionID
+                    Section {
+                        versePicker(book: $book, chapter: $chapter, verse: $verse, options: $startVerseOptions,
+                                    selectedEditionID: edition, loadError: $finishStartVerseError)
+                    } header: { readingSectionHeader("Start") }
+                    Section {
+                        versePicker(book: $endBook, chapter: $endChapter, verse: $endVerse, options: $endVerseOptions,
+                                    selectedEditionID: edition, loadError: $finishEndVerseError)
+                    } header: { readingSectionHeader("End") }
+                }
                 Button("Discard Activity", role: .destructive) { store.discardDraft(); showingFinish = false }
             }.navigationTitle("Finish Activity")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Keep Session") { showingFinish = false } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
-                            let end = store.draft?.readingStart == nil ? nil : VerseID(referenceSystemID: store.draft?.readingStart?.referenceSystemID ?? referenceSystemID, book: endBook, chapter: endChapter, verse: endVerse)
-                            store.finish(title: title, description: details, readingEnd: end,
+                            guard let draft = store.draft else { return }
+                            let systemID = draft.readingStart?.referenceSystemID ?? referenceSystemID
+                            let start = draft.readingStart == nil
+                                ? nil
+                                : VerseID(referenceSystemID: systemID, book: book, chapter: chapter, verse: verse)
+                            let end = draft.readingStart == nil
+                                ? nil
+                                : VerseID(referenceSystemID: systemID, book: endBook, chapter: endChapter, verse: endVerse)
+                            store.finish(title: title, description: details, readingStart: start, readingEnd: end,
                                 bookOrder: Dictionary(uniqueKeysWithValues: books.map { ($0.id, $0.order) }))
                             if store.errorMessage == nil { showingFinish = false }
-                        }.disabled(store.draft?.readingStart != nil && !endVerseOptions.contains(endVerse))
+                        }.disabled(finishSaveDisabled)
                     }
                 }
         }
+    }
+
+    private var finishSaveDisabled: Bool {
+        guard store.draft?.readingStart != nil else { return false }
+        guard startVerseOptions.contains(verse), endVerseOptions.contains(endVerse) else { return true }
+        return false
     }
     private var modesSheet: some View {
         NavigationStack {
@@ -734,7 +811,22 @@ struct ActivityView: View {
     private func prepareFinish() {
         guard let draft = store.draft else { return }
         title = draft.title; details = draft.description
-        if let start = draft.readingStart { endBook = start.book; endChapter = start.chapter; endVerse = start.verse }
+        finishStartVerseError = nil
+        finishEndVerseError = nil
+        if let start = draft.readingStart {
+            book = start.book
+            chapter = start.chapter
+            verse = start.verse
+            let reader = currentReaderLocation()
+            let suggested = ReadingWorkflowEndSuggestion.suggestedEnd(
+                start: start,
+                readerBook: reader?.book,
+                readerChapter: reader?.chapter
+            )
+            endBook = suggested.book
+            endChapter = suggested.chapter
+            endVerse = suggested.verse
+        }
         showingFinish = true
     }
     private func prepareCorrection(_ record: ActivityRecord) {

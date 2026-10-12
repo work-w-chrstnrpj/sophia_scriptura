@@ -9,7 +9,7 @@ final class MusicSession: ObservableObject {
     @Published var loadError: String?
 
     private let engine = BackgroundMusicEngine()
-    private let coordinator = StudyAudioCoordinator()
+    private var coordinator = StudyAudioCoordinator()
     private let nowPlaying = MusicNowPlayingCoordinator()
     private let userLibrary: UserMusicLibraryStore
     private var loaded = false
@@ -250,6 +250,10 @@ final class MusicSession: ObservableObject {
     func pauseForNarration() {
         guard snapshot.phase == .playing else { return }
         pause(userInitiated: false)
+    }
+
+    func attachStudyAudio(_ coordinator: StudyAudioCoordinator) {
+        self.coordinator = coordinator
     }
 
     private func importErrorMessage(for error: Error) -> String {

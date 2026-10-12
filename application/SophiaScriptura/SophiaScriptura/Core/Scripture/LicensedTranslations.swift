@@ -5,7 +5,7 @@ struct LicensedTranslation: Identifiable, Sendable {
     let abbreviation: String
     let name: String
     static let approved = [
-        Self(id:"78a9f6124f344018-01",abbreviation:"NIV",name:"New International Version"),
+        Self(id:"b8ee27bcd1cae43a-01",abbreviation:"NASB",name:"New American Standard Bible"),
         Self(id:"d6e14a625393b4da-01",abbreviation:"NLT",name:"New Living Translation"),
         Self(id:"63097d2a0a2f7db3-01",abbreviation:"NKJV",name:"New King James Version")]
     var editionID: String { "api.bible." + id }
@@ -19,8 +19,8 @@ struct TranslationStatus: Identifiable, Sendable {
 }
 
 /// API.Bible granted Sophia Scriptura a written development-period exception for
-/// NIV11, NLT and NKJV. The exception is compiled into development builds only;
-/// Release/Archive builds retain the standard refresh boundary.
+/// licensed API editions during development. The exception is compiled into development
+/// builds only; Release/Archive builds retain the standard refresh boundary.
 enum OfflineContentPolicy: Sendable, Equatable {
     case standard
     case developmentException

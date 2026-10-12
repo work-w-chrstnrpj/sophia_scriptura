@@ -137,6 +137,7 @@ struct StudyCenteredActionOverlay: View {
 
     @Environment(\.appTheme) private var theme
     let title: String
+    var cardMaxWidth: CGFloat = 300
     let actions: [Action]
     let onCancel: () -> Void
 
@@ -152,16 +153,17 @@ struct StudyCenteredActionOverlay: View {
                     .foregroundStyle(Color(theme.palette.ink))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     ForEach(actions) { action in
                         Button(action: action.handler) {
                             Label(action.title, systemImage: action.systemImage)
                                 .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.bordered)
                         .tint(Color(theme.palette.accent))
                         .foregroundStyle(Color(theme.palette.ink))
+                        .labelStyle(.titleAndIcon)
                         .accessibilityIdentifier(action.id)
                     }
                 }
@@ -169,10 +171,11 @@ struct StudyCenteredActionOverlay: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(Color(theme.palette.ink))
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+                    .padding(.top, 2)
             }
-            .padding(24)
-            .frame(maxWidth: 360)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 20)
+            .frame(width: cardMaxWidth)
             .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color(theme.palette.rule), lineWidth: 1))

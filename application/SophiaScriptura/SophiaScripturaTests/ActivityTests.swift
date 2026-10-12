@@ -336,6 +336,43 @@ import SwiftUI
             timeZoneID: "UTC", intervals: intervals, description: "", readingRange: nil,
             editionID: nil, quizSessionID: nil, createdAt: date, updatedAt: date)
     }
+    func testReadingWorkflowEndSuggestionUsesReaderOrFallsBackToStart() {
+        let start = VerseID(referenceSystemID: "org.sophia.web.engwebp", book: "GEN", chapter: 5, verse: 3)
+        let forward = ReadingWorkflowEndSuggestion.suggestedEnd(start: start, readerBook: "GEN", readerChapter: 8)
+        XCTAssertEqual(forward.book, "GEN")
+        XCTAssertEqual(forward.chapter, 8)
+        XCTAssertEqual(forward.verse, 1)
+        let sameChapter = ReadingWorkflowEndSuggestion.suggestedEnd(start: start, readerBook: "GEN", readerChapter: 5)
+        XCTAssertEqual(sameChapter.chapter, 5)
+        XCTAssertEqual(sameChapter.verse, 3)
+        let earlierChapter = ReadingWorkflowEndSuggestion.suggestedEnd(start: start, readerBook: "GEN", readerChapter: 2)
+        XCTAssertEqual(earlierChapter.book, "GEN")
+        XCTAssertEqual(earlierChapter.chapter, 5)
+        XCTAssertEqual(earlierChapter.verse, 3)
+        let otherBook = ReadingWorkflowEndSuggestion.suggestedEnd(start: start, readerBook: "EXO", readerChapter: 1)
+        XCTAssertEqual(otherBook.book, "GEN")
+        XCTAssertEqual(otherBook.chapter, 5)
+        XCTAssertEqual(otherBook.verse, 3)
+    }
+
+    func testFinishReadingAcceptsEditedStartAndEnd() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ActivityStore(repository: ActivityFileRepository(directory: directory))
+        await store.load()
+        let systemID = "org.sophia.web.engwebp"
+        let start = VerseID(referenceSystemID: systemID, book: "GEN", chapter: 1, verse: 1)
+        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("reading")), title: "Reading", readingStart: start,
+                    guidedWorkflow: true, now: Date(timeIntervalSince1970: 1000))
+        let editedStart = VerseID(referenceSystemID: systemID, book: "GEN", chapter: 1, verse: 2)
+        let end = VerseID(referenceSystemID: systemID, book: "GEN", chapter: 1, verse: 4)
+        store.finish(title: "Reading", description: "", readingStart: editedStart, readingEnd: end,
+                     bookOrder: ["GEN": 1], now: Date(timeIntervalSince1970: 1060))
+        XCTAssertNil(store.errorMessage)
+        XCTAssertEqual(store.records.first?.readingRange?.start.verse, 2)
+        XCTAssertEqual(store.records.first?.readingRange?.end.verse, 4)
+    }
+
     func testOptionalWorkflowsPersistAndAllowUnconstrainedTimers() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -347,14 +384,16 @@ import SwiftUI
         XCTAssertTrue(store.launchesWorkflow(for: ActivityModeID.meditating.id))
         store.setAutomaticWorkflow(false, for: ActivityModeID.meditating.id)
         let start = Date(timeIntervalSince1970: 1000)
-        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("reading")), title: "Free reading", now: start)
+        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("reading")), title: "Free reading",
+                    guidedWorkflow: false, now: start)
         XCTAssertEqual(store.draft?.guidedWorkflow, false)
         store.finish(title: "Free reading", description: "", now: start.addingTimeInterval(90))
         XCTAssertNil(store.errorMessage); XCTAssertNil(store.records.first?.readingRange)
-        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("meditating")), title: "Free contemplation", now: start.addingTimeInterval(100))
+        store.start(mode: try XCTUnwrap(store.modeIncludingArchived("meditating")), title: "Free contemplation",
+                    guidedWorkflow: false, now: start.addingTimeInterval(100))
         XCTAssertEqual(store.draft?.guidedWorkflow, false)
         store.setAutomaticWorkflow(true, for: "meditating")
-        XCTAssertEqual(store.draft?.guidedWorkflow, false, "Changing settings must not relaunch an active timer's workflow")
+        XCTAssertEqual(store.draft?.guidedWorkflow, false, "Changing saved defaults must not relaunch an active timer's workflow")
         store.finish(title: "Free contemplation", description: "", now: start.addingTimeInterval(200))
         await store.flush()
         let reopened = ActivityStore(repository: repository); await reopened.load()

@@ -56,7 +56,15 @@ struct APIChapterParser {
             }
         }
         for node in source.content { try walk(node,style:"p") }
-        let document = ChapterDocument(schemaVersion:1,editionID:edition.id,contentRevision:edition.contentRevision,book:source.bookId,chapter:chapter,blocks:blocks)
+        let document = ChapterDocument(
+            schemaVersion: 1,
+            editionID: edition.id,
+            contentRevision: edition.contentRevision,
+            book: source.bookId,
+            chapter: chapter,
+            blocks: blocks,
+            storedReferenceSystemID: edition.referenceSystemID
+        )
         guard !document.verseNumbers.isEmpty, source.verseCount > 0,
               document.verseNumbers.allSatisfy({ verse in blocks.contains { $0.kind == "label" && $0.verses.contains(verse) } }) else { throw LicensedContentError.invalidContent }
         return document

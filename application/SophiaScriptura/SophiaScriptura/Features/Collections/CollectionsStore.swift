@@ -7,6 +7,7 @@ final class CollectionsStore: ObservableObject {
     @Published private(set) var artifacts: [CollectionArtifact]
     @Published private(set) var memberships: Set<CollectionMembership>
     @Published private(set) var passages: [SavedPassage]
+    @Published private(set) var savedAnnotations: [SavedAnnotation]
     @Published private(set) var links: [SavedLink]
     @Published private(set) var conversations: [StudyConversation]
     @Published private(set) var notice: String?
@@ -25,12 +26,14 @@ final class CollectionsStore: ObservableObject {
         artifacts: [CollectionArtifact],
         memberships: Set<CollectionMembership>,
         passages: [SavedPassage] = [],
+        savedAnnotations: [SavedAnnotation] = [],
         links: [SavedLink] = [],
         conversations: [StudyConversation] = [],
         repository: (any CollectionsRepository)? = nil
     ) {
         self.artifacts = artifacts
         self.passages = passages
+        self.savedAnnotations = savedAnnotations
         self.links = links
         self.conversations = conversations
         self.memberships = Set(memberships.filter { $0.collectionID != StudyCollection.unfiledID })
@@ -223,10 +226,10 @@ final class CollectionsStore: ObservableObject {
         collections.filter { $0.parentID == collectionID && $0.isActiveInLibrary }
     }
 
-    func membershipCount(for collectionID: UUID, includingDescendants: Bool = false, notes: [NoteDocument]? = nil) -> Int {
+    func membershipCount(for collectionID: UUID, includingDescendants: Bool = false, notes: [NoteDocument]? = nil, annotationSnapshot: AnnotationSnapshot? = nil) -> Int {
         let ids = artifactIDs(for: collectionID, includingDescendants: includingDescendants)
         guard let notes else { return ids.count }
-        return ids.intersection(Set(presentedArtifacts(notes: notes).map(\.id))).count
+        return ids.intersection(Set(presentedArtifacts(notes: notes, annotationSnapshot: annotationSnapshot).map(\.id))).count
     }
 
     /// Up to `limit` artifact kinds by membership count, for folder preview dots.
@@ -234,12 +237,13 @@ final class CollectionsStore: ObservableObject {
         for collectionID: UUID,
         notes: [NoteDocument],
         includingDescendants: Bool = true,
-        limit: Int = 3
+        limit: Int = 3,
+        annotationSnapshot: AnnotationSnapshot? = nil
     ) -> [CollectionArtifactKind] {
         let ids = artifactIDs(for: collectionID, includingDescendants: includingDescendants)
         guard !ids.isEmpty else { return [] }
         var counts: [CollectionArtifactKind: Int] = [:]
-        for artifact in presentedArtifacts(notes: notes) where ids.contains(artifact.id) {
+        for artifact in presentedArtifacts(notes: notes, annotationSnapshot: annotationSnapshot) where ids.contains(artifact.id) {
             counts[artifact.kind, default: 0] += 1
         }
         return counts
@@ -567,6 +571,49 @@ final class CollectionsStore: ObservableObject {
     }
 
     @discardableResult
+    func registerAnnotation(
+        layerID: UUID,
+        groupID: UUID,
+        source: AnnotationSource,
+        bookTitle: String,
+        layerName: String
+    ) -> UUID {
+        guard !rejectWhileSophyCommits() else { return layerID }
+
+        let trimmedTitle = bookTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = String(layerName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        if let index = savedAnnotations.firstIndex(where: { $0.id == layerID }) {
+            savedAnnotations[index].groupID = groupID
+            savedAnnotations[index].source = source
+            savedAnnotations[index].bookTitle = trimmedTitle.isEmpty ? savedAnnotations[index].bookTitle : trimmedTitle
+            savedAnnotations[index].layerName = trimmedName.isEmpty ? savedAnnotations[index].layerName : trimmedName
+        } else {
+            savedAnnotations.append(
+                SavedAnnotation(
+                    id: layerID,
+                    groupID: groupID,
+                    source: source,
+                    bookTitle: trimmedTitle.isEmpty ? source.book : trimmedTitle,
+                    layerName: trimmedName.isEmpty ? "Layer" : trimmedName,
+                    savedAt: Date()
+                )
+            )
+        }
+        enqueueWrite()
+        return layerID
+    }
+
+    func savedAnnotation(id: UUID) -> SavedAnnotation? {
+        savedAnnotations.first { $0.id == id }
+    }
+
+    func collectionNames(containing artifactID: UUID) -> [String] {
+        collectionIDs(containing: artifactID)
+            .compactMap { collection(id: $0)?.name }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    @discardableResult
     func addPassage(_ passage: SavedPassage) -> UUID {
         guard !rejectWhileSophyCommits() else { return passage.id }
 
@@ -646,7 +693,7 @@ final class CollectionsStore: ObservableObject {
         await writeChain?.value
     }
 
-    func presentedArtifacts(notes: [NoteDocument]) -> [CollectionArtifact] {
+    func presentedArtifacts(notes: [NoteDocument], annotationSnapshot: AnnotationSnapshot? = nil) -> [CollectionArtifact] {
         let noteItems = notes.filter(\.isActiveInLibrary).map { note in
             CollectionArtifact(
                 id: note.id,
@@ -685,16 +732,31 @@ final class CollectionsStore: ObservableObject {
                 insight: passage.insight
             )
         }
+        let annotationItems = savedAnnotations.map { saved in
+            AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
+        }
         let covered = Set(noteItems.map(\.id))
             .union(passageItems.map(\.id))
             .union(linkItems.map(\.id))
             .union(conversationItems.map(\.id))
-        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems
+            .union(annotationItems.map(\.id))
+        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems
     }
 
-    func presentedArtifacts(for collectionID: UUID, includingDescendants: Bool, notes: [NoteDocument]) -> [CollectionArtifact] {
+    func pickableArtifacts(
+        notes: [NoteDocument],
+        annotationSnapshot: AnnotationSnapshot,
+        bookTitleForCode: (String) -> String
+    ) -> [CollectionArtifact] {
+        let material = presentedArtifacts(notes: notes, annotationSnapshot: annotationSnapshot)
+        let layers = AnnotationCollectionCatalog.pickableLayerArtifacts(snapshot: annotationSnapshot, bookTitleForCode: bookTitleForCode)
+        let covered = Set(material.map(\.id))
+        return material + layers.filter { !covered.contains($0.id) }
+    }
+
+    func presentedArtifacts(for collectionID: UUID, includingDescendants: Bool, notes: [NoteDocument], annotationSnapshot: AnnotationSnapshot? = nil) -> [CollectionArtifact] {
         guard !isLocked(collectionID) else { return [] }
-        let material = presentedArtifacts(notes: notes)
+        let material = presentedArtifacts(notes: notes, annotationSnapshot: annotationSnapshot)
         if collection(id: collectionID)?.isUnfiled == true {
             let ids = unfiledIDs(in: material)
             return material.filter { ids.contains($0.id) }
@@ -703,8 +765,8 @@ final class CollectionsStore: ObservableObject {
         return material.filter { ids.contains($0.id) }
     }
 
-    func unfiledCount(notes: [NoteDocument]) -> Int {
-        unfiledIDs(in: presentedArtifacts(notes: notes)).count
+    func unfiledCount(notes: [NoteDocument], annotationSnapshot: AnnotationSnapshot? = nil) -> Int {
+        unfiledIDs(in: presentedArtifacts(notes: notes, annotationSnapshot: annotationSnapshot)).count
     }
 
     func passage(id: UUID) -> SavedPassage? {
@@ -796,7 +858,12 @@ final class CollectionsStore: ObservableObject {
 
     private func knownItem(_ id: UUID) -> Bool {
         guard noteAccessAllows(id) else { return false }
-        return artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation } || passages.contains { $0.id == id } || links.contains { $0.id == id } || conversations.contains { $0.id == id } || linkedNoteIDs.contains(id)
+        return artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation }
+            || passages.contains { $0.id == id }
+            || savedAnnotations.contains { $0.id == id }
+            || links.contains { $0.id == id }
+            || conversations.contains { $0.id == id }
+            || linkedNoteIDs.contains(id)
     }
 
     private func touch(_ collectionID: UUID) {
@@ -807,6 +874,7 @@ final class CollectionsStore: ObservableObject {
     private func apply(_ snapshot: CollectionsSnapshot) {
         revision = snapshot.revision
         passages = snapshot.passages
+        savedAnnotations = snapshot.savedAnnotations
         links = snapshot.links
         conversations = snapshot.conversations
         if !conversations.contains(where: { $0.id == StudyConversation.placeholderID }) {
@@ -852,6 +920,7 @@ final class CollectionsStore: ObservableObject {
             revision: revision,
             collections: collections.filter { !$0.isUnfiled },
             passages: passages,
+            savedAnnotations: savedAnnotations,
             links: links,
             conversations: conversations,
             memberships: Array(memberships),

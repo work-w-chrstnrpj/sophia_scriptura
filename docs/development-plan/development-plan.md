@@ -5,19 +5,22 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
-## v1.0.0 — multi-source translations, planned 2026-10-10
+## v1.0.0 — owner-selected publication, 2026-10-13
 
 [SP-033](../../tickets/SP-033-v100-multi-source-translation-release.md) defines the
 owner-requested release outcome: retain bundled WEBP and API.Bible, add independently
 managed AO Lab translations. Sequence: SP-034 source contracts/compatibility → SP-035
 catalog/eligibility/parser → SP-036 offline downloads → SP-037 Versions/reader integration
-→ SP-038 acceptance/release. All are draft; no product implementation or release selected.
+→ SP-039 narration → SP-038 acceptance/release. **2026-10-11:** SP-034–037 and SP-039
+implementation landed in app source (multi-source contracts, Hello AO catalog/download/read,
+Versions UI, bounded BSB narration). SP-038 publication is owner-selected on 2026-10-13 as version 1.0.0/build 22;
+the full TR/AU matrix and physical/provider acceptance remain open. See
+[v1.0.0 release notes](../releases/v1.0.0.md) for evidence and disclosed gaps. API.Bible licensed trio is NASB (`b8ee27bcd1cae43a-01`), NLT and NKJV; NIV removed from picker/sync list (legacy NIV edition IDs remain in stored study data only).
 WEB is the World English Bible family; existing WEBP identity/data remain preserved.
 [Detailed execution guide](../design/v100-translation-implementation-guide.md) now defines
 contracts, recovery, limits and TR-01–22 evidence. D2/D3 are owner-decided; D1 is decided: KJV, BSB, ASV, LSV and WEBU; verification remains open
-Owner reports API.Bible NIV replaced by NASB; target NASB/NLT/NKJV. Owner confirmed NASB 1995; exact provider ID
-and rights remain verification inputs; current source still lists NIV. Preserve legacy NIV
-study references; do not transfer its Debug authorization to NASB.;
+NASB provider ID is recorded above; authenticated rights/lease verification remains open.
+Preserve legacy NIV study references; do not transfer its Debug authorization to NASB.
 dependent work cannot become ready by assuming the recommendations.
 SP-032 remains a separate v0.5.* ESV draft and is not silently superseded by this plan.
 

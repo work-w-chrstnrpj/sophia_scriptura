@@ -34,6 +34,7 @@ final class CompanionSession: ObservableObject {
     @Published private(set) var recentQuizFixtureKeys: [String] = []
     @Published private(set) var quizDefaultProviderConfigID: UUID?
     @Published private(set) var quizDefaultModelID: String?
+    @Published private(set) var examModeEnabled = false
     @Published private(set) var defaultProviderConfigID: UUID?
     @Published private(set) var defaultModelID: String?
 
@@ -185,6 +186,11 @@ final class CompanionSession: ObservableObject {
         quizDefaultModelID = modelID
         scheduleSave()
         scheduleQuizCacheWarmup()
+    }
+
+    func setExamModeEnabled(_ enabled: Bool) {
+        examModeEnabled = enabled
+        scheduleSave()
     }
 
     func abandonActiveQuiz() {
@@ -801,21 +807,19 @@ final class CompanionSession: ObservableObject {
         reviewingLinks = snapshot.reviewingLinks
         cachedQuizQuestions = snapshot.cachedQuizQuestions
         selectedConversationID = snapshot.uiState.selectedConversationID
-        scripturePanelConversationID = snapshot.uiState.scripturePanelConversationID
-        panelExpandedToTab = snapshot.uiState.panelExpandedToTab
+        // Transient cross-tab UI — do not restore on cold launch (avoids auto-opening chats on Scripture).
+        scripturePanelConversationID = nil
+        panelExpandedToTab = false
         showFreeModelsOnly = snapshot.uiState.showFreeModelsOnly
         sidebarQuizHistoryExpanded = snapshot.uiState.sidebarQuizHistoryExpanded
         sidebarChatHistoryExpanded = snapshot.uiState.sidebarChatHistoryExpanded
         recentQuizFixtureKeys = snapshot.uiState.recentQuizFixtureKeys
         quizDefaultProviderConfigID = snapshot.uiState.quizDefaultProviderConfigID
         quizDefaultModelID = snapshot.uiState.quizDefaultModelID
+        examModeEnabled = snapshot.uiState.examModeEnabled
         defaultProviderConfigID = snapshot.defaultProviderConfigID
         defaultModelID = snapshot.defaultModelID
         revision = snapshot.revision
-        if selectedConversationID == nil, let first = conversations.first {
-            selectedConversationID = first.id
-            composerText = first.composerDraft
-        }
     }
 
     func scheduleSave() {
@@ -830,14 +834,13 @@ final class CompanionSession: ObservableObject {
     func backupSnapshot() -> CompanionSnapshot {
         var ui = CompanionUIState()
         ui.selectedConversationID = selectedConversationID
-        ui.scripturePanelConversationID = scripturePanelConversationID
-        ui.panelExpandedToTab = panelExpandedToTab
         ui.showFreeModelsOnly = showFreeModelsOnly
         ui.sidebarQuizHistoryExpanded = sidebarQuizHistoryExpanded
         ui.sidebarChatHistoryExpanded = sidebarChatHistoryExpanded
         ui.recentQuizFixtureKeys = recentQuizFixtureKeys
         ui.quizDefaultProviderConfigID = quizDefaultProviderConfigID
         ui.quizDefaultModelID = quizDefaultModelID
+        ui.examModeEnabled = examModeEnabled
         return CompanionSnapshot(
             revision: revision,
             conversations: conversations,
@@ -867,14 +870,13 @@ final class CompanionSession: ObservableObject {
         guard let repository else { return }
         var ui = CompanionUIState()
         ui.selectedConversationID = selectedConversationID
-        ui.scripturePanelConversationID = scripturePanelConversationID
-        ui.panelExpandedToTab = panelExpandedToTab
         ui.showFreeModelsOnly = showFreeModelsOnly
         ui.sidebarQuizHistoryExpanded = sidebarQuizHistoryExpanded
         ui.sidebarChatHistoryExpanded = sidebarChatHistoryExpanded
         ui.recentQuizFixtureKeys = recentQuizFixtureKeys
         ui.quizDefaultProviderConfigID = quizDefaultProviderConfigID
         ui.quizDefaultModelID = quizDefaultModelID
+        ui.examModeEnabled = examModeEnabled
         let snapshot = CompanionSnapshot(
             revision: revision,
             conversations: conversations,
@@ -1203,12 +1205,13 @@ final class CompanionSession: ObservableObject {
     func submitQuizAnswer(sessionID: UUID, questionID: UUID, answer: String, choiceIndex: Int?) {
         guard var quiz = quizSessions.first(where: { $0.id == sessionID }),
               let question = quizQuestions.first(where: { $0.id == questionID && $0.sessionID == sessionID }) else { return }
+        let pointsEach = quiz.mode == .exam ? 1 : quiz.difficulty.pointsEach
         let result: QuizAnswerResult
         let points: Int
         switch question.type {
         case .completeVerse:
             result = ScriptureQuizEngine.gradeCompleteVerse(answer: answer, key: question.answerKey.canonicalText ?? "")
-            points = result == .correct ? quiz.difficulty.pointsEach : (result == .nearlyCorrect ? quiz.difficulty.pointsEach / 2 : 0)
+            points = result == .correct ? pointsEach : (result == .nearlyCorrect ? max(1, pointsEach / 2) : 0)
         case .scriptureOrCap:
             guard let choiceIndex else {
                 result = .unanswered
@@ -1217,10 +1220,10 @@ final class CompanionSession: ObservableObject {
             }
             let isScripture = choiceIndex == 0
             result = (isScripture == (question.answerKey.canonicalText == "scripture")) ? .correct : .incorrect
-            points = result == .correct ? quiz.difficulty.pointsEach : 0
+            points = result == .correct ? pointsEach : 0
         default:
             result = ScriptureQuizEngine.gradeMultipleChoice(selected: choiceIndex, keyIndex: question.answerKey.choiceIndex)
-            points = result == .correct ? quiz.difficulty.pointsEach : 0
+            points = result == .correct ? pointsEach : 0
         }
         quizAttempts.append(QuizAttemptRecord(
             id: UUID(), questionID: questionID, ownerAnswer: answer, choiceIndex: choiceIndex,

@@ -4,6 +4,25 @@ import SwiftUI
 
 @MainActor
 final class CompanionTests: XCTestCase {
+    func testMessageLayoutExpandsToPanelWidthForTableReplies() {
+        let markdown = """
+        | Book | Author | Theme |
+        | --- | --- | --- |
+        | Genesis | Moses | Creation |
+        | Exodus | Moses | Deliverance |
+        """
+        func measured(wide: Bool, panel: CGFloat) -> CGSize {
+            let host = UIHostingController(rootView: CompanionMessageLayout(allowsWideExpansion: wide) {
+                CompanionMarkdownText(content: markdown)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+            })
+            return host.sizeThatFits(in: CGSize(width: panel, height: 10_000))
+        }
+        XCTAssertLessThanOrEqual(measured(wide: false, panel: 900).width, 560)
+        XCTAssertEqual(measured(wide: true, panel: 900).width, 900)
+    }
+
     func testMessageLayoutHugsShortPromptsAndWrapsLongPromptsInNarrowPanel() {
         func measured(_ text: String, width: CGFloat) -> CGSize {
             let host = UIHostingController(rootView: CompanionMessageLayout {
@@ -147,6 +166,30 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(blocks[2].listDepth, 1)
         XCTAssertTrue(blocks.last?.isCode == true)
         XCTAssertTrue(String(blocks.last!.text.characters).contains("**literal code**"))
+    }
+
+    func testMarkdownTableRendersAsTableSegmentNotListRows() {
+        let markdown = """
+        Compare these books:
+
+        | Book | Theme |
+        | --- | --- |
+        | Genesis | Creation |
+        | Exodus | Deliverance |
+
+        Both point to Christ.
+        """
+        let segments = CompanionMarkdownTableParser.segments(from: markdown)
+        XCTAssertEqual(segments.count, 3)
+        guard case .prose(let lead) = segments[0] else { return XCTFail("Expected opening prose") }
+        XCTAssertTrue(lead.contains("Compare these books"))
+        guard case .table(let table) = segments[1] else { return XCTFail("Expected table segment") }
+        XCTAssertEqual(table.headers, ["Book", "Theme"])
+        XCTAssertEqual(table.rows, [["Genesis", "Creation"], ["Exodus", "Deliverance"]])
+        let tableBlocks = CompanionMarkdownText.blocks(for: "| A | B |\n| --- | --- |\n| 1 | 2 |")
+        XCTAssertTrue(tableBlocks.count > 1, "Unsplit pipe markdown would fragment into multiple blocks")
+        guard case .prose(let tail) = segments[2] else { return XCTFail("Expected trailing prose") }
+        XCTAssertTrue(tail.contains("Both point to Christ"))
     }
 
     func testMarkdownDoesNotInventParagraphsOrAlterEscapedCode() {
@@ -740,13 +783,14 @@ final class CompanionTests: XCTestCase {
         session.apply(CompanionSnapshot(providerConfigurations: [configuration]))
 
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .easy }.count, 20)
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .average }.count, 10)
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 6)
-        XCTAssertEqual(recorder.callCount, 6)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .easy }.count, 100)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .average }.count, 100)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 100)
+        let batchesPerBucket = QuizQuestionCachePolicy.bucketTargetCount / QuizQuestionCachePolicy.refillBatchSize
+        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket)
 
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(recorder.callCount, 6)
+        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket)
 
         let scope = try XCTUnwrap(session.cachedQuizQuestions.first?.scope)
         let reserved = session.reserveCachedQuestions(
@@ -755,8 +799,54 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(reserved?.count, 3)
         XCTAssertTrue(session.hasCachedQuestions(types: [.bibleQuiz], difficulty: .difficult, editionID: "web-engwebp"))
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 6)
-        XCTAssertEqual(recorder.callCount, 7)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 100)
+        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket + 1)
+    }
+
+    func testExamStartDrawsFromMixedCache() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("companion-" + UUID().uuidString, isDirectory: true)
+        let repository = CompanionFileRepository(directory: directory)
+        let credentials = InMemoryCompanionCredentialsStore()
+        let configuration = ProviderConfigurationRecord(adapterID: "mock", accountLabel: "Test", defaultModelID: "mock")
+        try credentials.writeKey("key", for: configuration.id)
+        let scope = QuizQuestionCacheScope(
+            providerConfigurationID: configuration.id,
+            adapterID: "mock",
+            modelID: "mock",
+            editionID: "web-engwebp"
+        )
+        let cached = QuizDifficulty.allCases.flatMap { difficulty in
+            QuizType.quizMeSelectable.flatMap { type in
+                (0..<2).map { index in
+                CachedQuizQuestion(
+                    id: UUID(), scope: scope, difficulty: difficulty, type: type,
+                    prompt: "Cached \(type.rawValue) \(difficulty.rawValue) \(index)",
+                    choices: ["Correct", "Wrong"],
+                    answerKey: QuizAnswerKey(referenceLabel: "Genesis 1:1", choiceIndex: 0),
+                    explanation: "Cached.", generatedAt: Date(), promptHash: "\(type.rawValue)-\(difficulty.rawValue)-\(index)"
+                )
+                }
+            }
+        }
+        let session = CompanionSession(
+            presetCatalog: try PromptPresetCatalog.bundled(),
+            repository: repository,
+            credentials: credentials,
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter(failure: .offline)])
+        )
+        session.apply(CompanionSnapshot(providerConfigurations: [configuration], cachedQuizQuestions: cached))
+
+        let quizID = try await session.startExamQuiz(
+            questionCount: 25,
+            editionID: "web-engwebp",
+            timed: true,
+            sessionTimeLimitSeconds: ExamTimeLimit.tenMinutes.rawValue
+        )
+        let quiz = try XCTUnwrap(session.quizSessions.first { $0.id == quizID })
+        XCTAssertEqual(quiz.mode, .exam)
+        XCTAssertEqual(quiz.effectiveQuestionCount, 25)
+        XCTAssertEqual(session.quizQuestions(for: quizID).count, 25)
+        XCTAssertEqual(session.cachedQuizQuestions.count, cached.count - 25)
     }
 
     func testFinishAndQuitRequestRefillOnlyOnce() throws {

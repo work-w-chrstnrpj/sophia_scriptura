@@ -3,6 +3,62 @@ import XCTest
 
 @MainActor
 final class CollectionsStoreTests: XCTestCase {
+    func testFolderMovePreservesSubtreeAndMembershipsAndRejectsCycles() throws {
+        let store = CollectionsStore.demo()
+        let parent = try XCTUnwrap(store.collections.first { $0.name == "Assurance" })
+        let child = try XCTUnwrap(store.collections.first { $0.name == "Romans" })
+        let target = try XCTUnwrap(store.collections.first { $0.name == "Prayer" })
+        let memberships = store.memberships
+        XCTAssertFalse(store.moveCollection(id: parent.id, to: parent.id))
+        XCTAssertFalse(store.moveCollection(id: parent.id, to: child.id))
+        XCTAssertFalse(store.moveCollection(id: parent.id, to: UUID()))
+        XCTAssertFalse(store.moveCollection(id: parent.id, to: StudyCollection.unfiledID))
+        XCTAssertTrue(store.moveCollection(id: parent.id, to: target.id))
+        XCTAssertEqual(store.collection(id: child.id)?.parentID, parent.id)
+        XCTAssertEqual(store.collection(id: parent.id)?.parentID, target.id)
+        XCTAssertEqual(store.memberships, memberships)
+        XCTAssertTrue(store.moveCollection(id: child.id, to: target.id))
+        XCTAssertTrue(store.moveCollection(id: child.id, to: nil))
+        XCTAssertNil(store.collection(id: child.id)?.parentID)
+        XCTAssertFalse(store.moveCollection(id: child.id, to: nil))
+        XCTAssertEqual(store.memberships, memberships)
+    }
+
+    func testFolderMoveRejectsProtectedAndInactiveDestinations() throws {
+        let store = CollectionsStore.demo()
+        let source = try XCTUnwrap(store.collections.first { $0.name == "Assurance" })
+        let target = try XCTUnwrap(store.collections.first { $0.name == "Prayer" })
+        store.archiveCollection(id: target.id)
+        XCTAssertFalse(store.moveCollection(id: source.id, to: target.id))
+        XCTAssertFalse(store.moveCollection(id: target.id, to: source.id))
+        var locked = target
+        locked.archivedAt = nil
+        locked.protectionID = UUID() // Unknown credentials must fail closed.
+        let protected = CollectionsStore(collections: [source, locked], artifacts: [], memberships: [])
+        XCTAssertFalse(protected.moveCollection(id: source.id, to: locked.id))
+        XCTAssertFalse(protected.moveCollection(id: locked.id, to: source.id))
+        XCTAssertNil(protected.collection(id: source.id)?.parentID)
+    }
+
+    func testMovedFolderHierarchySurvivesRelaunch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("move-" + UUID().uuidString)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await store.load()
+        let parent = try XCTUnwrap(store.createCollection(name: "Parent", detail: "", parentID: nil, accent: .sage))
+        let moved = try XCTUnwrap(store.createCollection(name: "Moved", detail: "", parentID: nil, accent: .gold))
+        let child = try XCTUnwrap(store.createCollection(name: "Child", detail: "", parentID: moved, accent: .sage))
+        let passage = samplePassage(kind: .bookmark, insight: "", endVerse: 1)
+        store.addPassage(passage)
+        store.toggleMembership(artifactID: passage.id, collectionID: child)
+        XCTAssertTrue(store.moveCollection(id: moved, to: parent))
+        await store.flush()
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await reopened.load()
+        XCTAssertEqual(reopened.collection(id: moved)?.parentID, parent)
+        XCTAssertEqual(reopened.collection(id: child)?.parentID, moved)
+        XCTAssertTrue(reopened.contains(passage.id, in: child))
+    }
+
     func testInactiveNotesCannotLeakThroughCachedArtifacts() {
         var active = NoteDocument()
         active.title = "Active"

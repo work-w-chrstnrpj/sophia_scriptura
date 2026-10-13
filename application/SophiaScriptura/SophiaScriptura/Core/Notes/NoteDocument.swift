@@ -203,10 +203,39 @@ struct PrayerContent: Codable, Equatable, Sendable {
 }
 
 struct CanvasContent: Codable, Equatable, Sendable { var objects: [NoteObject] = [] }
+enum PageStatus: String, Codable, CaseIterable, Sendable {
+    case unset, drafting, revising, editing, publishing, closed
+
+    var label: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+}
+
 struct PageContent: Codable, Equatable, Sendable {
-    var page = NotePage()
+    var page: NotePage
     // Existing v2 floating items are retained at their exact positions; new items flow inline.
-    var legacyObjects: [NoteObject] = []
+    var legacyObjects: [NoteObject]
+    var pageStatus: PageStatus
+
+    init(page: NotePage = NotePage(), legacyObjects: [NoteObject] = [], pageStatus: PageStatus = .unset) {
+        self.page = page
+        self.legacyObjects = legacyObjects
+        self.pageStatus = pageStatus
+    }
+
+    private enum CodingKeys: String, CodingKey { case page, legacyObjects, pageStatus }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        page = try container.decode(NotePage.self, forKey: .page)
+        legacyObjects = try container.decode([NoteObject].self, forKey: .legacyObjects)
+        pageStatus = try container.decodeIfPresent(String.self, forKey: .pageStatus).flatMap(PageStatus.init(rawValue:)) ?? .unset
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(page, forKey: .page)
+        try container.encode(legacyObjects, forKey: .legacyObjects)
+        if pageStatus != .unset { try container.encode(pageStatus.rawValue, forKey: .pageStatus) }
+    }
 }
 /// Apple Journal momentary feelings (`HKStateOfMind.Label`), plus Neutral.
 enum JournalEmotionalState: String, Codable, CaseIterable, Sendable {
@@ -395,6 +424,11 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
             }
         }
     }
+    var pageStatus: PageStatus? {
+        guard case .page(let value) = content else { return nil }
+        return value.pageStatus
+    }
+
     var page: NotePage? {
         get {
             switch content {
@@ -407,7 +441,7 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         set {
             guard let newValue else { return }
             switch content {
-            case .page: content = .page(PageContent(page: newValue, legacyObjects: objects))
+            case .page(var p): p.page = newValue; content = .page(p)
             case .prayer(var p): p.page = newValue; content = .prayer(p)
             case .journal(var j): j.page = newValue; content = .journal(j)
             case .canvas: break // Undo within Canvas must never change its type.

@@ -352,11 +352,13 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
     var mode: QuizSessionMode = .standard
     var configuredQuestionCount: Int?
     var sessionTimeLimitSeconds: Int?
+    /// Number of back-to-back Quiz Me rounds completed in this history entry.
+    var roundCount: Int = 1
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, completedAt, difficulty, types, editionID, timed, recordReviewing
         case providerConfigID, providerAdapterID, modelID, scoreEarned, scoreAvailable, completionState, reviewingLinkID, activeQuestionSeconds, customTitle
-        case mode, configuredQuestionCount, sessionTimeLimitSeconds
+        case mode, configuredQuestionCount, sessionTimeLimitSeconds, roundCount
     }
 
     init(
@@ -379,7 +381,8 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         customTitle: String = "",
         mode: QuizSessionMode = .standard,
         configuredQuestionCount: Int? = nil,
-        sessionTimeLimitSeconds: Int? = nil
+        sessionTimeLimitSeconds: Int? = nil,
+        roundCount: Int = 1
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -401,6 +404,7 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         self.mode = mode
         self.configuredQuestionCount = configuredQuestionCount
         self.sessionTimeLimitSeconds = sessionTimeLimitSeconds
+        self.roundCount = max(1, roundCount)
     }
 
     var effectiveQuestionCount: Int {
@@ -430,6 +434,7 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         mode = try container.decodeIfPresent(QuizSessionMode.self, forKey: .mode) ?? .standard
         configuredQuestionCount = try container.decodeIfPresent(Int.self, forKey: .configuredQuestionCount)
         sessionTimeLimitSeconds = try container.decodeIfPresent(Int.self, forKey: .sessionTimeLimitSeconds)
+        roundCount = max(1, try container.decodeIfPresent(Int.self, forKey: .roundCount) ?? 1)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -451,6 +456,7 @@ struct QuizSession: Codable, Identifiable, Hashable, Sendable {
         try container.encode(mode, forKey: .mode)
         try container.encodeIfPresent(configuredQuestionCount, forKey: .configuredQuestionCount)
         try container.encodeIfPresent(sessionTimeLimitSeconds, forKey: .sessionTimeLimitSeconds)
+        try container.encode(roundCount, forKey: .roundCount)
         try container.encodeIfPresent(reviewingLinkID, forKey: .reviewingLinkID)
         try container.encode(activeQuestionSeconds, forKey: .activeQuestionSeconds)
         try container.encode(customTitle, forKey: .customTitle)

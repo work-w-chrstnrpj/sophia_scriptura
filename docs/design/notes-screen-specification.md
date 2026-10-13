@@ -564,3 +564,61 @@ Rejected ink is retained separately with Note options → Recover unsaved drawin
 a new Canvas note after validation; saved source content is unchanged. See the
 [Notes contract](../data/notes-contract.md) for identity, recovery and downgrade details.
 This is SP-025 implementation, separate from the planned Notes/Collections authentication locks.
+
+## Journal glyph and Prayer stamp refinement — SP-040
+
+Thriving uses the SF Symbols flower (`camera.macro`) consistently in picker and toolbar.
+Unset Emotional state uses an outlined heart in the toolbar and Not set row; chosen
+emotions retain face emoji. Answered prayers display a green ANSWERED stamp, Redirected
+a yellow REDIRECTED stamp, in Rubber Stamp lettering, enlarged over the card text with stable per-note 1–15° tilt. Locked cards conceal the stamp. The prayer editor has no stamp. Waiting
+shows no stamp. Stamps do not intercept input or modify persisted text/ink, and existing
+status controls remain available. Physical appearance and accessibility acceptance
+remain separate from simulator verification.
+
+The stamp words are scalable PDF outlines generated from the locally licensed Rubber Stamp
+font with `scripts/generate-prayer-stamps.swift`. This preserves the requested lettering
+on iPadOS without silent system-font fallback or packaging the font file. The two
+template image assets inherit green/yellow tint; accessibility exposes the status words.
+
+Page notes also expose a Page status icon on the top editor toolbar, beside the other
+editor controls. Its menu lists Unset, Drafting, Revising, Editing, Publishing and Closed
+in that order. The icon reflects the chosen status, with an accessible label and value.
+This control is absent on Canvas, Journal and Prayer; changing it autosaves the metadata.
+
+## Owner card preview refinement — 2026-10-13
+
+Unlocked Journal cards show Emotional State and Mental State together in one row,
+with the existing state glyphs and Not set defaults. Unlocked Page cards show the
+opening body text (two lines); Closed Pages replace it with an enlarged green
+Rubber Stamp PUBLISHED mark with stable 1–15° tilt, matching prayer stamps. This is a local status mark,
+not an external publishing action. Locked cards conceal all previews and stamps.
+
+## Owner rubber stamp styling — 2026-10-13
+
+All three marks now use Rubber Stamp lettering, enlarged to overlap card text,
+with a deterministic per-note tilt from 1 through 15 degrees. Tilt stays stable
+on redraw/reopen and status changes. Green/yellow status colors, access guards
+and tap-through behavior remain. See [font provenance](stamp-font-provenance.md).
+
+Stamps animate from a faint shadow through a dark impression to their status color
+on Notes-tab activation, with no motion when Reduce Motion is enabled. A note opened
+from Collections opens a full-screen shared editor over the preserved Collections navigation stack; Back returns to the
+folder rather than switching to the Notes tab.
+
+## Owner long-press status controls — 2026-10-13
+
+Holding an active, accessible note adds type-specific status menus in Notes cards/list
+and Collection note rows: Page Status, Prayer Status, or Emotional State and Mental
+State. Existing choices, including Unset/Not set, remain available. Changes persist
+without selecting the note or changing editor navigation. The command rechecks
+locks, concealed collection ancestry, note kind and active state before committing.
+
+## Shared note card presentation — 2026-10-13
+
+Notes and Collection card mode now render the same NoteLibraryCard: note-selected
+accent/top rule, note-kind glyph, title/type, creation and modification dates,
+Page opening text/Published mark, Journal states, and Prayer stamps. The shared
+stamp sequence runs on card appearance and active-tab entry, cancels while hidden
+and respects Reduce Motion. Hosts retain their own selection, context actions and
+navigation. Fixed 176pt size and Collection list mode remain. Locked notes conceal
+previews and stamps in both hosts. No persistence or protection-policy changes.

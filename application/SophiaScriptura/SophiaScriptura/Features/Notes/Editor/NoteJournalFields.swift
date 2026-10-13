@@ -5,6 +5,12 @@ enum JournalFieldSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+struct LibraryJournalFieldContext: Identifiable {
+    let noteID: UUID
+    let field: JournalFieldSheet
+    var id: String { "\(noteID.uuidString)-\(field.id)" }
+}
+
 enum JournalMark: Equatable {
     case symbol(String)
     case emoji(String)
@@ -60,7 +66,7 @@ struct JournalStateAppearance: Equatable {
 
     static func mental(_ state: JournalMentalState) -> JournalStateAppearance {
         switch state {
-        case .thriving: return .init(mark: .emoji("🌾"), tint: Color(red: 0.78, green: 0.58, blue: 0.10))
+        case .thriving: return .init(mark: .symbol("camera.macro"), tint: Color(red: 0.78, green: 0.58, blue: 0.10))
         case .confident: return .init(mark: .symbol("checkmark.seal"), tint: Color(red: 0.12, green: 0.52, blue: 0.32))
         case .content: return .init(mark: .symbol("sun.max"), tint: Color(red: 0.86, green: 0.62, blue: 0.08))
         case .atEase: return .init(mark: .symbol("leaf"), tint: Color(red: 0.28, green: 0.58, blue: 0.36))
@@ -109,18 +115,16 @@ struct JournalFieldPicker: View {
     let field: JournalFieldSheet
     let journal: JournalContent?
     var session: NotesSession
+    /// When set, applies choices through library status updates instead of the open editor note.
+    var libraryNoteID: UUID? = nil
 
     var body: some View {
         NavigationStack {
             List {
                 Button {
-                    switch field {
-                    case .emotional: session.setJournalEmotionalState(nil)
-                    case .mental: session.setJournalMentalState(nil)
-                    }
-                    dismiss()
+                    applySelection(emotional: nil, mental: nil)
                 } label: {
-                    choiceRow(title: "Not set", detail: nil, mark: nil, tint: nil, selected: currentIsEmpty)
+                    choiceRow(title: "Not set", detail: nil, mark: .symbol(field == .emotional ? "heart" : "brain"), tint: nil, selected: currentIsEmpty)
                 }
                 .listRowBackground(Color(theme.palette.soft))
                 .accessibilityIdentifier(field == .emotional ? "notes.journal.emotional.none" : "notes.journal.mental.none")
@@ -131,8 +135,7 @@ struct JournalFieldPicker: View {
                         let appearance = JournalStateAppearance.emotional(state)
                         let selected = journal?.emotionalState == state
                         Button {
-                            session.setJournalEmotionalState(state)
-                            dismiss()
+                            applySelection(emotional: state, mental: nil)
                         } label: {
                             choiceRow(title: state.label, detail: nil, mark: appearance.mark, tint: appearance.tint, selected: selected)
                         }
@@ -144,8 +147,7 @@ struct JournalFieldPicker: View {
                         let appearance = JournalStateAppearance.mental(state)
                         let selected = journal?.mentalState == state
                         Button {
-                            session.setJournalMentalState(state)
-                            dismiss()
+                            applySelection(emotional: nil, mental: state)
                         } label: {
                             choiceRow(title: state.label, detail: state.meaning, mark: appearance.mark, tint: appearance.tint, selected: selected)
                         }
@@ -171,6 +173,21 @@ struct JournalFieldPicker: View {
         case .emotional: journal?.emotionalState == nil
         case .mental: journal?.mentalState == nil
         }
+    }
+
+    private func applySelection(emotional: JournalEmotionalState?, mental: JournalMentalState?) {
+        if let libraryNoteID {
+            switch field {
+            case .emotional: session.setLibraryStatus(.emotional(emotional), noteID: libraryNoteID)
+            case .mental: session.setLibraryStatus(.mental(mental), noteID: libraryNoteID)
+            }
+        } else {
+            switch field {
+            case .emotional: session.setJournalEmotionalState(emotional)
+            case .mental: session.setJournalMentalState(mental)
+            }
+        }
+        dismiss()
     }
 
     private func choiceRow(title: String, detail: String?, mark: JournalMark?, tint: Color?, selected: Bool) -> some View {

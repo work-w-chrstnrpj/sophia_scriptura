@@ -151,24 +151,33 @@ struct ActivityRecordDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .frame(maxWidth: .infinity)
-                HStack(spacing: 12) {
-                    Button { edit() } label: { Label("Edit", systemImage: "pencil") }
-                        .buttonStyle(.borderedProminent)
-                        .foregroundStyle(Color(theme.palette.paper))
+                HStack(spacing: 14) {
+                    Spacer(minLength: 0)
+                    Button(action: edit) {
+                        Label("Edit", systemImage: "pencil")
+                            .font(.body.weight(.semibold))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Color(theme.palette.paper))
                     Button(role: .destructive) {
                         dismiss()
                         delete()
                     } label: {
                         Label("Delete", systemImage: "trash")
+                            .font(.body.weight(.semibold))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 14)
                     }
                     .buttonStyle(.bordered)
                     .tint(.red)
                     .foregroundStyle(.red)
                 }
-                .frame(maxWidth: 720, alignment: .leading)
-                .padding(.top, 4)
+                .frame(maxWidth: 720)
+                .padding(.top, 16)
                 .padding(.horizontal, 20)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .appSurface()
             .navigationTitle("Activity Record")

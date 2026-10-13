@@ -5,6 +5,32 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v1.1.0 — owner-selected publication, 2026-10-13
+
+Owner authorized commit, push, merge and release of all current changes as v1.1.0
+(build 23). Scope includes SP-040 Notes/Collections refinements, Activity chart and
+record-detail presentation, and Companion repeated Quiz Me rounds/activity updates.
+The release snapshot passed 376 unit tests with zero failures; see
+[release notes](../releases/v1.1.0.md) for verification and acceptance limits.
+
+## Post-v1.0.0 refinements — owner selected 2026-10-13
+
+[SP-040](../../tickets/SP-040-folder-drag-and-journal-prayer-presentation.md) implements
+folder drag/reparent at root and nested levels, consistent Journal state icons, and
+Enlarged Rubber Stamp Answered/Redirected marks with stable 1–15° tilts overlapping prayer card text (outside the editor). Owner addition: Page-only
+pageStatus toolbar with Unset/Drafting/Revising/Editing/Publishing/Closed choices;
+Journal cards show both states in one row, Page cards show opening text, and Closed
+Pages show a green PUBLISHED mark in the preview area; stamp entry animation and
+collection-local note editing preserve the folder on return; type-specific long-press
+status menus are available in Notes and Collection note rows; Collection folders
+offer remembered List/Card layouts with uniform dimensions across material types;
+Notes and Collection note cards now share presentation and stamp animation;
+42 Page-status-focused checks passed (41 Notes unit, 1 UI), with compatibility,
+persistence and undo coverage. Build and 60 focused checks passed (58 unit, 2 UI);
+Signed build, signature verification, in-place installation and launch on the owner's
+iPad A16 passed on 2026-10-13; physical feature acceptance remains open. This scope is
+included in v1.1.0. Installation evidence is recorded in SP-040.
+
 ## v1.0.0 — owner-selected publication, 2026-10-13
 
 [SP-033](../../tickets/SP-033-v100-multi-source-translation-release.md) defines the

@@ -4,6 +4,86 @@ import CryptoKit
 @testable import SophiaScriptura
 
 final class NotesTests: XCTestCase {
+    @MainActor func testLibraryStatusesPersistWithoutChangingEditor() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        let session = NotesSession(repository: repository)
+        await session.load()
+        let page = try XCTUnwrap(session.create(kind: .page))
+        let prayer = try XCTUnwrap(session.create(kind: .prayer))
+        let journal = try XCTUnwrap(session.create(kind: .journal))
+        session.selectedNoteID = nil
+        session.setLibraryStatus(.page(.closed), noteID: page)
+        session.setLibraryStatus(.prayer(.answered), noteID: prayer)
+        session.setLibraryStatus(.mental(.thriving), noteID: journal)
+        session.setLibraryStatus(.emotional(.happy), noteID: journal)
+        session.setLibraryStatus(.page(.drafting), noteID: prayer)
+        XCTAssertNil(session.selectedNoteID)
+        await session.save()
+        let reopened = NotesSession(repository: repository); await reopened.load()
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == page }?.pageStatus, .closed)
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == prayer }?.prayerContent?.status, .answered)
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == journal }?.journalContent?.mentalState, .thriving)
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == journal }?.journalContent?.emotionalState, .happy)
+        reopened.setLibraryStatus(.mental(nil), noteID: journal)
+        reopened.setLibraryStatus(.emotional(nil), noteID: journal)
+        XCTAssertNil(reopened.snapshot.notes.first { $0.id == journal }?.journalContent?.mentalState)
+        XCTAssertNil(reopened.snapshot.notes.first { $0.id == journal }?.journalContent?.emotionalState)
+    }
+
+    func testPageStatusLegacyUnknownAndAllChoicesRoundTrip() throws {
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        var content = PageContent()
+        content.page.body = "Keep the body"
+        let legacy = try encoder.encode(content)
+        XCTAssertFalse(String(decoding: legacy, as: UTF8.self).contains("pageStatus"))
+        XCTAssertEqual(try decoder.decode(PageContent.self, from: legacy).pageStatus, .unset)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: legacy) as? [String: Any])
+        object["pageStatus"] = "a-future-status"
+        let unknown = try decoder.decode(PageContent.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(unknown.pageStatus, .unset)
+        XCTAssertEqual(unknown.page.body, "Keep the body")
+        for status in PageStatus.allCases {
+            content.pageStatus = status
+            XCTAssertEqual(try decoder.decode(PageContent.self, from: encoder.encode(content)), content)
+        }
+        XCTAssertEqual(PageStatus.allCases.map(\.label), ["Unset", "Drafting", "Revising", "Editing", "Publishing", "Closed"])
+    }
+
+    @MainActor func testPageStatusSurvivesBodyUndoAndReopenAndIgnoresOtherTypes() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        let session = NotesSession(repository: repository)
+        await session.load()
+        let id = try XCTUnwrap(session.create(kind: .page))
+        session.setPageStatus(.drafting)
+        session.edit { note in
+            var page = note.page!
+            page.body = "Draft body"
+            note.page = page
+        }
+        session.setPageStatus(.revising)
+        session.undo()
+        XCTAssertEqual(session.note?.pageStatus, .revising)
+        session.redo()
+        XCTAssertEqual(session.note?.pageStatus, .revising)
+        XCTAssertEqual(session.note?.page?.body, "Draft body")
+        await session.save()
+        let reopened = NotesSession(repository: repository)
+        await reopened.load(); reopened.open(id)
+        XCTAssertEqual(reopened.note?.pageStatus, .revising)
+        XCTAssertEqual(reopened.note?.page?.body, "Draft body")
+        reopened.setPageStatus(.unset)
+        await reopened.save()
+        let cleared = NotesSession(repository: repository)
+        await cleared.load(); cleared.open(id)
+        XCTAssertEqual(cleared.note?.pageStatus, .unset)
+        for kind in [NoteKind.canvas, .journal, .prayer] {
+            _ = cleared.create(kind: kind)
+            cleared.setPageStatus(.closed)
+            XCTAssertNil(cleared.note?.pageStatus)
+            XCTAssertEqual(cleared.note?.kind, kind)
+        }
+    }
+
     @MainActor func testCanvasCullsViewsAndKeepsSelectedObjectMounted() async throws {
         let session = NotesSession(repository: NotesFileRepository(directory: try folder()))
         await session.load(); _ = session.create(kind: .canvas)

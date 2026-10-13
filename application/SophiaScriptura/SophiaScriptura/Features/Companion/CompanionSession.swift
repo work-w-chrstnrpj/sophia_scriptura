@@ -1202,6 +1202,58 @@ final class CompanionSession: ObservableObject {
         return quiz.id
     }
 
+    /// Adds another question set to an in-progress Quiz Me session (same history entry and activity timer).
+    func appendQuizRound(sessionID: UUID) async throws {
+        guard var quiz = quizSessions.first(where: { $0.id == sessionID }),
+              quiz.completionState == "active",
+              quiz.mode == .standard else {
+            throw AIQuizQuestionGenerator.GenerationError.invalid("This quiz cannot start another round.")
+        }
+        let config = resolvedQuizProviderConfiguration()
+        guard let config,
+              let adapter = registry.adapter(id: config.adapterID),
+              let apiKey = try? credentials.readKey(for: config.id), !apiKey.isEmpty else {
+            notice = LLMProviderError.missingCredential.errorDescription
+            throw LLMProviderError.missingCredential
+        }
+        let model = quiz.modelID.isEmpty ? resolvedQuizModelID(for: config) : quiz.modelID
+        let scope = QuizQuestionCacheScope(
+            providerConfigurationID: config.id,
+            adapterID: config.adapterID,
+            modelID: model,
+            editionID: quiz.editionID
+        )
+        let plannedTypes = AIQuizQuestionGenerator.questionTypePlan(
+            types: quiz.types,
+            count: quiz.difficulty.questionCount
+        )
+        let missingPlan = missingQuestionPlan(for: plannedTypes, difficulty: quiz.difficulty, scope: scope)
+        if !missingPlan.isEmpty {
+            let generated = try await generatedQuestionsForColdStart(
+                missingPlan: missingPlan,
+                scope: scope,
+                difficulty: quiz.difficulty,
+                adapter: adapter,
+                apiKey: apiKey
+            )
+            mergeCachedQuestions(generated)
+        }
+        guard let reserved = reserveCachedQuestions(plan: plannedTypes, difficulty: quiz.difficulty, scope: scope) else {
+            throw AIQuizQuestionGenerator.GenerationError.invalid("The question cache could not prepare another quiz round.")
+        }
+        let indexOffset = (quizQuestions.filter { $0.sessionID == sessionID }.map(\.index).max() ?? -1) + 1
+        let generated = AIQuizQuestionGenerator.materialize(reserved, sessionID: sessionID, indexOffset: indexOffset)
+        guard let index = quizSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        quiz = quizSessions[index]
+        quiz.roundCount += 1
+        quiz.scoreAvailable += quiz.difficulty.questionCount * quiz.difficulty.pointsEach
+        quizSessions[index] = quiz
+        quizQuestions.append(contentsOf: generated)
+        scheduleSave()
+        await flush()
+        scheduleQuizCacheWarmup(prioritizedTypes: quiz.types, prioritizedDifficulty: quiz.difficulty)
+    }
+
     func submitQuizAnswer(sessionID: UUID, questionID: UUID, answer: String, choiceIndex: Int?) {
         guard var quiz = quizSessions.first(where: { $0.id == sessionID }),
               let question = quizQuestions.first(where: { $0.id == questionID && $0.sessionID == sessionID }) else { return }
@@ -1250,13 +1302,19 @@ final class CompanionSession: ObservableObject {
         let fullyAnswered = !questionIDs.isEmpty && questionIDs.allSatisfy { id in
             quizAttempts.contains { $0.questionID == id }
         }
-        if intentional && fullyAnswered && !reviewingLinks.contains(where: { $0.quizSessionID == sessionID }) {
-            let link = ReviewingActivityLink(
-                id: UUID(), quizSessionID: sessionID, startedAt: quiz.createdAt, endedAt: Date(),
-                activeSeconds: max(1, quiz.activeQuestionSeconds), sourceDeleted: false
-            )
-            reviewingLinks.append(link)
-            quiz.reviewingLinkID = link.id
+        if intentional && fullyAnswered {
+            if let linkIndex = reviewingLinks.firstIndex(where: { $0.quizSessionID == sessionID }) {
+                reviewingLinks[linkIndex].endedAt = Date()
+                reviewingLinks[linkIndex].activeSeconds = max(1, quiz.activeQuestionSeconds)
+                quiz.reviewingLinkID = reviewingLinks[linkIndex].id
+            } else {
+                let link = ReviewingActivityLink(
+                    id: UUID(), quizSessionID: sessionID, startedAt: quiz.createdAt, endedAt: Date(),
+                    activeSeconds: max(1, quiz.activeQuestionSeconds), sourceDeleted: false
+                )
+                reviewingLinks.append(link)
+                quiz.reviewingLinkID = link.id
+            }
         }
         quizSessions[index] = quiz
         activeQuizSessionID = nil

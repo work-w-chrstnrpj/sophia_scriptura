@@ -8,6 +8,7 @@ struct CollectionArtifactRow: View {
     }
 
     @Environment(\.appTheme) private var theme
+    @Environment(\.noteCardsActive) private var noteCardsActive
     let artifact: CollectionArtifact
     let accent: CollectionAccent
     let placement: Placement
@@ -16,6 +17,11 @@ struct CollectionArtifactRow: View {
     var assign: () -> Void = {}
     var remove: () -> Void = {}
     var deletePassage: () -> Void = {}
+    var notes: NotesSession? = nil
+    var onJournalField: ((JournalFieldSheet) -> Void)? = nil
+    var cards = false
+    static let listHeight: CGFloat = 80
+    static let cardHeight: CGFloat = 176
 
     private var isPassage: Bool { artifact.kind == .bookmark || artifact.kind == .gleaning }
 
@@ -43,20 +49,57 @@ struct CollectionArtifactRow: View {
     }
 
     var body: some View {
+        Group {
+            if cards, artifact.kind == .note, let notes,
+               let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) {
+                NoteLibraryCard(note: note, locked: notes.isLocked(note), isActive: noteCardsActive, open: open)
+            } else {
+                standardRecord
+            }
+        }
+        .accessibilityIdentifier("collections.open.\(artifact.title)")
+        .contextMenu { actions }
+    }
+
+    private var standardRecord: some View {
         Button(action: open) {
+            Group {
+                if cards {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 12) {
+                            CollectionItemGlyph(kind: artifact.kind, accent: accent, size: 36)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(artifact.title)
+                                    .font(.system(.headline, design: .serif).weight(.semibold))
+                                    .foregroundStyle(Color(theme.palette.ink))
+                                    .lineLimit(2)
+                                Text(caption).font(.caption)
+                                    .foregroundStyle(Color(theme.palette.secondary)).lineLimit(1)
+                            }
+                        }
+                        if let gleaningPreview {
+                            Text(gleaningPreview).font(.footnote)
+                                .foregroundStyle(Color(theme.palette.secondary)).lineLimit(2)
+                        }
+                        Spacer(minLength: 0)
+                        Text(artifact.modifiedAt.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption).foregroundStyle(accent.resolvedColor(in: theme))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
             HStack(alignment: .center, spacing: 14) {
                 CollectionItemGlyph(kind: artifact.kind, accent: accent, size: 42)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(artifact.title)
                         .font(isPassage ? .system(.body, design: .serif).weight(.semibold) : .body.weight(.semibold))
                         .foregroundStyle(Color(theme.palette.ink))
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .multilineTextAlignment(.leading)
                     if let gleaningPreview {
                         Text(gleaningPreview)
                             .font(.subheadline)
                             .foregroundStyle(Color(theme.palette.ink))
-                            .lineLimit(2)
+                            .lineLimit(1)
                             .multilineTextAlignment(.leading)
                     }
                     Text(caption)
@@ -69,18 +112,20 @@ struct CollectionArtifactRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.secondary))
             }
+                }
+            }
             .padding(.leading, 14)
             .padding(.trailing, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: cards ? Self.cardHeight : Self.listHeight)
+            .clipped()
             .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color(theme.palette.rule), lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("collections.open.\(artifact.title)")
-        .contextMenu { actions }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if placement != .subfolder && (isPassage || artifact.kind == .link) {
                 Button(role: .destructive, action: deletePassage) {
@@ -109,6 +154,11 @@ struct CollectionArtifactRow: View {
 
     @ViewBuilder
     private var actions: some View {
+        if artifact.kind == .note, let notes,
+           let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }),
+           !notes.isLocked(note), notes.collections?.concealsNote(note.id) != true {
+            NoteStatusContextMenu(note: note, session: notes, onJournalField: onJournalField)
+        }
         switch placement {
         case .subfolder:
             Text("Open its subfolder to organize this item.")

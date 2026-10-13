@@ -81,9 +81,9 @@ struct RootTabView: View {
     private var shellChromeAnimation: Animation {
         reduceMotion ? .easeOut(duration: 0.16) : .easeInOut(duration: 0.28)
     }
-    private var editingNote: Bool { selection == .notes && notes.selectedNoteID != nil }
+    private var editingNote: Bool { (selection == .notes || selection == .collections) && notes.selectedNoteID != nil }
     private var sophyIdleQuotesSuspended: Bool {
-        if selection == .notes, notes.selectedNoteID != nil { return true }
+        if editingNote { return true }
         if selection == .scripture, annotations.mode != .hidden { return true }
         return false
     }
@@ -94,14 +94,16 @@ struct RootTabView: View {
                     CollectionsView(
                         store: collections,
                         notes: notes,
-                        openNote: { id, collectionID in notes.open(id, from: collectionID); selection = .notes; chrome.reveal() },
+                        reader: reader,
+                        isTabActive: selection == .collections,
+                        openNote: { id, collectionID in notes.open(id, from: collectionID); chrome.reveal() },
                         openPassage: openPassage,
                         openAnnotation: openAnnotation,
                         annotationSnapshot: annotations.loaded ? annotations.snapshot : nil,
                         bookTitleForCode: { code in reader.books.first { $0.id == code }?.title ?? code },
                         openCompanion: { selection = .companion; chrome.reveal() },
                         createConversation: { companion.createConversation() }
-                    ).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    ).environment(\.noteCardsActive, selection == .collections).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
@@ -340,6 +342,7 @@ struct RootTabView: View {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
         .onChange(of: notes.selectedNoteID) { _, _ in
+            notes.active = selection == .notes || (selection == .collections && notes.openingCollectionID != nil)
             sophy.noteUserActivity()
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
@@ -348,7 +351,7 @@ struct RootTabView: View {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
         .onChange(of: selection) { _, tab in
-            notes.active = tab == .notes
+            notes.active = tab == .notes || (tab == .collections && notes.openingCollectionID != nil)
             if tab != .notes {
                 notes.toolsVisible = false
                 notes.toolsRequest = UUID()
@@ -361,7 +364,7 @@ struct RootTabView: View {
         .onChange(of:scenePhase) { _, phase in
             protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
-            notes.active = phase == .active && selection == .notes
+            notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil))
             if phase == .active { chrome.reveal(); activity.pruneExpiredReminders() }
             else { chrome.stop(); Task { await collections.flush(); await companion.flush(); await activity.flush() } }
         }

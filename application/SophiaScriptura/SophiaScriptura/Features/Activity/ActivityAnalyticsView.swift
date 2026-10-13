@@ -134,13 +134,8 @@ struct ActivityAnalyticsView: View {
             if totals.isEmpty {
                 emptyChart
             } else {
-                Chart(Array(totals.enumerated()), id: \.element.id) { index, item in
-                    SectorMark(angle: .value("Minutes", item.minutes), innerRadius: .ratio(0.55), angularInset: 2)
-                        .foregroundStyle(color(for: index))
-                        .accessibilityLabel("\(item.name), \(Int(item.minutes.rounded())) minutes")
-                }
-                .frame(height: 210)
-                .overlay { Text("\(Int(totalMinutes.rounded())) min").font(.headline).monospacedDigit() }
+                ActivityAnimatedDistributionChart(totals: totals, totalMinutes: totalMinutes)
+                    .id("distribution-\(period.rawValue)-\(anchor.timeIntervalSinceReferenceDate)-\(modeID)")
                 LazyVGrid(
                     columns: [
                         GridItem(.flexible(), spacing: 8, alignment: .leading),
@@ -193,25 +188,8 @@ struct ActivityAnalyticsView: View {
     }
 
     private var timeChart: some View {
-                    Chart(buckets) { bucket in
-                        BarMark(x: .value("Time", bucket.label), y: .value("Minutes", bucket.minutes))
-                            .foregroundStyle(Color(theme.palette.accent))
-                            .cornerRadius(4)
-                            .accessibilityLabel("\(bucket.label), \(Int(bucket.minutes.rounded())) minutes")
-                    }
-                    .chartYAxis { AxisMarks(position: .leading) }
-                    .chartXAxis {
-                        AxisMarks(values: chartAxisLabels) { value in
-                            AxisGridLine()
-                            AxisValueLabel {
-                                if let label = value.as(String.self) {
-                                    Text(label == "No time" ? "N/T" : label)
-                                }
-                            }
-                        }
-                    }
-                    .chartXScale(range: .plotDimension(padding: 26))
-                    .frame(width: chartWidth, height: 235)
+        ActivityAnimatedBarChart(buckets: buckets, width: chartWidth, axisLabels: chartAxisLabels)
+            .id("bars-\(period.rawValue)-\(anchor.timeIntervalSinceReferenceDate)-\(modeID)")
     }
 
     private var emptyChart: some View {

@@ -234,3 +234,19 @@ commands; NotesFileRepository owns additive metadata validation and rejected ink
 `NoteStrokeEditingTests.swift` covers identity, geometry, limits and persistence.
 
 SP-026–028: `Features/Protection/` owns independent access sessions, authentication presentation, combined/category controls and real-input idle tracking. `Infrastructure/Security/ItemLockCredential.swift` owns the device Keychain verifier. NotesSession and CollectionsStore guard domain commands and protected routes; StudyBackupService preflights access across both categories. The authoritative boundaries are in `docs/security/item-protection.md`.
+
+SP-040: `Features/Collections/CollectionFolderMove.swift` owns the custom local drag
+folder ID and drag/drop/full-tree move sheet. `AppInfoSupplement.plist` exports its UTI.
+`CollectionsStore` validates reparenting and writes existing parentID values. Journal
+glyphs live in `NoteJournalFields`; `PrayerStatusStamp` in `NotePrayerEditorView` is
+presentation-only and does not enter stored prayer content.
+
+`Assets.xcassets/PrayerAnsweredStamp.imageset` and `PrayerRedirectedStamp.imageset`
+contain template PDF wordmarks in Arial Black outlines, regenerated on macOS by
+`scripts/generate-prayer-stamps.swift` without distributing a font file.
+
+SP-040: `Features/Notes/NoteLibraryCard.swift` renders shared note cards for Notes
+and Collections, including previews, dates, protection glyphs and stamp activation.
+
+`Features/Activity/ActivityChartAnimation.swift` owns the shared animated distribution
+and bar chart views used by Activity analytics and distribution details.

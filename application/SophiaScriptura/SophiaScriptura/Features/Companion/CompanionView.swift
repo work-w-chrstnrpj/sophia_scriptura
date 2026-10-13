@@ -145,7 +145,7 @@ struct CompanionView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(quizDisplayTitle(quiz))
                                     .font(.headline)
-                                Text("\(quiz.scoreEarned)/\(quiz.scoreAvailable) pts · \(quiz.difficulty.title)")
+                                Text(quizHistorySubtitle(quiz))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -355,6 +355,14 @@ struct CompanionView: View {
         if !custom.isEmpty { return custom }
         return quiz.completedAt?.formatted(date: .abbreviated, time: .shortened)
             ?? quiz.createdAt.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func quizHistorySubtitle(_ quiz: QuizSession) -> String {
+        var parts = ["\(quiz.scoreEarned)/\(quiz.scoreAvailable) pts", quiz.difficulty.title]
+        if quiz.roundCount > 1 {
+            parts.append("\(quiz.roundCount) rounds")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 

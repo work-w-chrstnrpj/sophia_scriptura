@@ -15,6 +15,8 @@ struct QuizSessionView: View {
     @State private var questionTimeStartedAt: Date?
     @State private var questionElapsedSeconds: TimeInterval = 0
     @State private var timerTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var loadingNextRound = false
+    @State private var roundNotice: String?
 
     private enum Phase: Equatable {
         case answering
@@ -114,13 +116,29 @@ struct QuizSessionView: View {
             }
         case .summary:
             QuizBottomBar {
-                Button("Done") { session.finishQuiz(sessionID: quizID, intentional: true) }
-                    .buttonStyle(.borderedProminent)
-                    .foregroundStyle(Color(theme.palette.paper))
-                    .tint(Color(theme.palette.accent))
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
+                VStack(spacing: 10) {
+                    if showsQuizAgain {
+                        Button {
+                            Task { await startAnotherRound() }
+                        } label: {
+                            Label(loadingNextRound ? "Preparing next round…" : "Quiz again", systemImage: "arrow.clockwise")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(Color(theme.palette.accent))
+                        .disabled(loadingNextRound)
+                        .accessibilityIdentifier("quiz.again")
+                    }
+                    Button("Done") { session.finishQuiz(sessionID: quizID, intentional: true) }
+                        .buttonStyle(.borderedProminent)
+                        .foregroundStyle(Color(theme.palette.paper))
+                        .tint(Color(theme.palette.accent))
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                }
             }
         }
     }
@@ -131,6 +149,10 @@ struct QuizSessionView: View {
         case .feedback: return questionIndex + 1
         case .summary: return questions.count
         }
+    }
+
+    private var showsQuizAgain: Bool {
+        quiz?.mode == .standard
     }
 
     private var submitDisabled: Bool {
@@ -219,8 +241,18 @@ struct QuizSessionView: View {
         let available = quiz?.scoreAvailable ?? 1
         let percentage = QuizResultSummary.percentage(earned: earned, available: available)
         return VStack(alignment: .leading, spacing: 20) {
-            Text("Quiz complete")
+            Text((quiz?.roundCount ?? 1) > 1 ? "Round \(quiz?.roundCount ?? 1) complete" : "Quiz complete")
                 .font(.title.weight(.semibold))
+            if showsQuizAgain {
+                Text("Want another round? Your time stays on one Quiz Me activity until you tap Done.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            if let roundNotice {
+                Text(roundNotice)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(earned)/\(available)")
                     .font(.system(size: 44, weight: .semibold, design: .rounded))
@@ -422,6 +454,24 @@ struct QuizSessionView: View {
         } else {
             phase = .answering
             resetTimerForCurrentQuestion()
+        }
+    }
+
+    private func startAnotherRound() async {
+        guard !loadingNextRound else { return }
+        loadingNextRound = true
+        roundNotice = nil
+        defer { loadingNextRound = false }
+        let previousCount = questions.count
+        do {
+            try await session.appendQuizRound(sessionID: quizID)
+            questionIndex = previousCount
+            phase = .answering
+            answerText = ""
+            choiceIndex = nil
+            resetTimerForCurrentQuestion()
+        } catch {
+            roundNotice = (error as? LocalizedError)?.errorDescription ?? "Could not start another round."
         }
     }
 }

@@ -295,3 +295,34 @@ stores directly.
 - Ordering rules for artifacts within a collection and whether manual ordering is needed.
 - Which artifact kinds ship in the first Collections slice before Companion exists.
 - Export format and treatment of restricted Scripture/audio references in SP-005.
+
+## Folder reparenting — SP-040
+
+Root cards and subfolder tiles support dragging onto another folder. Drop feedback
+marks the hovered destination; the store revalidates the move on drop. Contents and
+subfolders move with their folder. Move Collection in its context menu exposes the
+full tree and Collections (top level), supporting cross-branch moves by tap or drag.
+No Folder, self/descendants, unchanged parent, inactive records and locked sources or
+destinations are rejected. Existing parentID persistence and protection bindings are
+preserved; destination ancestry determines inherited protection after moving.
+
+## Owner folder material layouts — 2026-10-13
+
+Each folder’s Study Material View menu offers List View and Card View, including
+No Folder and nested folders. The choice is remembered per folder in local UI
+preferences. List records are uniformly 80pt high; card records uniformly 176pt
+high in a shared adaptive 220–320pt grid. All artifact types use the same geometry
+within each mode; long titles/previews truncate instead of increasing record size.
+Context menus, access guards, filters, sorting, descendants and opening remain.
+List swipe actions remain; card organization uses the same long-press menu.
+No collection or note storage migration or other tab layout change.
+
+## Shared note card presentation — 2026-10-13
+
+Notes and Collection card mode now render the same NoteLibraryCard: note-selected
+accent/top rule, note-kind glyph, title/type, creation and modification dates,
+Page opening text/Published mark, Journal states, and Prayer stamps. The shared
+stamp sequence runs on card appearance and active-tab entry, cancels while hidden
+and respects Reduce Motion. Hosts retain their own selection, context actions and
+navigation. Fixed 176pt size and Collection list mode remain. Locked notes conceal
+previews and stamps in both hosts. No persistence or protection-policy changes.

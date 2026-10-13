@@ -189,25 +189,30 @@ struct NotePrayerEditorView: View {
 
     private var mainPrayerPost: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Prayer")
-                .font(.caption.weight(.semibold))
-                .tracking(0.6)
-                .textCase(.uppercase)
-                .foregroundStyle(Color(theme.palette.accent))
-                .accessibilityIdentifier("notes.prayer.badge")
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Prayer")
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.6)
+                        .textCase(.uppercase)
+                        .foregroundStyle(Color(theme.palette.accent))
+                        .accessibilityIdentifier("notes.prayer.badge")
 
-            if let note = session.note {
-                Text(note.title)
-                    .font(.system(.title2, design: .serif).weight(.semibold))
-                    .foregroundStyle(Color(theme.palette.ink))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if let note = session.note {
+                        Text(note.title)
+                            .font(.system(.title2, design: .serif).weight(.semibold))
+                            .foregroundStyle(Color(theme.palette.ink))
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Created \(note.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                    Text("Last modified \(note.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Created \(note.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                            Text("Last modified \(note.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(Color(theme.palette.secondary))
+                    }
                 }
-                .font(.caption)
-                .foregroundStyle(Color(theme.palette.secondary))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: 8) {
@@ -447,5 +452,60 @@ private struct PrayerUpdateRow: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(theme.palette.rule), lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityIdentifier("notes.prayer.update.\(update.id.uuidString)")
+    }
+}
+
+/// Presentation-only card mark; never part of note text or ink.
+struct NoteCardStatusStamp: View {
+    enum Mark { case answered, redirected, published }
+    let mark: Mark
+    let noteID: UUID
+    var isActive = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var impression = 0
+    // Stable per note across redraws, status changes and launches; never use Swift's randomized hash.
+    private var tilt: Double {
+        let seed = noteID.uuidString.utf8.reduce(UInt64(14695981039346656037)) {
+            ($0 ^ UInt64($1)) &* 1099511628211
+        }
+        return Double(1 + seed % 15)
+    }
+    private var asset: String {
+        switch mark {
+        case .answered: "PrayerAnsweredStamp"
+        case .redirected: "PrayerRedirectedStamp"
+        case .published: "PagePublishedStamp"
+        }
+    }
+    private var tint: Color { mark == .redirected ? .yellow : .green }
+    var body: some View {
+        Image(asset)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 210, height: 55)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .foregroundStyle(impression < 2 ? Color.black : tint)
+            .background(tint.opacity(impression < 2 ? 0 : 0.04))
+            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(impression < 2 ? Color.black : tint, lineWidth: 3))
+            .opacity(impression == 0 ? 0.08 : (impression == 1 ? 0.5 : 1))
+            .blur(radius: impression == 0 ? 7 : (impression == 1 ? 3 : 0))
+            .scaleEffect(impression == 0 ? 1.12 : (impression == 1 ? 1.04 : 1))
+            .rotationEffect(.degrees(tilt))
+            .allowsHitTesting(false)
+            .accessibilityLabel(mark == .published ? "Page published" : (mark == .answered ? "Prayer answered" : "Prayer redirected"))
+            .accessibilityIdentifier(mark == .published ? "notes.page.stamp" : "notes.prayer.stamp")
+            .task(id: isActive) {
+                guard isActive else { impression = 0; return }
+                guard !reduceMotion else { impression = 2; return }
+                impression = 0
+                do {
+                    try await Task.sleep(for: .milliseconds(160))
+                    withAnimation(.easeIn(duration: 0.24)) { impression = 1 }
+                    try await Task.sleep(for: .milliseconds(280))
+                    withAnimation(.easeOut(duration: 0.16)) { impression = 2 }
+                } catch { }
+            }
     }
 }

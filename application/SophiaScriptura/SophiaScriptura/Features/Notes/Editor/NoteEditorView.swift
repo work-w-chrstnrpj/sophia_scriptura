@@ -292,12 +292,15 @@ struct NoteEditorView: View {
                     .labelStyle(.iconOnly)
                     .accessibilityIdentifier("notes.editor.share")
             }
+            if session.note?.kind == .page {
+                pageStatusMenu
+            }
             if session.note?.kind == .journal {
                 let emotion = session.note?.journalContent?.emotionalState
                 let mind = session.note?.journalContent?.mentalState
                 Button { journalSheet = .emotional } label: {
                     journalToolbarMark(
-                        emotion.map(JournalStateAppearance.emotional)?.mark ?? .emoji("😶"),
+                        emotion.map(JournalStateAppearance.emotional)?.mark ?? .symbol("heart"),
                         tint: emotion.map { JournalStateAppearance.emotional($0).tint }
                     )
                 }
@@ -315,6 +318,36 @@ struct NoteEditorView: View {
                 .accessibilityValue(mind?.label ?? "Not set")
             }
             optionsMenu
+        }
+    }
+
+    private var pageStatusMenu: some View {
+        let status = session.note?.pageStatus ?? .unset
+        return Menu {
+            Picker("Page status", selection: Binding(
+                get: { session.note?.pageStatus ?? .unset },
+                set: { session.setPageStatus($0) }
+            )) {
+                ForEach(PageStatus.allCases, id: \.self) { choice in
+                    Label(choice.label, systemImage: pageStatusSymbol(choice)).tag(choice)
+                }
+            }
+        } label: {
+            Image(systemName: pageStatusSymbol(status))
+        }
+        .accessibilityLabel("Page status")
+        .accessibilityValue(status.label)
+        .accessibilityIdentifier("notes.page.status")
+    }
+
+    private func pageStatusSymbol(_ status: PageStatus) -> String {
+        switch status {
+        case .unset: "flag"
+        case .drafting: "pencil"
+        case .revising: "arrow.triangle.2.circlepath"
+        case .editing: "pencil.line"
+        case .publishing: "paperplane"
+        case .closed: "checkmark.seal"
         }
     }
 

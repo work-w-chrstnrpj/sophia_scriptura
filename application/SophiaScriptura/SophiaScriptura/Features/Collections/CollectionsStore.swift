@@ -325,6 +325,43 @@ final class CollectionsStore: ObservableObject {
         return id
     }
 
+    /// Reparent the folder as a unit; memberships and descendants keep their identities.
+    func canMoveCollection(_ id: UUID, to parentID: UUID?) -> Bool {
+        guard let folder = collection(id: id), folder.isActiveInLibrary,
+              !isLocked(id), folder.parentID != parentID else { return false }
+        if let parentID {
+            guard let target = collection(id: parentID), target.isActiveInLibrary,
+                  !isLocked(parentID) else { return false }
+            var current: UUID? = parentID
+            var seen = Set<UUID>()
+            while let next = current {
+                guard next != id, seen.insert(next).inserted,
+                      let ancestor = collection(id: next), ancestor.isActiveInLibrary else { return false }
+                current = ancestor.parentID
+            }
+        }
+        return true
+    }
+
+    @discardableResult
+    func moveCollection(id: UUID, to parentID: UUID?) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+        guard canMoveCollection(id, to: parentID) else {
+            notice = "Choose a different unlocked folder outside this folder’s own subfolders."
+            return false
+        }
+        guard allowChanges(Set([id, parentID].compactMap { $0 })),
+              let index = collections.firstIndex(where: { $0.id == id }) else { return false }
+        let oldParent = collections[index].parentID
+        collections[index].parentID = parentID
+        collections[index].modifiedAt = Date()
+        if let oldParent { touch(oldParent) }
+        if let parentID { touch(parentID) }
+        notice = nil
+        enqueueWrite()
+        return true
+    }
+
     func updateAccent(id: UUID, accent: CollectionAccent) {
         guard !rejectWhileSophyCommits() else { return }
 

@@ -326,3 +326,13 @@ safe presentation state and explicit PiP preview. RootTabView owns coordinator l
 MusicSession/ActivityStore retain command and persistence ownership. BackgroundMusicEngine
 retains the shared audio session while PiP is active. See tickets/SP-031-study-picture-in-picture.md
 for limits and physical acceptance; no permanent Home-screen notch is implemented.
+
+## SP-040 structure update
+
+`Features/Collections/CollectionFolderMove.swift` owns typed folder drag/drop and the
+full-tree move sheet; `CollectionsStore` validates and persists subtree reparenting.
+`NoteJournalFields` owns Journal icon presentation, and `PrayerStatusStamp` in
+`NotePrayerEditorView.swift` owns the presentation-only Prayer status mark.
+
+`Features/Notes/NoteLibraryCard.swift` owns shared Notes/Collection note-card
+presentation, previews and stamp activation; hosts own navigation/context actions.

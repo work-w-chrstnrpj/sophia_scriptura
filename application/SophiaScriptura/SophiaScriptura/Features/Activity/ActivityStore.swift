@@ -472,8 +472,13 @@ import Combine
         }
         guard loaded else { return }
         var changed = false
-        for link in links where !snapshot.records.contains(where: { $0.quizSessionID == link.quizSessionID })
-            && !(snapshot.suppressedQuizSessionIDs ?? []).contains(link.quizSessionID) {
+        for link in links where !(snapshot.suppressedQuizSessionIDs ?? []).contains(link.quizSessionID) {
+            if let existing = snapshot.records.firstIndex(where: { $0.quizSessionID == link.quizSessionID }) {
+                snapshot.records[existing].activeSeconds = Double(link.activeSeconds)
+                snapshot.records[existing].updatedAt = Date()
+                changed = true
+                continue
+            }
             let intersectsTimer = snapshot.draft.map { draft in
                 draft.intervals.contains { $0.start < link.endedAt && link.startedAt < $0.end }
                 || (draft.runningSince.map { $0 < link.endedAt && link.startedAt < Date() } ?? false)

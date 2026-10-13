@@ -936,6 +936,43 @@ import ImageIO
         return content.lastPrayedDay != Self.prayerDayKey()
     }
 
+    enum LibraryStatusChange {
+        case page(PageStatus), prayer(PrayerStatus)
+        case emotional(JournalEmotionalState?), mental(JournalMentalState?)
+    }
+
+    /// Updates a library item without selecting it or changing the editor route.
+    func setLibraryStatus(_ change: LibraryStatusChange, noteID: UUID) {
+        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == noteID }),
+              snapshot.notes[i].isActiveInLibrary,
+              !isLocked(snapshot.notes[i]), collections?.concealsNote(noteID) != true else { return }
+        var next = snapshot.notes[i]
+        switch (change, next.content) {
+        case (.page(let status), .page(var content)):
+            content.pageStatus = status; next.content = .page(content)
+        case (.prayer(let status), .prayer(var content)):
+            content.status = status; next.content = .prayer(content)
+        case (.emotional(let state), .journal(var content)):
+            content.emotionalState = state; next.content = .journal(content)
+        case (.mental(let state), .journal(var content)):
+            content.mentalState = state; next.content = .journal(content)
+        default: return
+        }
+        guard next != snapshot.notes[i] else { return }
+        do { try next.validate() } catch { report(error); return }
+        protection.activity(in: .notes)
+        next.updatedAt = Date(); snapshot.notes[i] = next; changed()
+    }
+
+    func setPageStatus(_ status: PageStatus) {
+        protection.activity(in: .notes)
+        edit({ note in
+            guard case .page(var content) = note.content else { return }
+            content.pageStatus = status
+            note.content = .page(content)
+        }, record: false)
+    }
+
     func setPrayerStatus(_ status: PrayerStatus) {
         edit { note in
             guard case .prayer(var content) = note.content else { return }

@@ -33,6 +33,124 @@ final class NotesUITests: XCTestCase {
         XCTAssertTrue(create.waitForExistence(timeout: 5))
         create.tap()
     }
+    func testHoldNoteStatusMenus() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "page")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Untitled Note"].press(forDuration: 1)
+        app.buttons["Page Status"].tap(); app.buttons["Closed"].tap()
+        XCTAssertTrue(app.images["notes.page.stamp"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.scrollViews["notes.viewport"].exists)
+        newNote(app, kind: "prayer")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Untitled Prayer"].press(forDuration: 1)
+        app.buttons["Prayer Status"].tap(); app.buttons["Prayer answered"].tap()
+        XCTAssertTrue(app.images["notes.prayer.stamp"].waitForExistence(timeout: 5))
+        newNote(app, kind: "journal")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Untitled Journal"].press(forDuration: 1)
+        app.buttons["Mental State"].tap(); app.buttons["Thriving"].tap()
+        app.staticTexts["Untitled Journal"].press(forDuration: 1)
+        app.buttons["Emotional State"].tap(); app.buttons["Happy"].tap()
+        let preview = app.descendants(matching: .any)["notes.journal.preview"].firstMatch
+        XCTAssertTrue(preview.label.contains("Happy")); XCTAssertTrue(preview.label.contains("Thriving"))
+        XCTAssertFalse(app.scrollViews["notes.viewport"].exists)
+    }
+
+    func testJournalAndPageCardPreviews() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "journal")
+        XCTAssertTrue(app.buttons["notes.journal.mental"].waitForExistence(timeout: 10))
+        app.buttons["notes.journal.mental"].tap()
+        app.buttons["notes.journal.mental.thriving"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let journal = app.descendants(matching: .any)["notes.journal.preview"].firstMatch
+        XCTAssertTrue(journal.waitForExistence(timeout: 5))
+        XCTAssertTrue(journal.label.contains("Emotional State: Not set"))
+        XCTAssertTrue(journal.label.contains("Mental State: Thriving"))
+        newNote(app, kind: "page")
+        let body = app.textViews["notes.body"]
+        XCTAssertTrue(body.waitForExistence(timeout: 10)); body.tap()
+        body.typeText("Opening words for the Page preview")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let preview = app.staticTexts["notes.page.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertTrue(preview.label.contains("Opening words"))
+        preview.tap()
+        let status = app.buttons["notes.page.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        status.tap(); app.buttons["Closed"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let stamp = app.images["notes.page.stamp"]
+        XCTAssertTrue(stamp.waitForExistence(timeout: 5))
+        XCTAssertEqual(stamp.label, "Page published")
+        XCTAssertFalse(preview.exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Journal row and Published Page card"; capture.lifetime = .keepAlways; add(capture)
+        stamp.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        status.tap(); app.buttons["Drafting"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertFalse(stamp.exists)
+    }
+
+    func testPageStatusToolbarOffersAllChoices() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "page")
+        let status = app.buttons["notes.page.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        XCTAssertEqual(status.value as? String, "Unset")
+        for choice in ["Drafting", "Revising", "Editing", "Publishing", "Closed", "Unset"] {
+            status.tap()
+            let option = app.buttons[choice]
+            XCTAssertTrue(option.waitForExistence(timeout: 5))
+            option.tap()
+            XCTAssertEqual(status.value as? String, choice)
+        }
+        status.tap()
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Page status toolbar choices"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    func testPrayerStatusStampsAndJournalStateIcons() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "prayer")
+        let status = app.buttons["notes.prayer.status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 10))
+        status.tap(); app.buttons["Prayer answered"].tap()
+        let stamp = app.descendants(matching: .any)["notes.prayer.stamp"].firstMatch
+        XCTAssertFalse(stamp.exists, "The prayer editor must not contain a stamp")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(stamp.waitForExistence(timeout: 5))
+        XCTAssertEqual(stamp.label, "Prayer answered")
+        let answered = XCTAttachment(screenshot: app.screenshot())
+        answered.name = "Answered prayer card stamp"; answered.lifetime = .keepAlways; add(answered)
+        stamp.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        status.tap(); app.buttons["Prayer redirected"].tap()
+        XCTAssertFalse(stamp.exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(stamp.waitForExistence(timeout: 5))
+        XCTAssertEqual(stamp.label, "Prayer redirected")
+        let redirected = XCTAttachment(screenshot: app.screenshot())
+        redirected.name = "Redirected prayer card stamp"; redirected.lifetime = .keepAlways; add(redirected)
+        stamp.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        status.tap(); app.buttons["Praying & waiting"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertFalse(stamp.exists)
+        newNote(app, kind: "journal")
+        let emotion = app.buttons["notes.journal.emotional"]
+        XCTAssertTrue(emotion.waitForExistence(timeout: 10))
+        XCTAssertEqual(emotion.value as? String, "Not set")
+        app.buttons["notes.journal.mental"].tap()
+        app.buttons["notes.journal.mental.thriving"].tap()
+        XCTAssertEqual(app.buttons["notes.journal.mental"].value as? String, "Thriving")
+        let journal = XCTAttachment(screenshot: app.screenshot())
+        journal.name = "Journal thriving and unset emotion icons"; journal.lifetime = .keepAlways; add(journal)
+    }
+
     func testBulkDeleteConfirmsCancelsAndPersistsOnlySelectedNotes() {
         let app = launch(); notes(app)
         for _ in 0..<3 {

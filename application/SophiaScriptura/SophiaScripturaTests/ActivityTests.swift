@@ -31,10 +31,12 @@ import SwiftUI
         let id = UUID()
         let link = ReviewingActivityLink(id: UUID(), quizSessionID: id, startedAt: Date(), endedAt: Date(), activeSeconds: 90, sourceDeleted: false)
         store.importQuizStudyLinks([link])
-        store.importQuizStudyLinks([link])
+        let updated = ReviewingActivityLink(
+            id: link.id, quizSessionID: id, startedAt: link.startedAt, endedAt: Date(), activeSeconds: 120, sourceDeleted: false)
+        store.importQuizStudyLinks([updated])
         XCTAssertEqual(store.records.count, 1)
         XCTAssertEqual(store.records.first?.quizSessionID, id)
-        XCTAssertEqual(store.records.first?.activeSeconds, 90)
+        XCTAssertEqual(store.records.first?.activeSeconds, 120)
         XCTAssertEqual(store.records.first?.modeID, ActivityModeID.studying.id)
         await store.flush()
     }

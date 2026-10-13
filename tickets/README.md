@@ -8,6 +8,7 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-040](SP-040-folder-drag-and-journal-prayer-presentation.md) | implemented; simulator verified; physical acceptance pending | Folder drag/reparent, Journal/Prayer presentation and Page status |
 | [SP-033](SP-033-v100-multi-source-translation-release.md) | draft; v1.0.0 planning | v1.0.0 multi-source translation release |
 | [SP-034](SP-034-translation-source-contracts.md) | draft; v1.0.0 planning | Source contracts and backward-compatible translation routing |
 | [SP-035](SP-035-helloao-catalog-and-content-adapter.md) | draft; v1.0.0 planning | AO Lab catalog, eligibility and content adapter |

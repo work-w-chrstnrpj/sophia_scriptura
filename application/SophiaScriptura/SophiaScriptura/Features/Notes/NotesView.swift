@@ -32,6 +32,7 @@ struct NotesView: View {
     @State private var confirmBulkDelete = false
     @State private var pendingBulkDeleteIDs: Set<UUID> = []
     @State private var confirmResetLibrary = false
+    @State private var libraryJournalField: LibraryJournalFieldContext?
     @Environment(\.scenePhase) private var scenePhase
     /// Every library card uses this height. Title and note type stay at the top; the dates sit on the bottom.
     private let noteCardHeight: CGFloat = 176
@@ -79,7 +80,7 @@ struct NotesView: View {
             .accessibilityIdentifier("notes.content")
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: Binding(get: { session.selectedNoteID != nil }, set: { if !$0 { session.flushSurface?(); session.selectedNoteID = nil } })) {
+            .navigationDestination(isPresented: Binding(get: { session.selectedNoteID != nil && session.openingCollectionID == nil }, set: { if !$0 { session.flushSurface?(); session.selectedNoteID = nil } })) {
                 NoteEditorView(session: session, reader: reader, collections: collections)
                     .toolbar(.visible, for: .navigationBar)
             }
@@ -107,6 +108,16 @@ struct NotesView: View {
             .sheet(isPresented: $showBulkCollectionPicker) {
                 NotesBulkCollectionPicker(store: collections, session: session, noteIDs: selectedNoteIDs) {
                     clearSelection()
+                }
+            }
+            .sheet(item: $libraryJournalField) { context in
+                if let note = session.snapshot.notes.first(where: { $0.id == context.noteID }) {
+                    JournalFieldPicker(
+                        field: context.field,
+                        journal: note.journalContent,
+                        session: session,
+                        libraryNoteID: context.noteID
+                    )
                 }
             }
         }
@@ -492,73 +503,20 @@ struct NotesView: View {
     }
 
     private func noteCard(_ note: NoteDocument) -> some View {
-        let accent = accent(for: note)
-        let tint = accent.resolvedColor(in: theme)
         let isSelected = selectedNoteIDs.contains(note.id)
-        return VStack(alignment: .leading, spacing: 10) {
-            Button { activate(note) } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .top, spacing: 12) {
-                        noteGlyph(note, accent: accent, size: 36)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(note.title)
-                                    .font(.system(.headline, design: .serif).weight(.semibold))
-                                    .foregroundStyle(Color(theme.palette.ink))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .multilineTextAlignment(.leading)
-                                Spacer(minLength: 0)
-                                if note.protectionID != nil {
-                                    Image(systemName: session.isLocked(note) ? "lock.fill" : "lock.open.fill")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .accessibilityLabel(session.isLocked(note) ? "Locked note" : "Protected note, unlocked")
-                                }
-                            }
-                            Text(note.kind.displayName)
-                                .font(.footnote)
-                                .foregroundStyle(Color(theme.palette.secondary))
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 16)
-                    noteDates(note, accent: accent)
+        return NoteLibraryCard(note: note, locked: session.isLocked(note), isActive: isTabActive) { activate(note) }
+            .overlay(alignment: .bottomTrailing) {
+                if deleted {
+                    Button("Unarchive") { session.unarchive(note.id) }
+                        .buttonStyle(CollectionSecondaryButtonStyle()).padding(14)
                 }
-                .frame(maxWidth: .infinity, minHeight: noteCardHeight - 28, maxHeight: noteCardHeight - 28, alignment: .top)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: noteCardHeight, maxHeight: noteCardHeight, alignment: .top)
-        .overlay(alignment: .bottomTrailing) {
-            if deleted {
-                Button("Unarchive") { session.unarchive(note.id) }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
-                    .padding(14)
+            .overlay(alignment: .topLeading) {
+                if selectionMode { selectionMark(for: note.id, size: .cardBadge).padding(6) }
             }
-        }
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(alignment: .top) {
-            UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
-                .fill(tint)
-                .frame(height: 4)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(tint.opacity(0.22), lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(alignment: .topLeading) {
-            if selectionMode {
-                selectionMark(for: note.id, size: .cardBadge)
-                    .padding(6)
-            }
-        }
-        .opacity(selectionMode && isSelected ? 0.58 : 1)
-        .animation(.easeInOut(duration: 0.18), value: isSelected)
-        .contextMenu { noteActions(note) }
+            .opacity(selectionMode && isSelected ? 0.58 : 1)
+            .animation(.easeInOut(duration: 0.18), value: isSelected)
+            .contextMenu { noteActions(note) }
     }
 
     private func noteRow(_ note: NoteDocument) -> some View {
@@ -618,6 +576,9 @@ struct NotesView: View {
                     .accessibilityIdentifier("notes.addToCollection.\(note.title)")
             }
             if !session.isLocked(note) {
+                NoteStatusContextMenu(note: note, session: session) { field in
+                    libraryJournalField = LibraryJournalFieldContext(noteID: note.id, field: field)
+                }
                 Button("Edit Note", systemImage: "pencil") { editingNote = note }
                     .accessibilityIdentifier("notes.editNote")
             }
@@ -743,4 +704,29 @@ struct NotesArchiveDocument: FileDocument {
     init(data: Data) { self.data = data }
     init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
+
+/// Shared status choices for the held library note; never opens an editor.
+struct NoteStatusContextMenu: View {
+    let note: NoteDocument
+    var session: NotesSession
+    var onJournalField: ((JournalFieldSheet) -> Void)? = nil
+    var body: some View {
+        if let status = note.pageStatus {
+            Menu("Page Status", systemImage: "flag") {
+                Picker("Page Status", selection: Binding(get: { status }, set: { session.setLibraryStatus(.page($0), noteID: note.id) })) {
+                    ForEach(PageStatus.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+            }
+        } else if let prayer = note.prayerContent {
+            Menu("Prayer Status", systemImage: "hands.and.sparkles") {
+                Picker("Prayer Status", selection: Binding(get: { prayer.status }, set: { session.setLibraryStatus(.prayer($0), noteID: note.id) })) {
+                    ForEach(PrayerStatus.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+            }
+        } else if note.journalContent != nil {
+            Button("Emotional State", systemImage: "heart") { onJournalField?(.emotional) }
+            Button("Mental State", systemImage: "brain") { onJournalField?(.mental) }
+        }
+    }
 }

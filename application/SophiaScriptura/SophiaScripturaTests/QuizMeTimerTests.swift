@@ -28,6 +28,32 @@ final class QuizMeTimerTests: XCTestCase {
         XCTAssertEqual(attempt.pointsEarned, 0)
     }
 
+    func testAppendQuizRoundKeepsOneSessionAndAccumulatesScorePool() async throws {
+        let catalog = try PromptPresetCatalog.bundled()
+        let session = CompanionSession(
+            presetCatalog: catalog,
+            repository: nil,
+            credentials: InMemoryCompanionCredentialsStore(),
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter(id: "mock", scriptedChunks: [
+                try identifyVerseQuizJSON(),
+            ])])
+        )
+        try session.saveProviderKey("key", adapterID: "mock", accountLabel: "Test", defaultModelID: "mock")
+        let config = try XCTUnwrap(session.providerConfigurations.first)
+        let scope = QuizQuestionCacheScope(providerConfigurationID: config.id, adapterID: "mock", modelID: "mock", editionID: "web-engwebp")
+        session.cachedQuizQuestions = try AIQuizQuestionGenerator.decodeCached(
+            identifyVerseQuizJSON(count: QuizDifficulty.easy.questionCount * 2), scope: scope,
+            difficulty: .easy, plannedTypes: Array(repeating: .identifyVerse, count: QuizDifficulty.easy.questionCount * 2), excludedPrompts: [:])
+        let quizID = try await session.startQuiz(types: [.identifyVerse], difficulty: .easy, editionID: "web-engwebp", timed: false, recordReviewing: true)
+        let firstCount = session.quizQuestions.filter { $0.sessionID == quizID }.count
+        try await session.appendQuizRound(sessionID: quizID)
+        let quiz = try XCTUnwrap(session.quizSessions.first { $0.id == quizID })
+        XCTAssertEqual(quiz.roundCount, 2)
+        XCTAssertEqual(session.quizQuestions.filter { $0.sessionID == quizID }.count, firstCount * 2)
+        XCTAssertEqual(quiz.scoreAvailable, firstCount * 2 * QuizDifficulty.easy.pointsEach)
+        XCTAssertEqual(session.quizQuestions.filter { $0.sessionID == quizID }.map(\.index).sorted(), Array(0..<(firstCount * 2)))
+    }
+
     func testActiveQuestionSecondsAccumulateForReviewing() async throws {
         let catalog = try PromptPresetCatalog.bundled()
         let session = CompanionSession(
@@ -57,8 +83,8 @@ final class QuizMeTimerTests: XCTestCase {
         XCTAssertEqual(counts.unanswered, 1)
     }
 
-    private func identifyVerseQuizJSON() throws -> String {
-        let questions = (0..<QuizDifficulty.easy.questionCount).map { index in
+    private func identifyVerseQuizJSON(count: Int = QuizDifficulty.easy.questionCount) throws -> String {
+        let questions = (0..<count).map { index in
             AIQuizQuestionGenerator.GeneratedQuestion(
                 type: QuizType.identifyVerse.rawValue,
                 prompt: "Public-domain verse wording \(index)",

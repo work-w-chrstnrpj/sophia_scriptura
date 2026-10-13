@@ -156,3 +156,15 @@ Mental state, from thriving through Neutral, then Challenged, then toward distre
 `NoteDocument.protectionID: UUID?` is additive, defaults to nil, and binds an app access lock to a device-only credential. It is separate from Canvas position locks and stroke IDs. Protected libraries persist schema 4 (accepted schemas 1–4); plain libraries retain schema 3. Existing atomic generations and paths are retained. Notes-only export and restoration require access to protected current records; pre-restore exports inspect their own bindings. A legacy restore retains current bindings for matching IDs. Restored foreign/missing credentials fail closed. Content remains unencrypted under the owner-selected v0.3.0 policy.
 
 The complete access, privacy, lifecycle, backup and recovery contract is [item protection](../security/item-protection.md). A note whose collection is locked, including a note filed only in a nested subfolder at any depth, is omitted from the Notes library. Body undo does not change protection. Save/flush-before-conceal preserves accepted edits; locked metadata/body commands are denied while archive/delete continue working.
+
+## Page status — SP-040 owner addition, 2026-10-13
+
+Only PageContent has `pageStatus`, with ordered choices Unset, Drafting, Revising,
+Editing, Publishing and Closed (persisted lowercase names). Unset is omitted on write;
+missing or unknown stored names decode as Unset without discarding body/attachments.
+This is an additive field within the current Notes schemas, not a migration. Older
+builds ignore it and can lose the status when rewriting a Page. Content, legacy objects,
+ink and IDs are unchanged. Page/body assignments and body undo/redo preserve the status.
+The guarded NotesSession metadata command autosaves changes; Canvas, Journal and Prayer
+do not acquire this field. Publishing is a local status label and triggers no external
+publishing or provider traffic.

@@ -6,6 +6,8 @@ struct CollectionsView: View {
     @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     var notes: NotesSession
+    var reader: ReaderSession? = nil
+    var isTabActive = true
     var openNote: (UUID, UUID) -> Void
     var openPassage: (SavedPassage) -> Void
     var openAnnotation: (SavedAnnotation) -> Void = { _ in }
@@ -19,6 +21,7 @@ struct CollectionsView: View {
     @State private var sort: CollectionLibrarySort = .modified
     @State private var showingNewCollection = false
     @State private var editingCollection: StudyCollection?
+    @State private var movingCollection: StudyCollection?
     @State private var deletingCollection: StudyCollection?
     @State private var showArchivedCollections = false
 
@@ -102,6 +105,9 @@ struct CollectionsView: View {
             .sheet(isPresented: $showingNewCollection) {
                 CollectionEditorSheet(store: store, parentID: nil)
             }
+            .sheet(item: $movingCollection) { collection in
+                CollectionFolderMoveSheet(store: store, folderID: collection.id)
+            }
             .sheet(item: $editingCollection) { collection in
                 CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collection.id)
             }
@@ -120,6 +126,22 @@ struct CollectionsView: View {
                 }
             }
             .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
+            .fullScreenCover(isPresented: Binding(
+                get: { reader != nil && notes.selectedNoteID != nil && notes.openingCollectionID != nil },
+                set: { if !$0 { notes.flushSurface?(); notes.selectedNoteID = nil } }
+            )) {
+                if let reader {
+                    NavigationStack {
+                        NoteEditorView(session: notes, reader: reader, collections: store)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Back") { notes.flushSurface?(); notes.selectedNoteID = nil }
+                                        .accessibilityIdentifier("collections.note.back")
+                                }
+                            }
+                    }
+                }
+            }
             .navigationDestination(item: $sophyFolder) { folder in
                 CollectionDetailView(
                     store: store,
@@ -171,6 +193,7 @@ struct CollectionsView: View {
             if !collection.isUnfiled {
                 if !store.isLocked(collection.id) {
                     Button("Edit Collection", systemImage: "pencil") { editingCollection = collection }
+                    Button("Move Collection", systemImage: "folder") { movingCollection = collection }
                 }
                 ItemProtectionContextActions(
                     noun: "Collection",
@@ -189,6 +212,7 @@ struct CollectionsView: View {
                 }
             }
         }
+        .collectionFolderDragAndDrop(collection, store: store)
         .accessibilityIdentifier("collections.folder.\(collection.name)")
     }
 

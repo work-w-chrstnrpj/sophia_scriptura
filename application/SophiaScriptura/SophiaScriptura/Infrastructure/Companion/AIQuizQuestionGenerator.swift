@@ -168,19 +168,20 @@ enum AIQuizQuestionGenerator {
         }
     }
 
-    static func materialize(_ cached: [CachedQuizQuestion], sessionID: UUID) -> [QuizQuestionRecord] {
+    static func materialize(_ cached: [CachedQuizQuestion], sessionID: UUID, indexOffset: Int = 0) -> [QuizQuestionRecord] {
         cached.enumerated().map { index, item in
+            let questionIndex = indexOffset + index
             let positioned = positionedChoices(
                 item.choices,
                 correctIndex: item.answerKey.choiceIndex ?? 0,
                 type: item.type,
                 sessionID: sessionID,
-                questionIndex: index
+                questionIndex: questionIndex
             )
             return QuizQuestionRecord(
                 id: UUID(),
                 sessionID: sessionID,
-                index: index,
+                index: questionIndex,
                 type: item.type,
                 prompt: item.prompt,
                 choices: positioned.choices,

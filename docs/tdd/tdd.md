@@ -1124,3 +1124,47 @@ and lifecycle acceptance are tracked independently of build success.
 ## v1.0.0 audio planning expansion — 2026-10-10
 
 [SP-039](../../tickets/SP-039-v100-scripture-audio-and-verse-highlighting.md) adds a Scripture player, transport controls and verified verse-synchronized highlighting. BSB is the initial candidate, not a claim of complete audio coverage. Recording-specific rights, exact text/audio/timing binding, shared music/system ownership and AU-01–09 are required. A1–A3 approved: ±15-second/chapter controls, Continuous/Follow initially off, streaming and optional manual chapter/book downloads. Prior AO-audio exclusions are superseded for this bounded feature; word-level highlighting and unverified edition audio are excluded. Implementation remains unselected.
+
+## Post-v1.0.0 folder and note presentation — SP-040
+
+Folder drag/reparent uses the existing CollectionsStore parentID and generation writes;
+commit-time validation rejects cycles, inactive/unknown records and locked ancestry.
+Memberships, descendants and protection bindings retain their identities. Journal
+Thriving/unset emotion use symbol icons, while Prayer status stamps are transient
+presentation on unlocked Notes library cards, with scalable Rubber Stamp wordmark outlines and stable per-note 1–15° tilts; no note text or ink changes.
+See [SP-040](../../tickets/SP-040-folder-drag-and-journal-prayer-presentation.md).
+
+SP-040 owner addition: PageContent stores additive local `pageStatus` metadata, default
+Unset, with Drafting/Revising/Editing/Publishing/Closed choices. The Page toolbar owns
+the chooser, NotesSession guards autosave, and body edits/undo preserve the value.
+Publishing is a metadata value, not a network operation.
+
+SP-040 card previews: Journal shows Emotional State and Mental State on one row;
+Page shows opening body text, replaced by a green PUBLISHED mark when pageStatus
+is Closed. All previews respect existing item access locks.
+
+SP-040 routing: Collections presents the shared Notes editor full-screen over its preserved folder stack using the existing
+openingCollectionID access context; Notes hosts only non-collection editor routes.
+Root keeps editor activity/chrome tracking for both tabs. Stamp entry animation is
+transient UI state, cancels on tab departure and respects Reduce Motion.
+
+SP-040 long-press status editing uses an ID-targeted NotesSession command rather
+than changing the selected editor. It validates kind, active item and access before
+applying existing metadata choices and scheduling the normal generation save.
+
+SP-040 Collection folder material layout is a local per-folder UI preference:
+shared artifact rendering enforces 80pt list rows and 176pt adaptive cards across
+material kinds. The layout preference does not modify collection generations.
+
+SP-040 Notes and Collection note cards share NoteLibraryCard presentation. Each
+host retains navigation and context actions; card visibility and active-tab state
+control the same transient stamp sequence with Reduce Motion respected.
+
+## v1.1.0 Activity and quiz refinements
+
+Activity distribution/bar chart helpers animate initial reveal with Reduce Motion
+support. QuizSession stores additive roundCount (legacy default 1); standard Quiz Me
+appends question records with continued indexes, accumulating score/time in one
+session. Reviewing links and Activity imports update the existing session-linked
+record. Provider-backed repeated-round acceptance remains a physical/live-provider
+gate, separate from local regression and source publication.

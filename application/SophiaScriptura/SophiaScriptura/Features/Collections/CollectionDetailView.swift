@@ -21,6 +21,14 @@ struct CollectionDetailView: View {
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
 
+    @AppStorage("collections.material.cardFolders") private var cardFolderIDs = ""
+    private var cards: Bool { cardFolderIDs.split(separator: ",").contains(Substring(collectionID.uuidString)) }
+    private func setCards(_ enabled: Bool) {
+        var ids = Set(cardFolderIDs.split(separator: ",").map(String.init))
+        if enabled { ids.insert(collectionID.uuidString) } else { ids.remove(collectionID.uuidString) }
+        cardFolderIDs = ids.sorted().joined(separator: ",")
+    }
+
     @State private var filter: CollectionArtifactFilter = .all
     @State private var sort: CollectionArtifactSort = .modified
     @State private var includeDescendants = false
@@ -34,7 +42,9 @@ struct CollectionDetailView: View {
     @State private var organizing: Organize?
     @State private var pendingDeletion: CollectionArtifact?
     @State private var editingSubfolder: StudyCollection?
+    @State private var movingSubfolder: StudyCollection?
     @State private var deletingSubfolder: StudyCollection?
+    @State private var libraryJournalField: LibraryJournalFieldContext?
 
     private var currentCollection: StudyCollection? { store.collection(id: collectionID) }
     private var isUnfiled: Bool { currentCollection?.isUnfiled == true }
@@ -102,6 +112,9 @@ struct CollectionDetailView: View {
 
     private func collectionSheets(_ collection: StudyCollection) -> some View {
                 collectionContent(collection)
+                .sheet(item: $movingSubfolder) { folder in
+                    CollectionFolderMoveSheet(store: store, folderID: folder.id)
+                }
                 .sheet(isPresented: $showingPicker) {
                     CollectionArtifactPicker(
                         store: store,
@@ -138,6 +151,16 @@ struct CollectionDetailView: View {
                 }
                 .sheet(item: $organizing) { item in
                     CollectionDestinationPicker(store: store, artifact: item.artifact, mode: item.mode, notes: notes)
+                }
+                .sheet(item: $libraryJournalField) { context in
+                    if let note = notes.snapshot.notes.first(where: { $0.id == context.noteID }) {
+                        JournalFieldPicker(
+                            field: context.field,
+                            journal: note.journalContent,
+                            session: notes,
+                            libraryNoteID: context.noteID
+                        )
+                    }
                 }
     }
 
@@ -313,7 +336,10 @@ struct CollectionDetailView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            if !store.isLocked(child.id) { Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child } }
+                            if !store.isLocked(child.id) {
+                                Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child }
+                                Button("Move Collection", systemImage: "folder") { movingSubfolder = child }
+                            }
                             ItemProtectionContextActions(
                                 noun: "Collection",
                                 protectionID: child.protectionID,
@@ -326,6 +352,7 @@ struct CollectionDetailView: View {
                             Button("Archive Collection", systemImage: "archivebox") { store.archiveCollection(id: child.id) }
                             Button("Delete Collection", systemImage: "trash", role: .destructive) { deletingSubfolder = child }
                         }
+                        .collectionFolderDragAndDrop(child, store: store)
                         .accessibilityIdentifier("collections.folder.\(child.name)")
                     }
                 }
@@ -364,6 +391,10 @@ struct CollectionDetailView: View {
                 sectionTitle("Study Material")
                 Spacer()
                 Menu {
+                    Picker("Layout", selection: Binding(get: { cards }, set: setCards)) {
+                        Label("List View", systemImage: "list.bullet").tag(false)
+                        Label("Card View", systemImage: "square.grid.2x2").tag(true)
+                    }
                     Picker("Show", selection: $filter) {
                         ForEach(CollectionArtifactFilter.allCases) { option in
                             Text(option.title).tag(option)
@@ -397,6 +428,13 @@ struct CollectionDetailView: View {
 
             if visibleArtifacts.isEmpty {
                 emptyMaterial(collection)
+            } else if cards {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16)], spacing: 16) {
+                    ForEach(visibleArtifacts) { artifact in
+                        row(artifact, in: collection)
+                    }
+                }
+                .accessibilityIdentifier("collections.material.cards")
             } else {
                 List {
                     ForEach(visibleArtifacts) { artifact in
@@ -406,6 +444,7 @@ struct CollectionDetailView: View {
                             .listRowBackground(Color.clear)
                     }
                 }
+                .accessibilityIdentifier("collections.material.list")
                 .listStyle(.plain)
                 .scrollDisabled(true)
                 .frame(height: CGFloat(visibleArtifacts.count) * 88 + 8)
@@ -436,7 +475,12 @@ struct CollectionDetailView: View {
                 organizing = Organize(artifact: artifact, mode: .assign)
             },
             remove: { store.removeArtifact(artifact.id, from: collectionID) },
-            deletePassage: { pendingDeletion = artifact }
+            deletePassage: { pendingDeletion = artifact },
+            notes: notes,
+            onJournalField: { field in
+                libraryJournalField = LibraryJournalFieldContext(noteID: artifact.id, field: field)
+            },
+            cards: cards
         )
     }
 

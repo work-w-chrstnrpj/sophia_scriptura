@@ -25,7 +25,9 @@ final class CollectionsUITests: XCTestCase {
     }
 
     private func back(_ app: XCUIApplication) {
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let editorBack = app.buttons["collections.note.back"]
+        if editorBack.exists && editorBack.isHittable { editorBack.tap() }
+        else { app.navigationBars.buttons.element(boundBy: 0).tap() }
     }
 
     private func createCollection(_ name: String, in app: XCUIApplication) {
@@ -39,6 +41,35 @@ final class CollectionsUITests: XCTestCase {
 
     private func item(_ prefix: String, in app: XCUIApplication) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.open.\(prefix)")).firstMatch
+    }
+
+    func testDragRootAndNestedFoldersPersists() {
+        let app = launch()
+        openCollections(app)
+        for name in ["Drag A", "Drag B", "Drag C"] { createCollection(name, in: app) }
+        let a = app.buttons["collections.folder.Drag A"]
+        let b = app.buttons["collections.folder.Drag B"]
+        let c = app.buttons["collections.folder.Drag C"]
+        XCTAssertTrue(a.waitForExistence(timeout: 5))
+        a.press(forDuration: 1.2, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.5)
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !a.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 5), .completed)
+        c.press(forDuration: 1.2, thenDragTo: b, withVelocity: .slow, thenHoldForDuration: 0.5)
+        b.tap()
+        XCTAssertTrue(a.waitForExistence(timeout: 5))
+        XCTAssertTrue(c.waitForExistence(timeout: 5))
+        a.press(forDuration: 1.2, thenDragTo: c, withVelocity: .slow, thenHoldForDuration: 0.5)
+        let nested = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !a.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [nested], timeout: 5), .completed)
+        c.tap()
+        XCTAssertTrue(a.waitForExistence(timeout: 5))
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Nested folder after drag"; capture.lifetime = .keepAlways; add(capture)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20))
+        openCollections(app)
+        b.tap(); c.tap()
+        XCTAssertTrue(a.waitForExistence(timeout: 5))
     }
 
     func testAddMaterialCreatesNoteInCollection() {
@@ -55,9 +86,25 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["notes.new.create"].tap()
         XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
         back(app)
-        showTab("tab.collections", in: app)
-        if app.buttons["collections.folder.New material"].exists { app.buttons["collections.folder.New material"].tap() }
-        XCTAssertTrue(app.buttons["collections.open.Created in collection"].waitForExistence(timeout: 5), app.debugDescription)
+        let material = app.buttons["collections.open.Created in collection"]
+        XCTAssertTrue(material.waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["collections.filter"].tap(); app.buttons["Card View"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["collections.material.cards"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(material.frame.height, 176, accuracy: 1)
+        XCTAssertTrue(material.isHittable)
+        material.press(forDuration: 1)
+        app.buttons["Page Status"].tap(); app.buttons["Closed"].tap()
+        XCTAssertTrue(material.exists)
+        material.tap()
+        XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons["notes.page.status"].value as? String, "Closed")
+        back(app)
+        XCTAssertTrue(material.waitForExistence(timeout: 5), "Closing a collection note must return to its folder")
+        XCTAssertEqual(material.frame.height, 176, accuracy: 1)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Uniform collection card layout"; capture.lifetime = .keepAlways; add(capture)
+        app.buttons["collections.filter"].tap(); app.buttons["List View"].tap()
+        XCTAssertEqual(material.frame.height, 88, accuracy: 1) // 80pt record plus 4pt top/bottom list insets
     }
 
     func testFolderColorNestingAndDeletionReturnsItemsToNoFolder() {

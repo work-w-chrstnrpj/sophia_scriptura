@@ -32,13 +32,11 @@ struct ActivityDistributionDetailView: View {
                         ContentUnavailableView("No activity in this period", systemImage: "chart.pie",
                             description: Text("Saved sessions appear here after you finish them."))
                     } else {
-                        Chart(Array(totals.enumerated()), id: \.element.id) { index, item in
-                            SectorMark(angle: .value("Minutes", item.minutes),
-                                innerRadius: .ratio(0.55), angularInset: 2)
-                                .foregroundStyle(ActivityDistributionColor.color(index: index, dark: theme.dark))
-                        }
-                        .frame(height: 170)
-                        .overlay { Text(ActivityDuration.text(seconds)).font(.title3.weight(.semibold)).monospacedDigit() }
+                        ActivityAnimatedDistributionChart(
+                            totals: totals,
+                            totalMinutes: seconds / 60,
+                            height: 170
+                        )
                         ForEach(Array(totals.enumerated()), id: \.element.id) { index, item in
                             HStack(spacing: 12) {
                                 Circle().fill(ActivityDistributionColor.color(index: index, dark: theme.dark))

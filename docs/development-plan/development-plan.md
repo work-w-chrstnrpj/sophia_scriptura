@@ -5,6 +5,35 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v1.2.0 — owner-selected publication, 2026-10-14
+
+Owner authorized commit/push/merge/release of all current changes as v1.2.0/build 24.
+Scope: Collection Smart Order, No Folder color and item actions; Sophy commands/Bible
+tree intent; Qwen region adapters; SP-041–043 planning documents. Release fixes align
+No Folder note access, authoritative Companion trash and conservative Qwen costing/model
+fallback. Verification passed: 392 units and two focused Collection deletion UI tests.
+See [release notes](../releases/v1.2.0.md) for evidence and acceptance limits.
+
+## Proposed study automation — planning requested 2026-10-13
+
+The owner requested three detailed tickets after v1.1.0. This section records
+proposals, not implemented behavior, a new release promise or permission to code.
+Existing M0–M9 closure is unchanged; target release is unassigned.
+
+| Ticket | Proposed outcome | Dependencies/readiness |
+| --- | --- | --- |
+| [SP-041](../../tickets/SP-041-sophia-mcp-bridge.md) | Optional paired Mac MCP bridge for scoped reads, later native-reviewed writes and independently verified ChatGPT/Cursor/Claude connections | Draft; foreground transport/auth/rights/idempotency spike required; no runtime backend exists today |
+| [SP-042](../../tickets/SP-042-selected-handwriting-to-text.md) | Box/lasso selected ink → local transcription → editable review → Copy/Insert with original ink retained | Draft; physical handwriting accuracy/coordinate spike; Canvas first, Page-style and Scripture gates explicit |
+| [SP-043](../../tickets/SP-043-lasso-handwriting-sophy-enhancement.md) | Selected handwriting → reviewed transcription → existing Sophy enhancement operations → reviewed Copy/Insert | Draft; depends on accepted SP-042 source snapshot and review; preserves existing typed selection and protected disclosure consent |
+
+Recommended owner selection: SP-042 G0/G1 first, SP-043 Canvas next, then SP-041
+read-only integration. MCP feasibility can be evaluated independently after owner
+selection; OCR/enhancement need no MCP. Surface expansion, external writes and remote
+hosting are explicit checkpoints. Full acceptance matrices and stop conditions live
+in the tickets; every new acceptance case is Not Run. Source-grounded documentation
+planning is complete; no new app code, agents' skills, server, accounts or deployment
+is authorized by this planning request.
+
 ## v1.1.0 — owner-selected publication, 2026-10-13
 
 Owner authorized commit, push, merge and release of all current changes as v1.1.0

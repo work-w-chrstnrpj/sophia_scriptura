@@ -30,6 +30,13 @@ sends a one-token completion for the selected model id, including any `:provider
 A successful model list is not treated as proof of inference. Hugging Face models are not
 labeled free, and none is selected automatically.
 
+Qwen (Alibaba Cloud Model Studio / DashScope) uses OpenAI-compatible chat completions.
+Adapter ids are `qwen-cn` (China Beijing keys,
+`https://dashscope.aliyuncs.com/compatible-mode/v1`) and `qwen-intl` (international keys,
+`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`). API keys are region-bound; a
+401 on the wrong endpoint should prompt the owner to switch adapters. Curated models include
+Flash and Turbo as paid/unknown-cost options; no Qwen free-model filter is offered. Remote model lists merge when the key can list models. Trial quota depends on the account and provider console.
+
 ## Provider-neutral contract
 
 `LLMProviderAdapter` exposes provider identity, model discovery when supported, advertised
@@ -210,3 +217,7 @@ generations. Full backup's optional `sophyHistory` field carries validated summa
 absence preserves local History. Restore invalidates pending requests and never imports
 execution receipts. See the [implementation guide](../design/sophy-implementation-guide.md)
 and [review evidence/remaining gates](../testing/sp029-sophy-review.md).
+
+Collection conversation deletion uses Companion’s authoritative Trash command, with
+Collections projections reconciled by existing sync callbacks. Qwen model names do
+not establish free pricing; adapters use conservative paid/unknown labels.

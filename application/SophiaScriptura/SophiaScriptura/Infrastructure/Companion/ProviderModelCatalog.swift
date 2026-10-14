@@ -65,6 +65,8 @@ enum ProviderModelCatalog {
             return options([("meta/llama-3.1-8b-instruct", "Llama 3.1 8B Instruct", false)])
         case "github":
             return options([("openai/gpt-4o", "GPT-4o (GitHub Models)", false)])
+        case "qwen-cn", "qwen-intl":
+            return qwenCuratedModels()
         case "huggingface":
             return []
         case "mock":
@@ -148,9 +150,22 @@ enum ProviderModelCatalog {
             return id.hasPrefix("open-mistral") || id.contains("free")
         case "nvidia":
             return id.contains("free")
+        case "qwen-cn", "qwen-intl":
+            return false
         default:
             return false
         }
+    }
+
+    private static func qwenCuratedModels() -> [CompanionModelOption] {
+        options([
+            ("qwen-flash", "Qwen Flash", false),
+            ("qwen-turbo", "Qwen Turbo", false),
+            ("qwen-plus", "Qwen Plus", false),
+            ("qwen-max", "Qwen Max", false),
+            ("qwen2.5-72b-instruct", "Qwen 2.5 72B Instruct", false),
+            ("qwen2.5-32b-instruct", "Qwen 2.5 32B Instruct", false)
+        ])
     }
 
     private static func options(_ triples: [(String, String, Bool)]) -> [CompanionModelOption] {

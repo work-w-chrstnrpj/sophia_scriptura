@@ -8,6 +8,9 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-041](SP-041-sophia-mcp-bridge.md) | draft; planning complete; implementation unselected | Paired MCP bridge: scoped reads, reviewed writes and per-client compatibility gates |
+| [SP-042](SP-042-selected-handwriting-to-text.md) | draft; planning complete; implementation unselected | Local box/lasso ink transcription, editable review and safe typed insertion |
+| [SP-043](SP-043-lasso-handwriting-sophy-enhancement.md) | draft; planning complete; implementation unselected | Reviewed handwriting transcription → Sophy enhancement → Copy/Insert, retaining ink |
 | [SP-040](SP-040-folder-drag-and-journal-prayer-presentation.md) | implemented; simulator verified; physical acceptance pending | Folder drag/reparent, Journal/Prayer presentation and Page status |
 | [SP-033](SP-033-v100-multi-source-translation-release.md) | draft; v1.0.0 planning | v1.0.0 multi-source translation release |
 | [SP-034](SP-034-translation-source-contracts.md) | draft; v1.0.0 planning | Source contracts and backward-compatible translation routing |
@@ -53,7 +56,7 @@ Milestone ordering and closure evidence live in the
 
 See [How we develop Sophia](../docs/guidelines/ai-structure-guidelines.md).
 The M0–M9 baseline is closed. SP-023 is the owner-selected post-baseline follow-up.
-Other new work requires owner selection.
+SP-041–043 are owner-requested planning tickets, not selected implementation. Recommended order: SP-042 Canvas transcription → SP-043 Canvas enhancement → SP-041 MCP read-only bridge; later surfaces/write/remote stages have explicit gates. Other new work requires owner selection.
 
 ## Readiness and completion
 

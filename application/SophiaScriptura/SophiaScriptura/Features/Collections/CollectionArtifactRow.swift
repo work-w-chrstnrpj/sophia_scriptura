@@ -16,7 +16,8 @@ struct CollectionArtifactRow: View {
     var move: () -> Void = {}
     var assign: () -> Void = {}
     var remove: () -> Void = {}
-    var deletePassage: () -> Void = {}
+    var deleteArtifact: () -> Void = {}
+    var archiveNote: (() -> Void)? = nil
     var notes: NotesSession? = nil
     var onJournalField: ((JournalFieldSheet) -> Void)? = nil
     var cards = false
@@ -29,7 +30,22 @@ struct CollectionArtifactRow: View {
         switch artifact.kind {
         case .gleaning: return "Delete Gleaning"
         case .link: return "Delete Link"
+        case .note: return "Delete Note"
+        case .conversation: return "Delete Conversation"
         default: return "Delete Bookmark"
+        }
+    }
+
+    private var canDeleteArtifact: Bool {
+        switch artifact.kind {
+        case .bookmark, .gleaning, .link, .conversation:
+            return true
+        case .note:
+            guard let notes,
+                  let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) else { return false }
+            return !notes.isLocked(note) && notes.collections?.concealsNote(note.id) != true
+        default:
+            return false
         }
     }
 
@@ -49,16 +65,20 @@ struct CollectionArtifactRow: View {
     }
 
     var body: some View {
-        Group {
-            if cards, artifact.kind == .note, let notes,
-               let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) {
-                NoteLibraryCard(note: note, locked: notes.isLocked(note), isActive: noteCardsActive, open: open)
-            } else {
-                standardRecord
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if cards, artifact.kind == .note, let notes,
+                   let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) {
+                    NoteLibraryCard(note: note, locked: notes.isLocked(note), isActive: noteCardsActive, open: open)
+                } else {
+                    standardRecord
+                }
             }
+            .accessibilityIdentifier("collections.open.\(artifact.title)")
+            .contextMenu { actions }
+            // Kept outside the record's identifier and context menu so it stays a distinct, tappable control.
+            artifactActionsMenu
         }
-        .accessibilityIdentifier("collections.open.\(artifact.title)")
-        .contextMenu { actions }
     }
 
     private var standardRecord: some View {
@@ -115,7 +135,7 @@ struct CollectionArtifactRow: View {
                 }
             }
             .padding(.leading, 14)
-            .padding(.trailing, 14)
+            .padding(.trailing, 44)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: cards ? Self.cardHeight : Self.listHeight)
@@ -126,30 +146,22 @@ struct CollectionArtifactRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            if placement != .subfolder && (isPassage || artifact.kind == .link) {
-                Button(role: .destructive, action: deletePassage) {
-                    Label(deleteTitle, systemImage: "trash")
-                }
-                .tint(.red)
-            }
+    }
+
+    private var artifactActionsMenu: some View {
+        Menu {
+            actions
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color(theme.palette.secondary))
+                .padding(10)
+                .contentShape(Rectangle())
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            switch placement {
-            case .unfiled:
-                Button(action: assign) { Label("Add to Collection", systemImage: "folder.badge.plus") }
-                    .tint(Color(theme.palette.accent))
-            case .folder:
-                Button(action: move) { Label("Move", systemImage: "folder") }
-                    .tint(Color(theme.palette.accent))
-                Button(action: assign) { Label("Add to…", systemImage: "folder.badge.plus") }
-                    .tint(.orange)
-                Button(action: remove) { Label("Remove", systemImage: "minus.circle") }
-                    .tint(.gray)
-            case .subfolder:
-                EmptyView()
-            }
-        }
+        .menuStyle(.borderlessButton)
+        .accessibilityLabel("Item actions")
+        .accessibilityIdentifier("collections.artifact.menu.\(artifact.id.uuidString)")
     }
 
     @ViewBuilder
@@ -166,13 +178,18 @@ struct CollectionArtifactRow: View {
             Button("Add to Collection…", systemImage: "folder.badge.plus", action: assign)
         case .folder:
             Button("Move to…", systemImage: "folder", action: move)
+                .accessibilityIdentifier("collections.artifact.move")
             Button("Add to Another Collection…", systemImage: "folder.badge.plus", action: assign)
             Divider()
             Button("Remove from This Collection", systemImage: "minus.circle", action: remove)
         }
-        if placement != .subfolder && (isPassage || artifact.kind == .link) {
+        if let archiveNote, artifact.kind == .note {
+            Button("Archive note", systemImage: "archivebox", action: archiveNote)
+        }
+        if placement != .subfolder, canDeleteArtifact {
             Divider()
-            Button(deleteTitle, systemImage: "trash", role: .destructive, action: deletePassage)
+            Button(deleteTitle, systemImage: "trash", role: .destructive, action: deleteArtifact)
+                .accessibilityIdentifier("collections.artifact.delete")
         }
     }
 }

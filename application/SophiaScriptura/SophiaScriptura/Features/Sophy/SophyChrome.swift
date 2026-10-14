@@ -220,7 +220,7 @@ struct SophyChrome: View {
             if sophy.composer.hasPrefix("/") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
-                        ForEach(["/folders", "/bible-tree", "/reminder", "/activity", "/quiz", "/contemplate", "/find", "/insights", "/chat", "/music", "/enhance", "/help"].filter { sophy.composer.trimmingCharacters(in: .whitespaces).isEmpty || $0.hasPrefix(sophy.composer.trimmingCharacters(in: .whitespaces)) || sophy.composer.contains(" ") }, id: \.self) { command in
+                        ForEach(SophySlashCommandCatalog.composerSuggestions.filter { sophy.composer.trimmingCharacters(in: .whitespaces).isEmpty || $0.hasPrefix(sophy.composer.trimmingCharacters(in: .whitespaces)) || sophy.composer.contains(" ") }, id: \.self) { command in
                             Button(command) { sophy.composer = command + " " }
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color(theme.palette.accent))

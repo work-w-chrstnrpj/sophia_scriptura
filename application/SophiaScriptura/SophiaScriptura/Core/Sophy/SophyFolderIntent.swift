@@ -4,6 +4,7 @@ enum SophyFolderIntentParser {
     private static let createPattern = #"(?i)\b(create|make|add|new)\b.{0,40}\bfolders?\b"#
 
     static func parse(_ text: String) -> [SophyFolderNodeDraft]? {
+        if SophyBibleTree.requestsHierarchy(text) { return nil }
         guard text.range(of: createPattern, options: .regularExpression) != nil else { return nil }
         guard let name = extractName(from: text) else { return nil }
         return nodes(named: name)

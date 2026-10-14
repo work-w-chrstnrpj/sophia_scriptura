@@ -20,6 +20,10 @@ struct CollectionDetailView: View {
     var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
+    var trashConversation: (UUID) -> Void = { _ in }
+    var books: [ScriptureBook] = []
+
+    @AppStorage("collections.subfolder.arrange") private var arrangeStore = ""
 
     @AppStorage("collections.material.cardFolders") private var cardFolderIDs = ""
     private var cards: Bool { cardFolderIDs.split(separator: ",").contains(Substring(collectionID.uuidString)) }
@@ -50,7 +54,7 @@ struct CollectionDetailView: View {
     private var isUnfiled: Bool { currentCollection?.isUnfiled == true }
 
     private func displayAccent(for collection: StudyCollection) -> CollectionAccent {
-        store.isLocked(collection.id) ? .stone : collection.isUnfiled ? .noFolder : collection.accent
+        store.isLocked(collection.id) ? .stone : collection.accent
     }
 
     private var visibleArtifacts: [CollectionArtifact] {
@@ -193,12 +197,12 @@ struct CollectionDetailView: View {
                 .overlay {
                     if let item = pendingDeletion {
                         StudyCenteredConfirmationOverlay(
-                            title: "Delete \(item.title)?",
-                            message: "It is removed from every collection.",
+                            title: deleteArtifactTitle(item),
+                            message: deleteArtifactMessage(item),
                             confirmLabel: "Delete",
+                            confirmAccessibilityIdentifier: "collections.delete.confirm",
                             onConfirm: {
-                                if item.kind == .link { store.deleteLink(item.id) }
-                                else { store.deletePassage(item.id) }
+                                confirmDeleteArtifact(item)
                                 pendingDeletion = nil
                             },
                             onCancel: { pendingDeletion = nil }
@@ -232,6 +236,8 @@ struct CollectionDetailView: View {
                     Button("Delete Collection", systemImage: "trash", role: .destructive) {
                         showingDeleteAlert = true
                     }
+                } else {
+                    Button("Edit No Folder Color…", systemImage: "paintpalette") { showingEditor = true }
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -297,12 +303,23 @@ struct CollectionDetailView: View {
 
     @ViewBuilder
     private func subfolders(_ collection: StudyCollection) -> some View {
-        let children = store.children(of: collectionID)
-            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let source = store.children(of: collectionID)
+        let children = arrangedSubfolders(source, parent: collection)
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                sectionTitle("Subfolders")
+                VStack(alignment: .leading, spacing: 2) {
+                    sectionTitle("Subfolders")
+                    if subfolderArrange(for: collection, children: source) == .smart {
+                        Text("Smart Order")
+                            .font(.caption)
+                            .foregroundStyle(Color(theme.palette.secondary))
+                            .accessibilityIdentifier("collections.subfolder.smartOrder")
+                    }
+                }
                 Spacer()
+                if !source.isEmpty {
+                    subfolderArrangeMenu(collection, children: source)
+                }
                 Button {
                     showingSubfolderEditor = true
                 } label: {
@@ -329,7 +346,9 @@ struct CollectionDetailView: View {
                                 annotationSnapshot: annotationSnapshot,
                                 bookTitleForCode: bookTitleForCode,
                                 openCompanion: openCompanion,
-                                createConversation: createConversation
+                                createConversation: createConversation,
+                                trashConversation: trashConversation,
+                                books: books
                             )
                         } label: {
                             subfolderTile(child)
@@ -436,18 +455,12 @@ struct CollectionDetailView: View {
                 }
                 .accessibilityIdentifier("collections.material.cards")
             } else {
-                List {
+                LazyVStack(spacing: 8) {
                     ForEach(visibleArtifacts) { artifact in
                         row(artifact, in: collection)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
                     }
                 }
                 .accessibilityIdentifier("collections.material.list")
-                .listStyle(.plain)
-                .scrollDisabled(true)
-                .frame(height: CGFloat(visibleArtifacts.count) * 88 + 8)
             }
         }
     }
@@ -463,7 +476,7 @@ struct CollectionDetailView: View {
         }
         return CollectionArtifactRow(
             artifact: artifact,
-            accent: collection.isUnfiled ? .noFolder : (placement == .subfolder ? store.accent(for: artifact.id) : collection.accent),
+            accent: placement == .subfolder ? store.accent(for: artifact.id) : collection.accent,
             placement: placement,
             open: { open(artifact) },
             move: {
@@ -475,7 +488,8 @@ struct CollectionDetailView: View {
                 organizing = Organize(artifact: artifact, mode: .assign)
             },
             remove: { store.removeArtifact(artifact.id, from: collectionID) },
-            deletePassage: { pendingDeletion = artifact },
+            deleteArtifact: { pendingDeletion = artifact },
+            archiveNote: artifact.kind == .note ? { notes.archive(artifact.id) } : nil,
             notes: notes,
             onJournalField: { field in
                 libraryJournalField = LibraryJournalFieldContext(noteID: artifact.id, field: field)
@@ -514,10 +528,107 @@ struct CollectionDetailView: View {
         )
     }
 
+    private func savedArrange(for id: UUID) -> CollectionSubfolderArrange {
+        let prefix = id.uuidString + "="
+        guard let entry = arrangeStore.split(separator: ",").first(where: { $0.hasPrefix(prefix) }) else { return .automatic }
+        return CollectionSubfolderArrange.stored(String(entry.dropFirst(prefix.count)))
+    }
+
+    private func setArrange(_ arrange: CollectionSubfolderArrange, for id: UUID) {
+        var entries = arrangeStore.split(separator: ",").map(String.init).filter { !$0.hasPrefix(id.uuidString + "=") }
+        if arrange != .automatic {
+            entries.append("\(id.uuidString)=\(arrange.rawValue)")
+        }
+        arrangeStore = entries.sorted().joined(separator: ",")
+    }
+
+    private func subfolderArrange(for collection: StudyCollection, children: [StudyCollection]) -> CollectionSubfolderArrange {
+        let names = children.map(\.name)
+        switch savedArrange(for: collection.id) {
+        case .automatic:
+            if BibleCollectionOrder.prefersScriptureOrder(parentName: collection.name, childNames: names, books: books) { return .smart }
+            if BibleCollectionOrder.prefersNumberOrder(names) { return .smart }
+            return .name
+        case .smart: return .smart
+        case .name: return .name
+        case .modified: return .modified
+        }
+    }
+
+    private func arrangedSubfolders(_ children: [StudyCollection], parent: StudyCollection) -> [StudyCollection] {
+        switch subfolderArrange(for: parent, children: children) {
+        case .smart:
+            let forced = savedArrange(for: parent.id) == .smart
+            let scripture = forced || BibleCollectionOrder.prefersScriptureOrder(
+                parentName: parent.name,
+                childNames: children.map(\.name),
+                books: books
+            )
+            return BibleCollectionOrder.sorted(children, name: \.name, books: books, scripture: scripture)
+        case .modified:
+            return children.sorted { $0.modifiedAt > $1.modifiedAt }
+        case .name, .automatic:
+            return children.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
+
+    private func subfolderArrangeMenu(_ collection: StudyCollection, children: [StudyCollection]) -> some View {
+        let selected = savedArrange(for: collection.id)
+        return Menu {
+            ForEach(CollectionSubfolderArrange.allCases) { option in
+                Button {
+                    setArrange(option, for: collection.id)
+                } label: {
+                    if option == selected {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+                .accessibilityIdentifier("collections.subfolder.arrange.\(option.rawValue)")
+            }
+        } label: {
+            Label("Arrange", systemImage: "arrow.up.arrow.down")
+        }
+        .buttonStyle(CollectionSecondaryButtonStyle())
+        .accessibilityLabel("Arrange subfolders")
+        .accessibilityIdentifier("collections.subfolder.arrange")
+        .disabled(children.isEmpty)
+    }
+
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.system(.title3, design: .serif).weight(.semibold))
             .foregroundStyle(Color(theme.palette.ink))
+    }
+
+    private func deleteArtifactTitle(_ item: CollectionArtifact) -> String {
+        switch item.kind {
+        case .note: return "Move \"\(item.title)\" to Trash?"
+        case .conversation: return "Delete \"\(item.title)\"?"
+        default: return "Delete \(item.title)?"
+        }
+    }
+
+    private func deleteArtifactMessage(_ item: CollectionArtifact) -> String {
+        switch item.kind {
+        case .note:
+            return "Trash keeps the note for \(TrashRetention.dayCount) days. Restore it from Settings → Trash, or delete it permanently there."
+        case .conversation:
+            return "The conversation moves to Trash in Companion and is removed from Collections. Restore it from Settings → Trash."
+        default:
+            return "It is removed from every collection."
+        }
+    }
+
+    private func confirmDeleteArtifact(_ item: CollectionArtifact) {
+        switch item.kind {
+        case .link: store.deleteLink(item.id)
+        case .bookmark, .gleaning: store.deletePassage(item.id)
+        case .conversation: trashConversation(item.id)
+        case .note: notes.moveToTrash(item.id)
+        default: break
+        }
     }
 
     private func open(_ artifact: CollectionArtifact) {

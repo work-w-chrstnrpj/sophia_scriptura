@@ -102,7 +102,8 @@ struct RootTabView: View {
                         annotationSnapshot: annotations.loaded ? annotations.snapshot : nil,
                         bookTitleForCode: { code in reader.books.first { $0.id == code }?.title ?? code },
                         openCompanion: { selection = .companion; chrome.reveal() },
-                        createConversation: { companion.createConversation() }
+                        createConversation: { companion.createConversation() },
+                        trashConversation: { companion.moveConversationToTrash($0) }
                     ).environment(\.noteCardsActive, selection == .collections).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)

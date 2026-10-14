@@ -110,7 +110,11 @@ struct CollectionEditorSheet: View {
 
     private func commit() {
         if let editingID {
-            guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent, icon: icon) else { return }
+            if store.collection(id: editingID)?.isUnfiled == true {
+                guard store.updateUnfiledAccent(accent) else { return }
+            } else {
+                guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent, icon: icon) else { return }
+            }
         } else {
             guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent, icon: icon) != nil else { return }
         }

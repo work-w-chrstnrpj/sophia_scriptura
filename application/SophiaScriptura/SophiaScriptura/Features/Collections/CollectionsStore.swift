@@ -15,6 +15,7 @@ final class CollectionsStore: ObservableObject {
     var protection = ItemProtectionSession.shared
     private(set) var recoveredOlderGeneration = false
     private var revision = 0
+    private var unfiledAccent: CollectionAccent = .noFolder
     @Published var sophyOpenCollectionID: UUID?
     private var sophyCommitInFlight = false
     private var linkedNoteIDs = Set<UUID>()
@@ -155,7 +156,7 @@ final class CollectionsStore: ObservableObject {
     func allowsNoteOpening(_ noteID: UUID, from collectionID: UUID? = nil) -> Bool {
         guard let collectionID else { return !concealsNote(noteID) }
         guard !isLocked(collectionID), let folder = collection(id: collectionID), (folder.isUnfiled || folder.isActiveInLibrary) else { return false }
-        if folder.isUnfiled { return self.collectionIDs(containing: noteID).isEmpty }
+        if folder.isUnfiled { return !concealsNote(noteID) && !hasFiledMembership(noteID) }
         return artifactIDs(for: collectionID, includingDescendants: true).contains(noteID)
     }
 
@@ -224,6 +225,17 @@ final class CollectionsStore: ObservableObject {
 
     func children(of collectionID: UUID?) -> [StudyCollection] {
         collections.filter { $0.parentID == collectionID && $0.isActiveInLibrary }
+    }
+
+    private func arrangedForDisplay(_ folders: [StudyCollection], parentName: String) -> [StudyCollection] {
+        let names = folders.map(\.name)
+        if BibleCollectionOrder.prefersScriptureOrder(parentName: parentName, childNames: names) {
+            return BibleCollectionOrder.sorted(folders, name: \.name)
+        }
+        if BibleCollectionOrder.prefersNumberOrder(names) {
+            return BibleCollectionOrder.sorted(folders, name: \.name, scripture: false)
+        }
+        return folders.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func membershipCount(for collectionID: UUID, includingDescendants: Bool = false, notes: [NoteDocument]? = nil, annotationSnapshot: AnnotationSnapshot? = nil) -> Int {
@@ -373,6 +385,17 @@ final class CollectionsStore: ObservableObject {
     }
 
     @discardableResult
+    func updateUnfiledAccent(_ accent: CollectionAccent) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+        guard let index = collections.firstIndex(where: \.isUnfiled) else { return false }
+        unfiledAccent = accent
+        collections[index].accent = accent
+        collections[index].modifiedAt = Date()
+        enqueueWrite()
+        return true
+    }
+
+    @discardableResult
     func updateCollection(id: UUID, name: String, detail: String, accent: CollectionAccent, icon: CollectionIcon? = nil) -> Bool {
         guard !rejectWhileSophyCommits() else { return false }
 
@@ -454,10 +477,9 @@ final class CollectionsStore: ObservableObject {
     func outline() -> [CollectionOutlineEntry] {
         var result: [CollectionOutlineEntry] = []
         func visit(_ parent: UUID?, depth: Int) {
-            let level = collections
-                .filter { $0.parentID == parent && !$0.isUnfiled }
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            for folder in level {
+            let level = collections.filter { $0.parentID == parent && !$0.isUnfiled }
+            let ordered = arrangedForDisplay(level, parentName: parent.flatMap { collection(id: $0)?.name } ?? "")
+            for folder in ordered {
                 result.append(CollectionOutlineEntry(collection: folder, depth: depth))
                 visit(folder.id, depth: depth + 1)
             }
@@ -493,9 +515,10 @@ final class CollectionsStore: ObservableObject {
         var result: [CollectionOutlineEntry] = []
         func visit(_ folder: StudyCollection, depth: Int) {
             result.append(CollectionOutlineEntry(collection: folder, depth: depth))
-            let children = collections
-                .filter { $0.parentID == folder.id && !$0.isUnfiled && $0.isActiveInLibrary }
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            let children = arrangedForDisplay(
+                collections.filter { $0.parentID == folder.id && !$0.isUnfiled && $0.isActiveInLibrary },
+                parentName: folder.name
+            )
             for child in children { visit(child, depth: depth + 1) }
         }
         for root in orderedRoots { visit(root, depth: 0) }
@@ -880,9 +903,14 @@ final class CollectionsStore: ObservableObject {
         enqueueWrite()
     }
 
+    private func hasFiledMembership(_ artifactID: UUID) -> Bool {
+        memberships.contains { membership in
+            membership.artifactID == artifactID && collection(id: membership.collectionID)?.isTrashed != true
+        }
+    }
+
     private func unfiledIDs(in material: [CollectionArtifact]) -> Set<UUID> {
-        let filed = Set(memberships.map(\.artifactID))
-        return Set(material.map(\.id)).subtracting(filed)
+        Set(material.filter { !hasFiledMembership($0.id) }.map(\.id))
     }
 
     private func noteAccessAllows(_ id: UUID) -> Bool {
@@ -919,7 +947,8 @@ final class CollectionsStore: ObservableObject {
         }
         memberships = Set(snapshot.memberships.filter { $0.collectionID != StudyCollection.unfiledID })
         var folders = snapshot.collections.filter { !$0.isUnfiled && $0.id != StudyCollection.unfiledID }
-        folders.insert(.unfiled(accent: .noFolder), at: 0)
+        unfiledAccent = snapshot.unfiledAccent
+        folders.insert(.unfiled(accent: unfiledAccent), at: 0)
         collections = folders
     }
 
@@ -961,7 +990,7 @@ final class CollectionsStore: ObservableObject {
             links: links,
             conversations: conversations,
             memberships: Array(memberships),
-            unfiledAccent: .noFolder
+            unfiledAccent: unfiledAccent
         )
     }
 

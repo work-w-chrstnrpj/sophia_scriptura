@@ -43,6 +43,31 @@ final class CollectionsUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.open.\(prefix)")).firstMatch
     }
 
+    private func itemMenu(in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.artifact.menu.")).firstMatch
+    }
+
+    private func saveBookmarkFromFirstVerse(_ app: XCUIApplication) {
+        let verse = app.links.firstMatch
+        XCTAssertTrue(verse.waitForExistence(timeout: 10))
+        verse.tap()
+        XCTAssertTrue(app.navigationBars["Verse hub"].waitForExistence(timeout: 5))
+        app.buttons["scripture.bookmark"].tap()
+        XCTAssertTrue(app.navigationBars["New Bookmark"].waitForExistence(timeout: 5))
+        app.buttons["collections.save.confirm"].tap()
+    }
+
+    private func snap(_ name: String, _ app: XCUIApplication) {
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = name; shot.lifetime = .keepAlways; add(shot)
+    }
+
+    private func confirmCenteredDelete(_ app: XCUIApplication) {
+        let confirm = app.buttons["collections.delete.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Delete must show the confirmation")
+        confirm.tap()
+    }
+
     func testDragRootAndNestedFoldersPersists() {
         let app = launch()
         openCollections(app)
@@ -104,7 +129,7 @@ final class CollectionsUITests: XCTestCase {
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Uniform collection card layout"; capture.lifetime = .keepAlways; add(capture)
         app.buttons["collections.filter"].tap(); app.buttons["List View"].tap()
-        XCTAssertEqual(material.frame.height, 88, accuracy: 1) // 80pt record plus 4pt top/bottom list insets
+        XCTAssertEqual(material.frame.height, 80, accuracy: 1)
     }
 
     func testFolderColorNestingAndDeletionReturnsItemsToNoFolder() {
@@ -120,9 +145,13 @@ final class CollectionsUITests: XCTestCase {
         let childName = app.textFields["Name"]
         XCTAssertTrue(childName.waitForExistence(timeout: 5))
         childName.tap()
-        childName.typeText("Study Child")
+        childName.typeText("Study Child\n")
         let plum = app.buttons["collections.color.plum"]
-        for _ in 0..<6 where !plum.isHittable { app.swipeUp() }
+        let sheetBar = app.navigationBars["New Subfolder"]
+        for _ in 0..<8 where !(plum.exists && plum.isHittable) {
+            sheetBar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 8))
+                .press(forDuration: 0.05, thenDragTo: sheetBar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 3)))
+        }
         XCTAssertTrue(plum.waitForExistence(timeout: 5))
         plum.tap()
         app.buttons["Create"].tap()
@@ -143,8 +172,11 @@ final class CollectionsUITests: XCTestCase {
 
         app.buttons["collections.folder.No Folder"].tap()
         app.buttons["Collection actions"].tap()
-        XCTAssertTrue(app.buttons["Change Color"].waitForExistence(timeout: 2))
+        let editColor = app.buttons["Edit No Folder Color…"]
+        XCTAssertTrue(editColor.waitForExistence(timeout: 2))
         XCTAssertFalse(app.buttons["Delete Collection"].exists)
+        editColor.tap()
+        XCTAssertTrue(app.navigationBars["No Folder Color"].waitForExistence(timeout: 5))
     }
 
     func testUnfiledNoteCanBeFiledAndReturnsWhenItsFolderIsDeleted() {
@@ -179,7 +211,15 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["collections.folder.Grace"].tap()
         app.buttons["Collection actions"].tap()
         app.buttons["Delete Collection"].tap()
-        app.alerts.buttons["Delete Collection"].tap()
+        let confirmDelete = app.buttons["Delete Collection"]
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5))
+        snap("grace confirm", app)
+        confirmDelete.tap()
+        snap("grace after confirm", app)
+        XCTAssertTrue(app.buttons["collections.folder.No Folder"].waitForExistence(timeout: 5))
+        let grace = app.buttons["collections.folder.Grace"]
+        let graceGone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !grace.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [graceGone], timeout: 5), .completed, "Delete Collection must remove the folder")
         app.buttons["collections.folder.No Folder"].tap()
         XCTAssertTrue(item("Untitled Note", in: app).waitForExistence(timeout: 5))
     }
@@ -207,8 +247,10 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["collections.folder.Creation"].tap()
         let bookmark = item("Genesis 1:1", in: app)
         XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
-        bookmark.swipeLeft()
-        app.buttons["Move"].tap()
+        let menu = itemMenu(in: app)
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.tap()
+        app.buttons["collections.artifact.move"].tap()
         XCTAssertTrue(app.navigationBars["Move"].waitForExistence(timeout: 5))
         app.buttons["collections.chooser.new"].tap()
         let moveName = app.textFields["collections.chooser.newName"]
@@ -266,5 +308,107 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["collections.insight.save"].tap()
         XCTAssertEqual(app.staticTexts["collections.insight.text"].label, "Light comes first.")
         XCTAssertTrue(app.buttons["collections.insight.edit"].exists)
+    }
+
+    func testDeleteBookmarkFromNoFolderUsingItemMenu() {
+        let app = launch()
+        saveBookmarkFromFirstVerse(app)
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let bookmark = item("Genesis 1:1", in: app)
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+
+        let menu = itemMenu(in: app)
+        XCTAssertTrue(menu.waitForExistence(timeout: 3), "Each item needs its own actions menu")
+        XCTAssertTrue(menu.isHittable)
+        menu.tap()
+        let delete = app.buttons["collections.artifact.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+        confirmCenteredDelete(app)
+        XCTAssertFalse(bookmark.waitForExistence(timeout: 3))
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20))
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        XCTAssertFalse(item("Genesis 1:1", in: app).waitForExistence(timeout: 3), "Deletion must persist across relaunch")
+    }
+
+    func testDeleteBookmarkInsideFolderUsingLongPress() {
+        let app = launch()
+        saveBookmarkFromFirstVerse(app)
+        openCollections(app)
+        createCollection("Hold Delete", in: app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let bookmark = item("Genesis 1:1", in: app)
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+        back(app)
+
+        app.buttons["collections.folder.Hold Delete"].tap()
+        app.buttons["collections.addMaterial"].tap()
+        let pick = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "collections.pick.Genesis 1:1")).firstMatch
+        XCTAssertTrue(pick.waitForExistence(timeout: 5))
+        pick.tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+
+        bookmark.press(forDuration: 1.2)
+        let delete = app.buttons["collections.artifact.delete"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "Long-press must offer Delete")
+        delete.tap()
+        confirmCenteredDelete(app)
+        XCTAssertFalse(bookmark.waitForExistence(timeout: 3))
+        back(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        XCTAssertFalse(item("Genesis 1:1", in: app).waitForExistence(timeout: 2), "A deleted bookmark must not fall back to No Folder")
+    }
+
+    func testDeleteNoteFromNoFolderMovesItToTrash() {
+        let app = launch()
+        showTab("tab.notes", in: app)
+        XCTAssertTrue(app.buttons["notes.newNotes"].waitForExistence(timeout: 10))
+        app.buttons["notes.newNotes"].tap()
+        app.buttons["notes.new.page"].tap()
+        app.buttons["notes.new.create"].tap()
+        let close = app.navigationBars.buttons.element(boundBy: 0)
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let note = item("Untitled Note", in: app)
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        let menu = itemMenu(in: app)
+        XCTAssertTrue(menu.waitForExistence(timeout: 3))
+        menu.tap()
+        app.buttons["collections.artifact.delete"].tap()
+        confirmCenteredDelete(app)
+        XCTAssertFalse(note.waitForExistence(timeout: 3))
+    }
+
+    func testDeleteFolderFromLibraryUsingLongPress() {
+        let app = launch()
+        openCollections(app)
+        createCollection("Remove Me", in: app)
+        let folder = app.buttons["collections.folder.Remove Me"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        folder.press(forDuration: 1.2)
+        let delete = app.buttons["Delete Collection"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "Long-press on a folder must offer Delete Collection")
+        snap("library menu", app)
+        delete.tap()
+        let confirm = app.buttons["Delete Collection"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        snap("library confirm", app)
+        confirm.tap()
+        snap("library after confirm", app)
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !folder.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20))
+        openCollections(app)
+        XCTAssertFalse(folder.waitForExistence(timeout: 2), "Folder deletion must persist")
     }
 }

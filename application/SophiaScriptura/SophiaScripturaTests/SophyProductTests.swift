@@ -69,7 +69,13 @@ final class SophyProductTests: XCTestCase {
         XCTAssertTrue(ScriptureVerseText.shouldInsertSpace(after: ";", before: "f"))
         let folder = SophyFolderIntentParser.parse("Create a folder called Prayer")
         XCTAssertEqual(folder?.first?.name, "Prayer")
-        XCTAssertTrue(SophySlashCommandStyle.showsHighlightedOverlay(for: "/folders Bible"))
+        let bibleRequest = "Create me folder in collections called Bible, add subfolder called New & Old Testament then, for each subfolder, populate it with subfolders of books associated to it, only add the 66 books"
+        XCTAssertTrue(SophyBibleTree.requestsHierarchy(bibleRequest))
+        XCTAssertNil(SophyFolderIntentParser.parse(bibleRequest))
+        XCTAssertEqual(SophyCommandParser.slashCommand(in: "/create-collection-folder Prayer")?.command, .folders)
+        XCTAssertEqual(SophyCommandParser.slashCommand(in: "/create-bible-collection-tree")?.command, .bibleTree)
+        XCTAssertTrue(SophySlashCommandCatalog.helpMessage.contains("/create-bible-collection-tree"))
+        XCTAssertTrue(SophySlashCommandStyle.showsHighlightedOverlay(for: "/create-collection-folder Bible"))
         XCTAssertFalse(SophySlashCommandStyle.showsHighlightedOverlay(for: "Create a folder"))
         XCTAssertEqual(SophyCommandParser.slashCommand(in: "/search grace")?.command, .find)
         XCTAssertEqual(SophyCommandParser.slashCommand(in: "/not-a-command")?.command, .unknown("not-a-command"))
@@ -106,8 +112,9 @@ final class SophyCommandTests: XCTestCase {
             ScriptureBook(id: "GEN", title: "Genesis", testament: "OT", order: 1, chapterCount: 50),
             ScriptureBook(id: "MAT", title: "Matthew", testament: "NT", order: 40, chapterCount: 28)
         ]
-        await sophy.send("/bible-tree", companion: companion, collections: collections, notes: notes, activity: activity, music: music, books: books)
+        await sophy.send("/create-bible-collection-tree", companion: companion, collections: collections, notes: notes, activity: activity, music: music, books: books)
         XCTAssertEqual(sophy.phase, .previewing)
+        XCTAssertEqual(sophy.previewLines.count, 5)
         XCTAssertEqual(collections.collections.filter { !$0.isUnfiled }.count, 0)
         sophy.cancelPreview()
         XCTAssertEqual(sophy.phase, .completed)

@@ -383,26 +383,26 @@ final class SophySession: ObservableObject {
             performScriptureNavigation(navigation)
             return
         }
+        if SophyBibleTree.requestsHierarchy(trimmed), !books.isEmpty {
+            append("You", trimmed)
+            refreshDestinations(collections: collections, notes: notes)
+            showPreview(message: "Review the Bible folder hierarchy and descriptions.", actions: [.createFolders(destinationHandle: nil, nodes: SophyBibleTree.folderDrafts(books: books))])
+            return
+        }
         if let folderNodes = SophyFolderIntentParser.parse(trimmed) {
             append("You", trimmed)
             refreshDestinations(collections: collections, notes: notes)
             showPreview(message: "Review the folder before saving.", actions: [.createFolders(destinationHandle: nil, nodes: folderNodes)])
             return
         }
-        if trimmed.caseInsensitiveCompare("Create a Bible folder with books grouped by Testament") == .orderedSame, !books.isEmpty {
-            append("You", trimmed)
-            refreshDestinations(collections: collections, notes: notes)
-            showPreview(message: "Review the Bible folder hierarchy and descriptions.", actions: [.createFolders(destinationHandle: nil, nodes: SophyBibleTree.folderDrafts(books: books))])
-            return
-        }
         if let parsed = SophyCommandParser.slashCommand(in: trimmed) {
             switch parsed.command {
             case .unknown:
                 append("You", trimmed)
-                append("Sophy", "Unknown command. Use /help for available commands."); phase = .completed; return
+                append("Sophy", "Unknown command. Send /help for what each slash command does."); phase = .completed; return
             case .help:
                 append("You", trimmed)
-                append("Sophy", "Use /folders, /bible-tree, /reminder, /activity, /music, /quiz, /contemplate, /find, /insights, /chat or /enhance. You can also ask me to open a book or passage in Scripture.")
+                append("Sophy", SophySlashCommandCatalog.helpMessage)
                 phase = .completed; return
             case .newSession: newSession(); return
             case .history: historyOpen = true; return

@@ -8,7 +8,7 @@ struct CompanionProviderSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("API keys stay in the device Keychain. Sophia fetches models after you save a key. Hugging Face also accepts an exact model id, including a routing suffix such as :provider. A model list does not prove that the token can run that model, and Hugging Face models are not marked free.")
+                Text("API keys stay in the device Keychain. Sophia fetches models after you save a key. For Alibaba Qwen, use Qwen (China) with Beijing Model Studio keys and Qwen (International) with Singapore or other intl keys. Hugging Face also accepts an exact model id, including a routing suffix such as :provider. A model list does not prove that the token can run that model, and Hugging Face models are not marked free.")
                     .font(.footnote)
                     .foregroundStyle(Color(theme.palette.secondary))
             }

@@ -55,7 +55,7 @@ final class SophyUITests: XCTestCase {
         capture("Sophy welcome portrait", app: app)
         send("/help", app: app)
         XCTAssertTrue(app.staticTexts["You"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Use /folders")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "/create-bible-collection-tree")).firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["sophy.send"].isHittable)
         capture("Sophy message and composer", app: app)
         XCUIDevice.shared.orientation = .landscapeLeft

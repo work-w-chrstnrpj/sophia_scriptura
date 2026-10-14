@@ -5,6 +5,7 @@ struct StudyCenteredConfirmationOverlay: View {
     let title: String
     let message: String
     let confirmLabel: String
+    var confirmAccessibilityIdentifier: String? = nil
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -30,6 +31,7 @@ struct StudyCenteredConfirmationOverlay: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)
+                .accessibilityIdentifier(confirmAccessibilityIdentifier ?? confirmLabel)
                 Button("Cancel", action: onCancel)
                     .font(.body.weight(.medium))
                     .foregroundStyle(Color(theme.palette.ink))

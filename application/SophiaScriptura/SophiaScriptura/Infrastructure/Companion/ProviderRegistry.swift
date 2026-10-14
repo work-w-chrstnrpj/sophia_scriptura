@@ -18,7 +18,9 @@ struct ProviderRegistry: Sendable {
             OpenAICompatibleProviderAdapter.cerebras(),
             OpenAICompatibleProviderAdapter.groq(),
             OpenAICompatibleProviderAdapter.mistral(),
-            OpenAICompatibleProviderAdapter.huggingface()
+            OpenAICompatibleProviderAdapter.huggingface(),
+            OpenAICompatibleProviderAdapter.qwenChina(),
+            OpenAICompatibleProviderAdapter.qwenInternational()
         ])
     }
 

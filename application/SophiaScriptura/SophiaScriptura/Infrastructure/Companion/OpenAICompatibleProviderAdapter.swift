@@ -321,4 +321,50 @@ extension OpenAICompatibleProviderAdapter {
             return .transport("Hugging Face could not complete the request (HTTP \(status)).")
         }
     }
+
+    /// Alibaba Cloud Model Studio (DashScope) — China (Beijing) API keys.
+    static func qwenChina(session: URLSession = .shared) -> OpenAICompatibleProviderAdapter {
+        OpenAICompatibleProviderAdapter(
+            id: "qwen-cn",
+            displayName: "Qwen (China)",
+            chatCompletionsURL: URL(string: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")!,
+            validationGETURL: URL(string: "https://dashscope.aliyuncs.com/compatible-mode/v1/models")!,
+            session: session,
+            classifyStatus: Self.qwenStatus
+        )
+    }
+
+    /// Alibaba Cloud Model Studio (DashScope) — international region API keys.
+    static func qwenInternational(session: URLSession = .shared) -> OpenAICompatibleProviderAdapter {
+        OpenAICompatibleProviderAdapter(
+            id: "qwen-intl",
+            displayName: "Qwen (International)",
+            chatCompletionsURL: URL(string: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions")!,
+            validationGETURL: URL(string: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models")!,
+            session: session,
+            classifyStatus: Self.qwenStatus
+        )
+    }
+
+    static func qwenStatus(status: Int, body: Data) -> LLMProviderError {
+        let message = String(data: body, encoding: .utf8) ?? ""
+        switch status {
+        case 401:
+            if message.localizedCaseInsensitiveContains("incorrect api key")
+                || message.contains("invalid_api_key") {
+                return .refused(
+                    "That API key does not match this Qwen region. Use Qwen (China) for Beijing keys or Qwen (International) for Singapore and other intl keys."
+                )
+            }
+            return .invalidCredential
+        case 403:
+            return .refused("Enable the model in Alibaba Cloud Model Studio, or confirm your trial quota is still active.")
+        case 400, 404, 422:
+            return .refused("That Qwen model id is unavailable on this endpoint. Refresh models or pick another model.")
+        case 429:
+            return .rateLimited
+        default:
+            return .transport("Qwen could not complete the request (HTTP \(status)).")
+        }
+    }
 }

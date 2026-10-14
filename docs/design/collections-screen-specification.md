@@ -82,6 +82,15 @@ are no decorative button capsules or duplicated navigation titles.
   available locally. Results identify whether the match is a folder or an artifact.
 - **Sort** supports Name, Recently modified and Item count. Name sorting is locale-aware;
   date sorting uses the collection’s last membership or metadata change.
+- **Subfolder arrange** is separate from the library sort. **Smart Order** recognizes
+  patterns in folder names. Bible books and testaments follow reading order, including
+  common names such as “Psalm” and “I Samuel”. Other names use number-aware order, so
+  “Chapter 2” stays before “Chapter 10”. Automatic applies Smart Order when the parent is
+  Bible or a testament, when at least half of the children are recognized books, or when
+  a name contains a number. Otherwise folders stay in name order. The Arrange menu can
+  force Smart Order, Name, or Recently modified. A loaded edition’s book order wins over
+  the built-in 66-book sequence when a folder name matches that edition. Folders that are
+  not books stay after the books.
 - **Unfiled** shows artifacts eligible for membership that currently belong to no collection.
   It is a query, not a hidden collection and not a second copy of the artifacts.
 - **Recent** shows recently opened collections and does not silently reorder the owner’s
@@ -326,3 +335,7 @@ stamp sequence runs on card appearance and active-tab entry, cancels while hidde
 and respects Reduce Motion. Hosts retain their own selection, context actions and
 navigation. Fixed 176pt size and Collection list mode remain. Locked notes conceal
 previews and stamps in both hosts. No persistence or protection-policy changes.
+
+Trashed-folder memberships do not count as filing for No Folder display or note
+opening; inaccessible ancestry remains concealed. Delete Conversation moves the
+authoritative Companion record to Trash, preventing projection resurrection.

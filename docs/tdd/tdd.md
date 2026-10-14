@@ -1168,3 +1168,25 @@ appends question records with continued indexes, accumulating score/time in one
 session. Reviewing links and Activity imports update the existing session-linked
 record. Provider-backed repeated-round acceptance remains a physical/live-provider
 gate, separate from local regression and source publication.
+
+## Proposed study automation — SP-041–043 (not implemented)
+
+Owner requested detailed planning on 2026-10-13. These proposals extend the personal,
+offline-first app without changing the current runtime architecture or authorizing
+implementation. Target release is unassigned. Source remains implementation truth.
+
+- [SP-042 selected handwriting](../../tickets/SP-042-selected-handwriting-to-text.md): app-owned rectangle/lasso snapshot → selected-ink-only raster → local Vision recognition → editable review → explicit Copy/Insert. Canvas selection is the first checkpoint; Page/Journal/Prayer overlays and Scripture layer/layout coordinates require separate work. Original ink remains intact; no OCR cache/schema migration or cloud fallback by default. OCR accuracy on owner handwriting is a physical feasibility gate.
+- [SP-043 Sophy ink enhancement](../../tickets/SP-043-lasso-handwriting-sophy-enhancement.md): consumes the reviewed transcription through a tagged transient enhancement source, keeping existing typed-range semantics. Only reviewed text reaches the configured BYOK provider after explicit Generate and protected-source consent. Source/access/provider generation is checked at request, response and apply. Insert typed output through host commands with undo; never invent an NSRange for ink or delete it automatically.
+- [SP-041 MCP bridge](../../tickets/SP-041-sophia-mcp-bridge.md): optional Mac helper exposes a versioned allowlist of scoped tools over paired/authenticated transport. App sessions/stores own eligibility and commits; no raw sandbox/repository access. Foreground iPad availability is required initially. Read-only first, reviewed durable/idempotent writes later; ChatGPT/Cursor/Claude compatibility is verified per surface/account. Remote exposure requires a separately selected setup checkpoint.
+
+Shared boundaries: access locks are not encryption; bulk external retrieval excludes
+protected records/ancestry even when unlocked. An explicit selected-content Sophy
+exception retains narrow per-request consent. Crop isolation, stale-source cancellation,
+capacity bounds, no private payload logging and preserving original study data are
+acceptance requirements. Existing translation rights apply to any actual Scripture
+disclosure; no blanket permission follows from storing a quotation in a note.
+
+Recommended sequence: SP-042 Canvas → SP-043 Canvas → SP-041 read-only, followed by
+independently selected surface/write/remote expansions. A workflow skill can orchestrate
+implemented tools later; Markdown instructions alone do not add selection/OCR/network
+capabilities. Ticket-local criteria are proposals and all new verification is Not Run.

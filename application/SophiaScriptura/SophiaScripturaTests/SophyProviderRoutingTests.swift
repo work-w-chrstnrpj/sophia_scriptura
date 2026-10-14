@@ -44,6 +44,16 @@ final class SophyProviderRoutingTests: XCTestCase {
         super.tearDown()
     }
 
+    func testQwenDefaultsAndTrialModelsAreNotLabeledFree() {
+        for adapter in ["qwen-cn", "qwen-intl"] {
+            XCTAssertEqual(ProviderModelCatalog.defaultModelID(adapterID: adapter), "qwen-flash")
+            XCTAssertFalse(ProviderModelCatalog.curatedModels(adapterID: adapter).isEmpty)
+            XCTAssertFalse(ProviderModelCatalog.supportsFreeModelFilter(adapterID: adapter))
+            XCTAssertTrue(ProviderModelCatalog.curatedModels(adapterID: adapter).allSatisfy { !$0.isFree })
+            XCTAssertFalse(ProviderModelCatalog.isLikelyFreeModel(modelID: "qwen-turbo", adapterID: adapter))
+        }
+    }
+
     func testLegacySnapshotOmitsSharedRouteAndResolvesFirstSavedKey() throws {
         let first = ProviderConfigurationRecord(adapterID: "groq", accountLabel: "Personal", defaultModelID: "llama-3.1-8b-instant")
         let second = ProviderConfigurationRecord(adapterID: "openai", accountLabel: "Personal", defaultModelID: "gpt-4o-mini")
@@ -299,10 +309,25 @@ final class SophyProviderRoutingTests: XCTestCase {
     func testProductionRegistryIncludesHuggingFaceWithoutDroppingExistingAdapters() {
         let ids = Set(ProviderRegistry.production().supportedAdapters.map(\.id))
         XCTAssertTrue(ids.contains("huggingface"))
-        XCTAssertEqual(ids.count, 10)
+        XCTAssertEqual(ids.count, 12)
         let hugging = ProviderRegistry.production().adapter(id: "huggingface")
         XCTAssertEqual(hugging?.displayName, "Hugging Face")
         XCTAssertFalse(hugging?.advertisedCapabilities(modelID: "org/model:groq").contains(.tools) ?? true)
+        XCTAssertNotNil(ProviderRegistry.production().adapter(id: "qwen-cn"))
+        XCTAssertNotNil(ProviderRegistry.production().adapter(id: "qwen-intl"))
+    }
+
+    func testQwenChinaValidationUsesModelList() async {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RoutingHTTPStub.self]
+        let adapter = OpenAICompatibleProviderAdapter.qwenChina(session: URLSession(configuration: configuration))
+        var url: URL?
+        RoutingHTTPStub.handler = { request in
+            url = request.url
+            return .success(RoutingHTTPResponse(status: 200, data: Data(#"{"data":[{"id":"qwen-flash"}]}"#.utf8)))
+        }
+        try? await adapter.validateConnection(apiKey: "sk-test", modelID: "qwen-flash")
+        XCTAssertEqual(url?.absoluteString, "https://dashscope.aliyuncs.com/compatible-mode/v1/models")
     }
 
     private func huggingFaceAdapter() -> OpenAICompatibleProviderAdapter {

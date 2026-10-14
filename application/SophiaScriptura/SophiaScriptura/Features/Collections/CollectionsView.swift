@@ -15,6 +15,7 @@ struct CollectionsView: View {
     var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
+    var trashConversation: (UUID) -> Void = { _ in }
     @State private var sophyFolder: StudyCollection?
     @State private var searchText = ""
     @State private var searchPresented = false
@@ -30,7 +31,7 @@ struct CollectionsView: View {
     private var topics: [StudyCollection] {
         let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidates = store.collections.filter { collection in
-            guard !collection.isUnfiled, collection.archivedAt == nil else { return false }
+            guard collection.isActiveInLibrary else { return false }
             if !trimmed.isEmpty {
                 return collection.name.localizedCaseInsensitiveContains(trimmed) ||
                     (!store.isLocked(collection.id) && collection.detail.localizedCaseInsensitiveContains(trimmed))
@@ -153,7 +154,9 @@ struct CollectionsView: View {
                     annotationSnapshot: annotationSnapshot,
                     bookTitleForCode: bookTitleForCode,
                     openCompanion: openCompanion,
-                    createConversation: createConversation
+                    createConversation: createConversation,
+                                trashConversation: trashConversation,
+                    books: reader?.books ?? []
                 )
             }
             .onChange(of: store.sophyOpenCollectionID) { _, id in
@@ -182,7 +185,9 @@ struct CollectionsView: View {
                 annotationSnapshot: annotationSnapshot,
                 bookTitleForCode: bookTitleForCode,
                 openCompanion: openCompanion,
-                createConversation: createConversation
+                createConversation: createConversation,
+                                trashConversation: trashConversation,
+                books: reader?.books ?? []
             )
             .toolbar(.visible, for: .navigationBar)
         } label: {
@@ -190,7 +195,9 @@ struct CollectionsView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            if !collection.isUnfiled {
+            if collection.isUnfiled {
+                Button("Edit No Folder Color", systemImage: "paintpalette") { editingCollection = collection }
+            } else {
                 if !store.isLocked(collection.id) {
                     Button("Edit Collection", systemImage: "pencil") { editingCollection = collection }
                     Button("Move Collection", systemImage: "folder") { movingCollection = collection }

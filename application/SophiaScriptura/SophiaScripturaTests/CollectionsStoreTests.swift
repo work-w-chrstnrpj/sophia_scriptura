@@ -172,6 +172,41 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertNil(store.createCollection(name: "Child", detail: "", parentID: StudyCollection.unfiledID, accent: .sage))
     }
 
+    func testNoteInTrashedFolderCanOpenFromNoFolderUntilRestored() throws {
+        let store = CollectionsStore.demo()
+        let folder = try XCTUnwrap(store.collections.first { !$0.isUnfiled })
+        let note = NoteDocument(kind: .page)
+        let id = note.id
+        store.link(notes: [note])
+        store.addMembership(artifactID: id, collectionID: folder.id)
+        XCTAssertFalse(store.allowsNoteOpening(id, from: StudyCollection.unfiledID))
+        store.moveCollectionToTrash(id: folder.id)
+        XCTAssertTrue(store.allowsNoteOpening(id, from: StudyCollection.unfiledID))
+        store.restoreCollectionFromTrash(id: folder.id)
+        XCTAssertFalse(store.allowsNoteOpening(id, from: StudyCollection.unfiledID))
+    }
+
+    func testTrashedFolderReturnsItsOnlyItemsToNoFolderUntilRestored() throws {
+        let store = CollectionsStore.demo()
+        let assurance = try XCTUnwrap(store.collections.first { $0.name == "Assurance" })
+        let link = try XCTUnwrap(store.artifacts.first { $0.kind == .link })
+        let verse = try XCTUnwrap(store.artifacts.first { $0.kind == .scripture })
+        func unfiled() -> [CollectionArtifact] {
+            store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: [])
+        }
+        XCTAssertFalse(unfiled().contains { $0.id == link.id })
+
+        store.deleteCollection(id: assurance.id)
+
+        XCTAssertFalse(try XCTUnwrap(store.collection(id: assurance.id)).isActiveInLibrary)
+        XCTAssertTrue(unfiled().contains { $0.id == link.id })
+        XCTAssertFalse(unfiled().contains { $0.id == verse.id }, "Items still in another folder stay filed")
+
+        store.restoreCollectionFromTrash(id: assurance.id)
+        XCTAssertFalse(unfiled().contains { $0.id == link.id })
+        XCTAssertTrue(store.contains(link.id, in: assurance.id))
+    }
+
     func testBookmarkLabelAndGleaningCardStayDistinct() {
         let store = CollectionsStore.demo()
         let bookmark = samplePassage(kind: .bookmark, insight: "", endVerse: 1)
@@ -356,6 +391,34 @@ final class CollectionsStoreTests: XCTestCase {
         await reopened.load()
         XCTAssertEqual(reopened.savedAnnotation(id: layerID)?.layerName, "Annotation 1")
         XCTAssertTrue(reopened.contains(layerID, in: folder))
+    }
+
+    func testDeletePassageRemovesItFromNoFolderPresentation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("delete-passage-" + UUID().uuidString)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await store.load()
+        let passage = samplePassage(kind: .bookmark, insight: "", endVerse: 1)
+        let passageID = store.addPassage(passage)
+        XCTAssertTrue(store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: [])
+            .contains { $0.id == passageID })
+        store.deletePassage(passageID)
+        XCTAssertFalse(store.passages.contains { $0.id == passageID })
+        XCTAssertFalse(store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: [])
+            .contains { $0.id == passageID })
+    }
+
+    func testUpdateUnfiledAccentPersistsOnRelaunch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("unfiled-" + UUID().uuidString)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await store.load()
+        let unfiled = try XCTUnwrap(store.collection(id: StudyCollection.unfiledID))
+        XCTAssertEqual(unfiled.accent, .noFolder)
+        XCTAssertTrue(store.updateUnfiledAccent(.gold))
+        XCTAssertEqual(store.collection(id: StudyCollection.unfiledID)?.accent, .gold)
+        await store.flush()
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
+        await reopened.load()
+        XCTAssertEqual(reopened.collection(id: StudyCollection.unfiledID)?.accent, .gold)
     }
 
     private func samplePassage(kind: SavedPassageKind, insight: String, endVerse: Int) -> SavedPassage {

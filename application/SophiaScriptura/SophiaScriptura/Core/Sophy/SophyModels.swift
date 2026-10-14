@@ -221,6 +221,23 @@ enum SophyReconciler {
 }
 
 enum SophyBibleTree {
+    /// Natural-language requests for Bible → Testaments → 66 book folders (not a single “Bible” folder).
+    static func requestsHierarchy(_ text: String) -> Bool {
+        let normalized = text.lowercased()
+            .replacingOccurrences(of: "&", with: "and")
+        guard normalized.contains("bible") else { return false }
+        let oldTestament = normalized.contains("old testament")
+        let newTestament = normalized.contains("new testament")
+        let bothTestaments = (oldTestament && newTestament)
+            || normalized.contains("old and new")
+            || normalized.contains("new and old")
+        guard bothTestaments else { return false }
+        if normalized.contains("66") { return true }
+        if normalized.contains("books of the bible") { return true }
+        return normalized.contains("book")
+            && (normalized.contains("subfolder") || normalized.contains("populate") || normalized.contains("each"))
+    }
+
     static func folderDrafts(books: [ScriptureBook]) -> [SophyFolderNodeDraft] {
         let ordered = books.sorted { lhs, rhs in
             if lhs.order != rhs.order { return lhs.order < rhs.order }
@@ -260,23 +277,61 @@ enum SophyCommandParser {
         let remainder = parts.count > 1 ? String(parts[1]) : ""
         let command: SophySlashCommand
         switch name {
-        case "folders", "create-folders": command = .folders
-        case "enhance": command = .enhance
-        case "reminder", "create-reminder": command = .reminder
-        case "activity", "create-activity": command = .activity
-        case "music": command = .music
-        case "quiz": command = .quiz
-        case "contemplate": command = .contemplate
-        case "find", "search": command = .find
-        case "insights": command = .insights
-        case "chat": command = .chat
+        case "create-collection-folder", "folders", "create-folders", "folder": command = .folders
+        case "create-bible-collection-tree", "bible-tree", "bible": command = .bibleTree
+        case "enhance-note", "enhance": command = .enhance
+        case "create-reminder", "reminder": command = .reminder
+        case "create-activity", "activity": command = .activity
+        case "play-music", "music": command = .music
+        case "open-quiz", "quiz": command = .quiz
+        case "open-contemplation", "contemplate": command = .contemplate
+        case "find-notes", "find", "search": command = .find
+        case "study-insights", "insights": command = .insights
+        case "open-chat", "chat": command = .chat
         case "help": command = .help
         case "new-session", "new": command = .newSession
-        case "history": command = .history
+        case "show-history", "history": command = .history
         case "clear-history": command = .clearHistory
-        case "bible-tree", "bible": command = .bibleTree
         default: command = .unknown(name)
         }
         return (command, remainder)
     }
+}
+
+enum SophySlashCommandCatalog {
+    static let composerSuggestions: [String] = [
+        "/create-bible-collection-tree",
+        "/create-collection-folder",
+        "/create-reminder",
+        "/create-activity",
+        "/open-quiz",
+        "/open-contemplation",
+        "/find-notes",
+        "/study-insights",
+        "/open-chat",
+        "/play-music",
+        "/enhance-note",
+        "/help"
+    ]
+
+    static let helpMessage = """
+    Slash commands (older short names like /folders still work):
+
+    /create-collection-folder [name] — Create one collection folder, or describe a custom tree in chat.
+    /create-bible-collection-tree — Bible → Old Testament & New Testament → all 66 book folders.
+    /create-reminder — Schedule a local study reminder (title, mode, date, time, repeat).
+    /create-activity — Log or schedule a study activity with mode and duration.
+    /open-quiz — Open Quiz Me with optional difficulty and question types.
+    /open-contemplation — Start a meditation journey from a passage or title.
+    /find-notes [query] — Search notes and collections on this iPad.
+    /study-insights [day|week|month|year] — Summarize recent study activity.
+    /open-chat [preset] — Start a Companion conversation from a prompt preset.
+    /play-music play|pause — Control background study music.
+    /enhance-note — Improve selected note text (grammar, tone, organize, and more).
+    /new-session — Clear the current Sophy chat thread.
+    /show-history — Open durable Sophy action history.
+    /clear-history — Remove Sophy history entries (not the folders or records they created).
+
+    You can also ask in plain language—for example, open James 1 in Scripture, or describe folders to review before saving.
+    """
 }

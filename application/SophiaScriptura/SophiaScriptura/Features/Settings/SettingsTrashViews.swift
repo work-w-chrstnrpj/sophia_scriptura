@@ -8,6 +8,10 @@ struct SettingsTrashHubView: View {
 
     var body: some View {
         List {
+            NavigationLink("Points to Ponder") {
+                StudyTrashedPointsView(store: collections)
+            }
+            .accessibilityIdentifier("settings.trash.points")
             NavigationLink {
                 StudyTrashedNotesView(session: notes, collections: collections)
             } label: {
@@ -397,5 +401,27 @@ private struct TrashedStudyRow: View {
             }
             .tint(.accentColor)
         }
+    }
+}
+
+struct StudyTrashedPointsView: View {
+    @ObservedObject var store: CollectionsStore
+    @State private var pendingDelete: UUID?
+
+    var body: some View {
+        List(store.pointsToPonder.filter { $0.trashedAt != nil }) { point in
+            TrashedStudyRow(title: point.question, subtitle: "Point to Ponder", trashedAt: point.trashedAt,
+                onRestore: { store.restorePoint(point.id) }, onDelete: { pendingDelete = point.id })
+        }
+        .overlay { if !store.pointsToPonder.contains(where: { $0.trashedAt != nil }) { ContentUnavailableView("Trash is empty", systemImage: "trash") } }
+        .navigationTitle("Points to Ponder trash")
+        .appSurface()
+        .alert("Delete this question permanently?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
+            Button("Delete Permanently", role: .destructive) {
+                if let id = pendingDelete { store.permanentlyDeletePoint(id) }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { Text("This cannot be undone.") }
     }
 }

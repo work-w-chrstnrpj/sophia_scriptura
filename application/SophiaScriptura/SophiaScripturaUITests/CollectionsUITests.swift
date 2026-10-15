@@ -68,6 +68,98 @@ final class CollectionsUITests: XCTestCase {
         confirm.tap()
     }
 
+    func testPointToPonderExploreCancelAndCreatePrefilledNote() {
+        let app = launch(); openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let addMaterial = app.buttons["collections.addMaterial"]
+        XCTAssertTrue(addMaterial.waitForExistence(timeout: 5)); addMaterial.tap()
+        XCTAssertTrue(app.buttons["collections.newPoint"].waitForExistence(timeout: 5))
+        app.buttons["collections.newPoint"].tap()
+        let question = "How can I love my neighbour?"
+        let field = app.textViews["ponder.question"].exists ? app.textViews["ponder.question"] : app.textFields["ponder.question"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText(question)
+        app.buttons["ponder.create"].tap()
+        app.buttons["Done"].tap()
+        let point = item(question, in: app)
+        XCTAssertTrue(point.waitForExistence(timeout: 5)); point.tap()
+        XCTAssertTrue(app.staticTexts["ponder.card.question"].waitForExistence(timeout: 5))
+        snap("Point question", app)
+        app.buttons["ponder.explore"].tap()
+        XCTAssertTrue(app.buttons["ponder.note"].waitForExistence(timeout: 5))
+        app.buttons["ponder.note"].tap()
+        XCTAssertTrue(app.textFields["notes.new.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["notes.new.title"].value as? String, question)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(point.waitForExistence(timeout: 5)); point.tap()
+        app.buttons["ponder.explore"].tap()
+        XCTAssertTrue(app.buttons["ponder.note"].waitForExistence(timeout: 5))
+        app.buttons["ponder.note"].tap()
+        XCTAssertTrue(app.buttons["notes.new.create"].waitForExistence(timeout: 5))
+        snap("Prefilled question note", app)
+        app.buttons["notes.new.create"].tap()
+        XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
+        back(app)
+        XCTAssertTrue(point.waitForExistence(timeout: 5))
+    }
+
+    func testBookmarkTurnsIntoGleaningAndPrefillsNoteTitle() {
+        let app = launch()
+        saveBookmarkFromFirstVerse(app)
+        if app.buttons["Done"].exists { app.buttons["Done"].tap() }
+        openCollections(app)
+        app.buttons["collections.folder.No Folder"].tap()
+        let saved = item("Genesis 1:1", in: app)
+        XCTAssertTrue(saved.waitForExistence(timeout: 5)); saved.tap()
+        let chapterButton = app.buttons["collections.seeChapter"]
+        let gleaningButton = app.buttons["collections.bookmark.toGleaning"]
+        XCTAssertTrue(gleaningButton.waitForExistence(timeout: 5))
+        XCTAssertEqual(gleaningButton.label, "Turn into a Gleaning")
+        XCTAssertGreaterThan(gleaningButton.frame.minY, chapterButton.frame.maxY)
+        XCTAssertEqual(gleaningButton.frame.width, chapterButton.frame.width, accuracy: 1)
+        XCTAssertEqual(gleaningButton.frame.height, chapterButton.frame.height, accuracy: 1)
+        snap("Bookmark action order and sizing", app)
+        gleaningButton.tap()
+        let insight = app.textViews["collections.insight.field"].exists ? app.textViews["collections.insight.field"] : app.textFields["collections.insight.field"]
+        XCTAssertTrue(insight.waitForExistence(timeout: 5)); insight.tap(); insight.typeText("God is the Creator.")
+        app.buttons["collections.insight.save"].tap()
+        let reference = app.staticTexts["collections.card.reference"].label
+        let noteButton = app.buttons["collections.gleaning.toNote"]
+        XCTAssertTrue(noteButton.waitForExistence(timeout: 5))
+        XCTAssertEqual(noteButton.label, "Turn into a Note")
+        XCTAssertGreaterThan(noteButton.frame.minY, chapterButton.frame.maxY)
+        XCTAssertEqual(noteButton.frame.width, chapterButton.frame.width, accuracy: 1)
+        XCTAssertEqual(noteButton.frame.height, chapterButton.frame.height, accuracy: 1)
+        snap("Gleaning action order and sizing", app)
+        noteButton.tap()
+        XCTAssertTrue(app.textFields["notes.new.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.textFields["notes.new.title"].value as? String, "Gleaning from \"\(reference)\"")
+        app.buttons["notes.new.create"].tap()
+        XCTAssertTrue(app.scrollViews["notes.viewport"].waitForExistence(timeout: 10))
+        XCTAssertTrue((app.textViews["notes.body"].value as? String ?? "").contains("God is the Creator."))
+        XCTAssertTrue((app.textViews["notes.body"].value as? String ?? "").contains(reference))
+        snap("Converted gleaning note", app)
+    }
+
+    func testDeletedCollectionIsAbsentWhenSavingBookmark() {
+        let app = launch(); openCollections(app)
+        createCollection("Removed destination", in: app)
+        app.buttons["collections.folder.Removed destination"].tap()
+        app.buttons["Collection actions"].tap()
+        app.buttons["Delete Collection"].tap()
+        let confirm = app.buttons["Delete Collection"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertTrue(app.buttons["collections.folder.No Folder"].waitForExistence(timeout: 5))
+        showTab("tab.scripture", in: app)
+        let verse = app.links.firstMatch
+        XCTAssertTrue(verse.waitForExistence(timeout: 10)); verse.tap()
+        XCTAssertTrue(app.buttons["scripture.bookmark"].waitForExistence(timeout: 5))
+        app.buttons["scripture.bookmark"].tap()
+        XCTAssertTrue(app.navigationBars["New Bookmark"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["collections.choose.Removed destination"].exists)
+        snap("Deleted folder excluded from save choices", app)
+        app.buttons["collections.save.confirm"].tap()
+    }
+
     func testDragRootAndNestedFoldersPersists() {
         let app = launch()
         openCollections(app)
@@ -130,6 +222,51 @@ final class CollectionsUITests: XCTestCase {
         capture.name = "Uniform collection card layout"; capture.lifetime = .keepAlways; add(capture)
         app.buttons["collections.filter"].tap(); app.buttons["List View"].tap()
         XCTAssertEqual(material.frame.height, 80, accuracy: 1)
+    }
+
+    func testDuplicateCollectionModalCreatesIndependentFolders() {
+        let app = launch(); openCollections(app)
+        createCollection("Duplicate Source", in: app)
+        app.buttons["collections.folder.Duplicate Source"].press(forDuration: 1)
+        app.buttons["collections.duplicate"].tap()
+        XCTAssertTrue(app.switches["collections.duplicate.contents"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(app.buttons["collections.folder.Duplicate Source (Copy)"].exists)
+        app.buttons["collections.folder.Duplicate Source"].tap()
+        app.buttons["Collection actions"].tap(); app.buttons["collections.duplicate"].tap()
+        XCTAssertTrue(app.buttons["collections.duplicate.confirm"].waitForExistence(timeout: 5))
+        app.buttons["collections.duplicate.confirm"].tap()
+        back(app)
+        XCTAssertTrue(app.buttons["collections.folder.Duplicate Source (Copy)"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["collections.folder.Duplicate Source"].exists)
+    }
+
+    func testSubfolderPreviewCountsOnlyDirectChildFolders() {
+        let app = launch(); openCollections(app)
+        createCollection("Count Parent", in: app)
+        app.buttons["collections.folder.Count Parent"].tap()
+        func addSubfolder(_ name: String) {
+            app.buttons["collections.newSubfolder"].tap()
+            let field = app.textFields["Name"]
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap(); field.typeText(name + "\n")
+            app.buttons["Create"].tap()
+            XCTAssertTrue(app.buttons["collections.folder." + name].waitForExistence(timeout: 5))
+        }
+        addSubfolder("Preview")
+        app.buttons["collections.folder.Preview"].tap()
+        addSubfolder("Direct")
+        app.buttons["collections.folder.Direct"].tap()
+        addSubfolder("Deep")
+        back(app)
+        XCTAssertEqual(app.staticTexts["collections.subfolder.counts.Direct"].label, "0 items · 1 subfolder")
+        back(app)
+        XCTAssertEqual(app.staticTexts["collections.subfolder.counts.Preview"].label, "0 items · 1 subfolder", "Deeper descendants must not increase the direct-folder count")
+        app.buttons["collections.subfolder.arrange"].tap()
+        XCTAssertTrue(app.buttons["collections.subfolder.arrange.name"].waitForExistence(timeout: 5))
+        app.buttons["collections.subfolder.arrange.name"].tap()
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "Plain Arrange and direct subfolder count"; shot.lifetime = .keepAlways; add(shot)
     }
 
     func testFolderColorNestingAndDeletionReturnsItemsToNoFolder() {
@@ -310,7 +447,7 @@ final class CollectionsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["collections.insight.edit"].exists)
     }
 
-    func testDeleteBookmarkFromNoFolderUsingItemMenu() {
+    func testDeleteBookmarkFromNoFolderUsingSwipe() {
         let app = launch()
         saveBookmarkFromFirstVerse(app)
         openCollections(app)
@@ -318,10 +455,16 @@ final class CollectionsUITests: XCTestCase {
         let bookmark = item("Genesis 1:1", in: app)
         XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
 
-        let menu = itemMenu(in: app)
-        XCTAssertTrue(menu.waitForExistence(timeout: 3), "Each item needs its own actions menu")
-        XCTAssertTrue(menu.isHittable)
-        menu.tap()
+        XCTAssertFalse(itemMenu(in: app).exists, "List records must not display an ellipsis")
+        app.buttons["collections.filter"].tap(); app.buttons["Card View"].tap()
+        XCTAssertFalse(itemMenu(in: app).exists, "Cards must not display an ellipsis either")
+        bookmark.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["collections.artifact.delete"].waitForExistence(timeout: 3), "Card hold menu remains available")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.55)).tap()
+        app.buttons["collections.filter"].tap(); app.buttons["List View"].tap()
+        bookmark.swipeLeft()
+        let capture = XCTAttachment(screenshot: app.screenshot()); capture.lifetime = .keepAlways; capture.name = "Revealed Collection actions"; add(capture)
+        app.buttons["collections.swipe.more"].tap()
         let delete = app.buttons["collections.artifact.delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 3))
         delete.tap()
@@ -379,9 +522,7 @@ final class CollectionsUITests: XCTestCase {
         app.buttons["collections.folder.No Folder"].tap()
         let note = item("Untitled Note", in: app)
         XCTAssertTrue(note.waitForExistence(timeout: 5))
-        let menu = itemMenu(in: app)
-        XCTAssertTrue(menu.waitForExistence(timeout: 3))
-        menu.tap()
+        note.press(forDuration: 1)
         app.buttons["collections.artifact.delete"].tap()
         confirmCenteredDelete(app)
         XCTAssertFalse(note.waitForExistence(timeout: 3))

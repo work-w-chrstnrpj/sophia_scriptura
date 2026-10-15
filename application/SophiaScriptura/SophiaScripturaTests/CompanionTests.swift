@@ -961,6 +961,26 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(session.modelOptions(for: configID).map(\.modelID), ["mock", "mock-fast"])
     }
 
+    func testReflectionQuestionUsesSeparateConversationPresetAndSendPipeline() async throws {
+        let credentials = InMemoryCompanionCredentialsStore()
+        let session = CompanionSession(presetCatalog: try PromptPresetCatalog.bundled(), repository: nil,
+            credentials: credentials, registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()]))
+        XCTAssertNil(session.prepareReflectionQuestion("What is faith?"))
+        try session.saveProviderKey("key", adapterID: "mock", accountLabel: "Test")
+        let existing = try XCTUnwrap(session.createConversation())
+        session.updateComposerDraft("Keep my existing draft")
+        XCTAssertNil(session.prepareReflectionQuestion("  "))
+        let id = try XCTUnwrap(session.prepareReflectionQuestion("What is faith?"))
+        XCTAssertNotEqual(existing, id)
+        XCTAssertEqual(session.conversations.first(where: { $0.id == existing })?.composerDraft, "Keep my existing draft")
+        XCTAssertEqual(session.conversations.first(where: { $0.id == id })?.composerDraft, "What is faith?")
+        XCTAssertTrue(session.conversations.first(where: { $0.id == id })?.presetSnapshot.resolvedInstruction.contains("historic orthodox Christian faith") == true)
+        await session.sendMessage()
+        XCTAssertEqual(session.messages.first(where: { $0.conversationID == id && $0.role == .user })?.content, "What is faith?")
+        XCTAssertEqual(session.messages.last?.deliveryState, .complete)
+        XCTAssertEqual(session.messages.last?.role, .assistant)
+    }
+
     func testSendMessageUsesMockStream() async throws {
         let catalog = try PromptPresetCatalog.bundled()
         let credentials = InMemoryCompanionCredentialsStore()

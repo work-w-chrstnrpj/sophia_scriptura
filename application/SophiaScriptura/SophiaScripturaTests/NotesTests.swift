@@ -4,6 +4,57 @@ import CryptoKit
 @testable import SophiaScriptura
 
 final class NotesTests: XCTestCase {
+    func testJournalTypeLegacyUnknownAndRoundTripPreserveBody() throws {
+        var journal = JournalContent(); XCTAssertEqual(journal.journalType, .unset)
+        journal.page.body = "Preserve my journal"; journal.mentalState = .thriving
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(journal)) as? [String: Any])
+        json.removeValue(forKey: "journalType")
+        let legacy = try decoder.decode(JournalContent.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(legacy.journalType, .spiritual); XCTAssertEqual(legacy.page.body, journal.page.body)
+        XCTAssertEqual(legacy.mentalState, .thriving)
+        json["journalType"] = "future"
+        XCTAssertEqual(try decoder.decode(JournalContent.self, from: JSONSerialization.data(withJSONObject: json)).journalType, .spiritual)
+        for choice in JournalType.allCases {
+            journal.journalType = choice
+            XCTAssertEqual(try decoder.decode(JournalContent.self, from: encoder.encode(journal)), journal)
+        }
+    }
+
+    @MainActor func testDuplicateNoteRejectsUnknownProtectionBinding() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        var protected = NoteDocument(kind: .page); protected.protectionID = UUID()
+        var snapshot = NotesSnapshot(); snapshot.notes = [protected]
+        _ = try await repository.save(snapshot, expectedRevision: 0)
+        let session = NotesSession(repository: repository); await session.load()
+        XCTAssertNil(session.duplicate(protected.id)); XCTAssertEqual(session.snapshot.notes.count, 1)
+    }
+
+    @MainActor func testDuplicateNoteIsIndependentAndPersistsJournalType() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        let session = NotesSession(repository: repository); await session.load()
+        let original = try XCTUnwrap(session.create(kind: .journal, title: "My Journal"))
+        session.setJournalType(.diaristic)
+        session.edit { note in
+            note.page?.body = "Original reflection"
+            note.objects = [NoteObject(kind: .text, text: "Legacy object")]
+        }
+        session.metadata(title: "My Journal", tags: "study", paper: .ruled)
+        let copy = try XCTUnwrap(session.duplicate(original))
+        XCTAssertNotEqual(copy, original); XCTAssertEqual(session.selectedNoteID, original)
+        XCTAssertEqual(session.snapshot.notes.first { $0.id == copy }?.journalContent?.journalType, .diaristic)
+        XCTAssertEqual(session.snapshot.notes.first { $0.id == copy }?.content, session.note?.content)
+        session.setLibraryStatus(.journalType(.spiritual), noteID: copy)
+        session.open(copy)
+        session.replaceBody(NSRange(location: 0, length: "Original reflection".utf16.count), with: "Copied reflection")
+        XCTAssertEqual(session.snapshot.notes.first { $0.id == original }?.page?.body, "Original reflection")
+        XCTAssertEqual(session.snapshot.notes.first { $0.id == original }?.journalContent?.journalType, .diaristic)
+        await session.save()
+        let reopened = NotesSession(repository: repository); await reopened.load()
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == copy }?.journalContent?.journalType, .spiritual)
+        XCTAssertEqual(reopened.snapshot.notes.first { $0.id == copy }?.tags, ["study"])
+    }
+
     @MainActor func testLibraryStatusesPersistWithoutChangingEditor() async throws {
         let repository = NotesFileRepository(directory: try folder())
         let session = NotesSession(repository: repository)

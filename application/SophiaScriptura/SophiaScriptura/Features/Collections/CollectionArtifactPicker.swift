@@ -11,6 +11,7 @@ struct CollectionArtifactPicker: View {
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
     @State private var creatingNote = false
+    @State private var creatingPoint = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -44,6 +45,8 @@ struct CollectionArtifactPicker: View {
         NavigationStack {
             List {
                 Section {
+                    Button("New Point to Ponder", systemImage: "questionmark.bubble") { creatingPoint = true }
+                        .accessibilityIdentifier("collections.newPoint")
                     Button("New Note", systemImage: "square.and.pencil") { creatingNote = true }
                         .accessibilityIdentifier("collections.newNote")
                     Button("New Conversation", systemImage: "bubble.left.and.bubble.right") {
@@ -79,11 +82,11 @@ struct CollectionArtifactPicker: View {
                         .accessibilityIdentifier("collections.newLink")
                     }
                 }                 footer: {
-                    Text("Include notes, conversations, bookmarks, gleanings, links, and Scripture annotation layers.")
+                    Text(collectionID == StudyCollection.unfiledID ? "Create material here without filing it into a folder." : "Include notes, points to ponder, conversations, bookmarks, gleanings, links, and Scripture annotation layers.")
                 }
                 .listRowBackground(Color(theme.palette.soft))
 
-                ForEach(filteredArtifacts) { artifact in
+                ForEach(collectionID == StudyCollection.unfiledID ? [] : filteredArtifacts) { artifact in
                 let included = store.contains(artifact.id, in: collectionID)
                 Button {
                     store.link(notes: notes.snapshot.notes)
@@ -115,6 +118,9 @@ struct CollectionArtifactPicker: View {
                 .accessibilityIdentifier("collections.pick.\(artifact.title)")
                 .accessibilityValue(included ? "Included" : "Not included")
                 }
+            }
+            .sheet(isPresented: $creatingPoint) {
+                PointToPonderCreatorSheet(store: store, collectionID: collectionID)
             }
             .sheet(isPresented: $creatingNote) {
                 NoteCreatorSheet(notes: notes) { id in

@@ -77,6 +77,14 @@ struct NoteCreatorSheet: View {
     let notes: NotesSession
     var onCreated: (UUID) -> Void = { _ in }
 
+    init(notes: NotesSession, initialTitle: String = "", initialContent: StudyNoteSaveContent? = nil, onCreated: @escaping (UUID) -> Void = { _ in }) {
+        self.notes = notes
+        self.initialContent = initialContent
+        self.onCreated = onCreated
+        _title = State(initialValue: initialTitle)
+    }
+    private let initialContent: StudyNoteSaveContent?
+
     @State private var kind: NoteKind = .page
     @State private var color: CollectionAccent = .preset
     @State private var title = ""
@@ -174,6 +182,7 @@ struct NoteCreatorSheet: View {
 
     private func create() {
         guard let id = notes.create(kind: kind, color: color, title: title) else { return }
+        if let initialContent { notes.append(saveContent: initialContent) }
         onCreated(id)
         dismiss()
     }

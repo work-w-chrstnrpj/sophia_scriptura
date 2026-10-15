@@ -168,3 +168,22 @@ ink and IDs are unchanged. Page/body assignments and body undo/redo preserve the
 The guarded NotesSession metadata command autosaves changes; Canvas, Journal and Prayer
 do not acquire this field. Publishing is a local status label and triggers no external
 publishing or provider traffic.
+
+## SP-045 Journal Type and note duplication
+
+JournalContent writes an additive `journalType` string (`unset`, `diaristic` or `spiritual`). New journals start Unset.
+Absent/unknown values decode as Spiritual Journal without changing body, ink,
+attachments or prior reflection fields. Existing generations and schema 3/4 remain
+readable; older builds ignore the new key or decode unfamiliar `unset` as Spiritual. The guarded editor/library commands
+autosave the choice. Standalone note copies use a new note ID and timestamps,
+preserve content/status/protection, and do not copy collection memberships. Embedded
+objects and stroke identifiers remain document-local; payload Data is copied by value.
+Library and aggregate payload limits are checked before appending a copy.
+
+## SP-046 prefilled creation
+
+The existing New note sheet accepts an initial editable title/content. Point to Ponder
+uses its question as title. Gleanings use `Gleaning from "Book Chapter:Verse
+(Translation)"` and copy reference, passage text and insight into the selected note
+kind. Existing note capacity/title limits apply. Source records remain independent;
+no cross-store destructive conversion or new Notes schema is introduced.

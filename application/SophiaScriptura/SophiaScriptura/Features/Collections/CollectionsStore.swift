@@ -6,6 +6,7 @@ final class CollectionsStore: ObservableObject {
     @Published private(set) var collections: [StudyCollection]
     @Published private(set) var artifacts: [CollectionArtifact]
     @Published private(set) var memberships: Set<CollectionMembership>
+    @Published private(set) var pointsToPonder: [PointToPonder] = []
     @Published private(set) var passages: [SavedPassage]
     @Published private(set) var savedAnnotations: [SavedAnnotation]
     @Published private(set) var links: [SavedLink]
@@ -337,6 +338,45 @@ final class CollectionsStore: ObservableObject {
         return id
     }
 
+    /// Copies folder identities and optionally membership edges, never the linked artifacts.
+    func duplicateCollection(_ id: UUID, includeContents: Bool) async -> UUID? {
+        guard !rejectWhileSophyCommits() else { return nil }
+        sophyCommitInFlight = true
+        defer { sophyCommitInFlight = false }
+        await flush()
+        guard let root = collection(id: id), !root.isUnfiled, root.isActiveInLibrary else { return nil }
+        var originals = [root], visited: Set<UUID> = [id], pending = [id]
+        while let parent = pending.popLast() {
+            for child in children(of: parent) where visited.insert(child.id).inserted {
+                originals.append(child); pending.append(child.id)
+            }
+        }
+        guard allowChanges(visited.union(Set([root.parentID].compactMap { $0 }))) else { return nil }
+        let mapping = Dictionary(uniqueKeysWithValues: originals.map { ($0.id, UUID()) })
+        var value = exportSnapshot()
+        let now = Date()
+        for original in originals {
+            value.collections.append(StudyCollection(
+                protectionID: original.protectionID,
+                id: mapping[original.id]!,
+                name: original.id == id ? String(original.name.prefix(113)) + " (Copy)" : original.name,
+                detail: original.detail,
+                parentID: original.id == id ? original.parentID : original.parentID.flatMap { mapping[$0] },
+                accent: original.accent, icon: original.icon, modifiedAt: now
+            ))
+        }
+        if includeContents {
+            let edges = memberships.filter { visited.contains($0.collectionID) }
+            guard edges.allSatisfy({ noteAccessAllows($0.artifactID) }) else { return nil }
+            value.memberships.append(contentsOf: edges.map { CollectionMembership(collectionID: mapping[$0.collectionID]!, artifactID: $0.artifactID) })
+        }
+        do {
+            if let repository { value = try await repository.save(value, expectedRevision: revision) }
+            apply(value)
+            return mapping[id]
+        } catch { notice = error.localizedDescription; return nil }
+    }
+
     /// Reparent the folder as a unit; memberships and descendants keep their identities.
     func canMoveCollection(_ id: UUID, to parentID: UUID?) -> Bool {
         guard let folder = collection(id: id), folder.isActiveInLibrary,
@@ -477,7 +517,7 @@ final class CollectionsStore: ObservableObject {
     func outline() -> [CollectionOutlineEntry] {
         var result: [CollectionOutlineEntry] = []
         func visit(_ parent: UUID?, depth: Int) {
-            let level = collections.filter { $0.parentID == parent && !$0.isUnfiled }
+            let level = collections.filter { $0.parentID == parent && $0.isActiveInLibrary }
             let ordered = arrangedForDisplay(level, parentName: parent.flatMap { collection(id: $0)?.name } ?? "")
             for folder in ordered {
                 result.append(CollectionOutlineEntry(collection: folder, depth: depth))
@@ -615,6 +655,7 @@ final class CollectionsStore: ObservableObject {
             guard let trashedAt = collection.trashedAt else { return false }
             return TrashRetention.isExpired(trashedAt, now: now)
         }.map(\.id)
+        for point in pointsToPonder where point.trashedAt.map({ TrashRetention.isExpired($0, now: now) }) == true { permanentlyDeletePoint(point.id) }
         guard !expired.isEmpty else { return }
         for id in expired { permanentlyDeleteCollection(id: id) }
     }
@@ -663,6 +704,15 @@ final class CollectionsStore: ObservableObject {
         return layerID
     }
 
+    func deleteAnnotationReference(_ id: UUID) {
+        guard !rejectWhileSophyCommits(), savedAnnotations.contains(where: { $0.id == id }),
+              allowChanges(Set(memberships.filter { $0.artifactID == id }.map(\.collectionID))) else { return }
+        savedAnnotations.removeAll { $0.id == id }
+        artifacts.removeAll { $0.id == id }
+        memberships = memberships.filter { $0.artifactID != id }
+        enqueueWrite()
+    }
+
     func savedAnnotation(id: UUID) -> SavedAnnotation? {
         savedAnnotations.first { $0.id == id }
     }
@@ -674,6 +724,45 @@ final class CollectionsStore: ObservableObject {
     }
 
     @discardableResult
+    func addPointToPonder(question: String, collectionID: UUID) -> UUID? {
+        guard !rejectWhileSophyCommits(), allowChanges([collectionID]),
+              let folder = collection(id: collectionID), folder.isUnfiled || folder.isActiveInLibrary else { return nil }
+        let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, question.count <= 200 else { notice = "Enter a question of up to 200 characters."; return nil }
+        let point = PointToPonder(id: UUID(), question: question, createdAt: Date())
+        pointsToPonder.append(point)
+        if !folder.isUnfiled { memberships.insert(CollectionMembership(collectionID: collectionID, artifactID: point.id)) }
+        touch(collectionID)
+        enqueueWrite()
+        return point.id
+    }
+
+    func trashPoint(_ id: UUID) {
+        guard !rejectWhileSophyCommits(), let index = pointsToPonder.firstIndex(where: { $0.id == id }) else { return }
+        pointsToPonder[index].trashedAt = Date()
+        enqueueWrite()
+    }
+
+    func restorePoint(_ id: UUID) {
+        guard !rejectWhileSophyCommits(), let index = pointsToPonder.firstIndex(where: { $0.id == id }) else { return }
+        pointsToPonder[index].trashedAt = nil
+        enqueueWrite()
+    }
+
+    func permanentlyDeletePoint(_ id: UUID) {
+        guard !rejectWhileSophyCommits(), pointsToPonder.contains(where: { $0.id == id && $0.trashedAt != nil }) else { return }
+        pointsToPonder.removeAll { $0.id == id }
+        memberships = memberships.filter { $0.artifactID != id }
+        enqueueWrite()
+    }
+
+    @discardableResult func turnBookmarkToGleaning(_ id: UUID) -> Bool {
+        guard !rejectWhileSophyCommits(), let index = passages.firstIndex(where: { $0.id == id && $0.kind == .bookmark }) else { return false }
+        passages[index].kind = .gleaning
+        enqueueWrite()
+        return true
+    }
+
     func addPassage(_ passage: SavedPassage) -> UUID {
         guard !rejectWhileSophyCommits() else { return passage.id }
 
@@ -754,6 +843,9 @@ final class CollectionsStore: ObservableObject {
     }
 
     func presentedArtifacts(notes: [NoteDocument], annotationSnapshot: AnnotationSnapshot? = nil) -> [CollectionArtifact] {
+        let pointItems = pointsToPonder.filter { $0.trashedAt == nil }.map {
+            CollectionArtifact(id: $0.id, title: $0.question, subtitle: "Point to Ponder", kind: .pointToPonder, modifiedAt: $0.createdAt)
+        }
         let noteItems = notes.filter(\.isActiveInLibrary).map { note in
             CollectionArtifact(
                 id: note.id,
@@ -792,15 +884,17 @@ final class CollectionsStore: ObservableObject {
                 insight: passage.insight
             )
         }
-        let annotationItems = savedAnnotations.map { saved in
-            AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
+        let annotationItems = savedAnnotations.compactMap { saved -> CollectionArtifact? in
+            if let annotationSnapshot, let layer = AnnotationCollectionCatalog.resolveLayer(layerID: saved.id, in: annotationSnapshot), layer.deleted { return nil }
+            return AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
         }
         let covered = Set(noteItems.map(\.id))
+            .union(pointsToPonder.map(\.id))
             .union(passageItems.map(\.id))
             .union(linkItems.map(\.id))
             .union(conversationItems.map(\.id))
-            .union(annotationItems.map(\.id))
-        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems
+            .union(savedAnnotations.map(\.id))
+        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems + pointItems
     }
 
     func pickableArtifacts(
@@ -924,6 +1018,7 @@ final class CollectionsStore: ObservableObject {
     private func knownItem(_ id: UUID) -> Bool {
         guard noteAccessAllows(id) else { return false }
         return artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation }
+            || pointsToPonder.contains { $0.id == id && $0.trashedAt == nil }
             || passages.contains { $0.id == id }
             || savedAnnotations.contains { $0.id == id }
             || links.contains { $0.id == id }
@@ -938,6 +1033,7 @@ final class CollectionsStore: ObservableObject {
 
     private func apply(_ snapshot: CollectionsSnapshot) {
         revision = snapshot.revision
+        pointsToPonder = snapshot.pointsToPonder
         passages = snapshot.passages
         savedAnnotations = snapshot.savedAnnotations
         links = snapshot.links
@@ -962,7 +1058,7 @@ final class CollectionsStore: ObservableObject {
 
         do {
             try protection.require(collections.map(\.protectionID), in: .collections)
-            guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+            guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
             await flush()
             try protection.require(collections.map(\.protectionID), in: .collections)
             var restored = snapshot
@@ -970,7 +1066,7 @@ final class CollectionsStore: ObservableObject {
                 restored.collections[i].protectionID = collection(id: restored.collections[i].id)?.protectionID
             }
             restored.revision = revision
-            restored.schemaVersion = restored.collections.contains(where: { $0.protectionID != nil }) ? 2 : 1
+            restored.schemaVersion = restored.requiredSchemaVersion
             protection.lock([.collections])
             if let repository {
                 let saved = try await repository.save(restored, expectedRevision: revision)
@@ -982,9 +1078,10 @@ final class CollectionsStore: ObservableObject {
 
     private func exportSnapshot() -> CollectionsSnapshot {
         CollectionsSnapshot(
-            schemaVersion: collections.contains(where: { $0.protectionID != nil }) ? 2 : 1,
+            schemaVersion: !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1,
             revision: revision,
             collections: collections.filter { !$0.isUnfiled },
+            pointsToPonder: pointsToPonder,
             passages: passages,
             savedAnnotations: savedAnnotations,
             links: links,

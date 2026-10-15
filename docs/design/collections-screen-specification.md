@@ -339,3 +339,58 @@ previews and stamps in both hosts. No persistence or protection-policy changes.
 Trashed-folder memberships do not count as filing for No Folder display or note
 opening; inaccessible ancestry remains concealed. Delete Conversation moves the
 authoritative Companion record to Trash, preventing projection resurrection.
+
+## SP-044 record action consistency
+
+Long press retains the complete action menu. Collection material lists and cards no longer
+show a permanent ellipsis; swipe left reveals More/Delete where eligible. Notes
+cards/lists gain the same swipe rail; Prayer updates reveal Edit/Delete. Rightward
+swipe closes actions; no full-swipe commit. Existing confirmations and access
+guards apply. Notes multiselect disables swipe. Accessibility Show/Hide actions
+and Reduce Motion handling provide alternatives to gestures/settling animation.
+
+SP-044 follow-up: only one record rail is open at a time. Swipe right on the record
+body, tap its shifted body, or start vertical finger scrolling to close it. Opening
+another record rail or switching tabs also dismisses it. Collection cards retain
+the hold menu without a permanent ellipsis. Drag onset/settling are shortened;
+record commands and confirmations remain unchanged.
+
+The Subfolders heading presents Arrange as a plain icon/text menu with no border or
+capsule; New Subfolder retains the outlined button style. Each unlocked subfolder
+preview includes its existing item total and active direct child-folder count, e.g.
+`4 items · 2 subfolders`; deeper folder generations are excluded from that folder
+count. Locked previews continue to conceal both counts.
+
+SP-045: Duplicate Collection in root/subfolder hold menus and detail actions opens
+an Include contents modal. Structure always copies; enabled contents reuse item IDs
+as chosen by the owner, so editing an item affects both folders. Names/colors/icons,
+descriptions and protection bindings are retained; new folder IDs distinguish copies.
+Confirmed deleted annotation layers are omitted from library projection. Unavailable
+references retain a confirmed Remove Annotation Reference action (swipe Delete);
+cleanup removes only references/memberships, never underlying ink.
+
+## v1.3.0 — Points to Ponder and conversions
+
+Add Study Material includes New Point to Ponder in folders and No Folder. The question
+card shows Close, Delete and Explore. Explore opens a separate choice modal for Send
+Question to Companion or Turn into a Note. New note opens with the editable question
+title. Bookmark cards offer Turn into a Gleaning; gleanings offer Turn into a Note,
+with `Gleaning from "Book Chapter:Verse (Translation)"` as the initial title and the
+reference, passage and insight as content. Sources stay saved; cancellation creates
+nothing. New items inherit accessible folder memberships. Points support the material
+filter and recoverable deletion in Settings → Trash → Points to Ponder.
+See [SP-046](../../tickets/SP-046-points-to-ponder-and-study-conversions.md).
+
+## SP-046 owner follow-up — 2026-10-15
+
+The shared save/folder chooser now includes only active Collections. Trashed and
+archived folders are excluded, including branches under archived ancestors; active
+children promoted by folder deletion remain available. Restoring/unarchiving makes
+eligible destinations available again. Existing saved membership edges are retained.
+Bookmark cards show See the whole chapter first and Turn into a Gleaning below it,
+with matching full-width dimensions. Turn into a Gleaning uses a transparent,
+outlined secondary style; See the whole chapter retains its accent fill.
+
+Gleaning card follow-up: **Turn into a Note** sits below **See the whole chapter**,
+using the same transparent outlined full-width style and height as the bookmark's
+**Turn into a Gleaning** action. Conversion/title/content behavior is retained.

@@ -434,6 +434,17 @@ final class CompanionSession: ObservableObject {
         return conversation.id
     }
 
+    /// Starts a distinct conversation with the existing preset/provider route and a durable draft.
+    @discardableResult
+    func prepareReflectionQuestion(_ question: String) -> UUID? {
+        let question = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isSending, !question.isEmpty, question.count <= 200,
+              let id = createConversation() else { return nil }
+        updateComposerDraft(question)
+        scheduleSave()
+        return id
+    }
+
     func syncCollections(_ conversation: CompanionConversation) {
         guard conversation.state != .archived, !conversation.isTrashed else {
             onCollectionsRemove?(conversation.id)

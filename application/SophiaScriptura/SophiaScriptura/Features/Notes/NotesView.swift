@@ -340,6 +340,11 @@ struct NotesView: View {
             LazyVStack(spacing: 8) {
                 ForEach(notes) { note in
                     noteRow(note)
+                        .studySwipeReveal(enabled: !selectionMode, identifier: "notes.swipe.\(note.id)") {
+                            Menu("More", systemImage: "ellipsis") { noteActions(note) }
+                                .accessibilityIdentifier("notes.swipe.more")
+                            Button("Delete", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
+                        }
                         .contextMenu { noteActions(note) }
                 }
             }
@@ -516,6 +521,11 @@ struct NotesView: View {
             }
             .opacity(selectionMode && isSelected ? 0.58 : 1)
             .animation(.easeInOut(duration: 0.18), value: isSelected)
+            .studySwipeReveal(enabled: !selectionMode, identifier: "notes.swipe.\(note.id)") {
+                Menu("More", systemImage: "ellipsis") { noteActions(note) }
+                    .accessibilityIdentifier("notes.swipe.more")
+                Button("Delete", systemImage: "trash", role: .destructive) { permanentlyDeleting = note.id }
+            }
             .contextMenu { noteActions(note) }
     }
 
@@ -579,6 +589,8 @@ struct NotesView: View {
                 NoteStatusContextMenu(note: note, session: session) { field in
                     libraryJournalField = LibraryJournalFieldContext(noteID: note.id, field: field)
                 }
+                Button("Duplicate Note", systemImage: "doc.on.doc") { session.duplicate(note.id) }
+                    .accessibilityIdentifier("notes.duplicate")
                 Button("Edit Note", systemImage: "pencil") { editingNote = note }
                     .accessibilityIdentifier("notes.editNote")
             }
@@ -724,7 +736,16 @@ struct NoteStatusContextMenu: View {
                     ForEach(PrayerStatus.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
             }
-        } else if note.journalContent != nil {
+        } else if let journal = note.journalContent {
+            Menu {
+                Picker("Journal Type", selection: Binding(get: { journal.journalType }, set: { session.setLibraryStatus(.journalType($0), noteID: note.id) })) {
+                    ForEach(JournalType.allCases, id: \.self) { choice in
+                        Label { Text(choice.label) } icon: { JournalTypeImages.image(for: choice) }.tag(choice)
+                    }
+                }
+            } label: {
+                Label { Text("Journal Type") } icon: { JournalTypeImages.image(for: journal.journalType) }
+            }
             Button("Emotional State", systemImage: "heart") { onJournalField?(.emotional) }
             Button("Mental State", systemImage: "brain") { onJournalField?(.mental) }
         }

@@ -336,3 +336,30 @@ full-tree move sheet; `CollectionsStore` validates and persists subtree reparent
 
 `Features/Notes/NoteLibraryCard.swift` owns shared Notes/Collection note-card
 presentation, previews and stamp activation; hosts own navigation/context actions.
+
+## SP-044 structure update
+
+`DesignSystem/StudySwipeReveal.swift` owns transient swipe-reveal presentation for
+Collection/Notes records and Prayer updates; hosts retain menus/command ownership.
+
+SP-044 dismissal follow-up: RootTabView supplies StudySwipeCoordinator for a single
+open action rail. AppShell/ScrollActivityObserver passively dismisses it on vertical
+finger intent; StudySwipeReveal keeps the shifted record body available for closing.
+Collection cards and lists omit the permanent item ellipsis.
+
+## SP-045 structure update
+
+`Features/Collections/CollectionDuplicateSheet.swift` owns the duplicate modal;
+CollectionsStore owns guarded atomic folder-tree/membership copy and annotation
+reference cleanup. NotesSession owns standalone note copy and Journal Type commands;
+Core/Notes/NoteDocument.swift owns additive JournalType decoding. NoteEditorView
+owns transient retractable tools and type selection.
+
+## SP-046 structure update
+
+`Features/Collections/PointToPonderSheets.swift` owns question creation and serial
+question/Explore/New note modals. CollectionModels/CollectionsStore own persisted
+PointToPonder values, Trash lifecycle and Bookmark → Gleaning commands. Collections
+schema 3 and all-data backups include points; older schemas default to none.
+NoteCreatorSheet accepts initial titles/content; existing NotesSession and Companion
+retain creation/send ownership. SettingsTrashViews exposes point recovery.

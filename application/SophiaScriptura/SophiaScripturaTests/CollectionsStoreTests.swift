@@ -3,6 +3,37 @@ import XCTest
 
 @MainActor
 final class CollectionsStoreTests: XCTestCase {
+    func testDuplicateCollectionRejectsLockedDescendantWithoutPartialCopy() async throws {
+        let root = StudyCollection(id: UUID(), name: "Root", detail: "", accent: .plum, modifiedAt: Date())
+        let child = StudyCollection(protectionID: UUID(), id: UUID(), name: "Locked Child", detail: "", parentID: root.id, accent: .gold, modifiedAt: Date())
+        let store = CollectionsStore(collections: [root, child], artifacts: [], memberships: [])
+        let before = store.collections
+        let result = await store.duplicateCollection(root.id, includeContents: true)
+        XCTAssertNil(result); XCTAssertEqual(store.collections, before)
+    }
+
+    func testDuplicateCollectionCopiesHierarchyAndOptionallyReusesItems() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await store.load()
+        let root = try XCTUnwrap(store.createCollection(name: "Study", detail: "Description", parentID: nil, accent: .plum))
+        let child = try XCTUnwrap(store.createCollection(name: "Child", detail: "", parentID: root, accent: .gold))
+        let item = store.addPassage(samplePassage(kind: .bookmark, insight: "", endVerse: 1))
+        store.addMembership(artifactID: item, collectionID: child)
+        let copyResult = await store.duplicateCollection(root, includeContents: true)
+        let copy = try XCTUnwrap(copyResult)
+        let copiedChild = try XCTUnwrap(store.children(of: copy).first)
+        XCTAssertNotEqual(copiedChild.id, child); XCTAssertTrue(store.contains(item, in: copiedChild.id))
+        XCTAssertTrue(store.contains(item, in: child)); XCTAssertEqual(store.passages.count, 1)
+        let emptyResult = await store.duplicateCollection(root, includeContents: false)
+        let empty = try XCTUnwrap(emptyResult)
+        XCTAssertEqual(store.children(of: empty).count, 1)
+        XCTAssertTrue(store.artifactIDs(for: empty, includingDescendants: true).isEmpty)
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await reopened.load()
+        XCTAssertTrue(reopened.contains(item, in: copiedChild.id))
+        let virtual = await store.duplicateCollection(StudyCollection.unfiledID, includeContents: true)
+        XCTAssertNil(virtual)
+    }
+
     func testFolderMovePreservesSubtreeAndMembershipsAndRejectsCycles() throws {
         let store = CollectionsStore.demo()
         let parent = try XCTUnwrap(store.collections.first { $0.name == "Assurance" })
@@ -386,11 +417,19 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertEqual(artifact.kind, .annotation)
         XCTAssertTrue(artifact.title.contains("Genesis"))
         XCTAssertTrue(store.contains(layerID, in: folder))
+        snapshot.groups[0].layers[0].deletedAt = Date()
+        XCTAssertFalse(store.presentedArtifacts(notes: [], annotationSnapshot: snapshot).contains { $0.id == layerID })
+        XCTAssertFalse(store.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: [], annotationSnapshot: snapshot).contains { $0.id == layerID })
 
         let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
         await reopened.load()
         XCTAssertEqual(reopened.savedAnnotation(id: layerID)?.layerName, "Annotation 1")
         XCTAssertTrue(reopened.contains(layerID, in: folder))
+        reopened.deleteAnnotationReference(layerID); await reopened.flush()
+        XCTAssertNil(reopened.savedAnnotation(id: layerID)); XCTAssertFalse(reopened.contains(layerID, in: folder))
+        let cleaned = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await cleaned.load()
+        XCTAssertNil(cleaned.savedAnnotation(id: layerID))
+        XCTAssertNotNil(AnnotationCollectionCatalog.resolveLayer(layerID: layerID, in: snapshot), "Reference cleanup must not mutate ink")
     }
 
     func testDeletePassageRemovesItFromNoFolderPresentation() async throws {
@@ -419,6 +458,100 @@ final class CollectionsStoreTests: XCTestCase {
         let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory))
         await reopened.load()
         XCTAssertEqual(reopened.collection(id: StudyCollection.unfiledID)?.accent, .gold)
+    }
+
+    func testPointLegacyDefaultsAndPersistenceWithTrashRecovery() async throws {
+        let legacy = try JSONDecoder().decode(CollectionsSnapshot.self, from: Data("{\"schemaVersion\":1}".utf8))
+        XCTAssertTrue(legacy.pointsToPonder.isEmpty)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let repository = CollectionsFileRepository(directory: directory)
+        let store = CollectionsStore(repository: repository)
+        await store.load()
+        let folder = try XCTUnwrap(store.createCollection(name: "Reflection", detail: "", parentID: nil, accent: .sage))
+        let id = try XCTUnwrap(store.addPointToPonder(question: "  How can I serve today?  ", collectionID: folder))
+        XCTAssertEqual(store.pointsToPonder.first?.question, "How can I serve today?")
+        XCTAssertTrue(store.contains(id, in: folder))
+        store.trashPoint(id)
+        XCTAssertFalse(store.presentedArtifacts(notes: []).contains { $0.id == id })
+        await store.flush()
+        let loaded = try await repository.load()
+        XCTAssertEqual(loaded.snapshot.schemaVersion, 3)
+        XCTAssertNotNil(loaded.snapshot.pointsToPonder.first?.trashedAt)
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        reopened.restorePoint(id)
+        XCTAssertTrue(reopened.presentedArtifacts(for: folder, includingDescendants: false, notes: []).contains { $0.id == id && $0.kind == .pointToPonder })
+        XCTAssertTrue(reopened.contains(id, in: folder))
+        reopened.trashPoint(id)
+        reopened.purgeExpiredTrash(now: Date().addingTimeInterval(31 * 86_400))
+        XCTAssertTrue(reopened.pointsToPonder.isEmpty)
+        XCTAssertFalse(reopened.contains(id, in: folder))
+    }
+
+    func testPointCreationRejectsInvalidQuestionOrLockedFolder() throws {
+        let folder = StudyCollection(protectionID: UUID(), id: UUID(), name: "Locked", detail: "", accent: .sage, modifiedAt: Date())
+        let store = CollectionsStore(collections: [folder], artifacts: [], memberships: [])
+        XCTAssertNil(store.addPointToPonder(question: "Question?", collectionID: folder.id))
+        XCTAssertNil(store.addPointToPonder(question: "  ", collectionID: StudyCollection.unfiledID))
+        XCTAssertNil(store.addPointToPonder(question: String(repeating: "x", count: 201), collectionID: StudyCollection.unfiledID))
+        XCTAssertNil(store.addPointToPonder(question: "Question?", collectionID: UUID()))
+        XCTAssertTrue(store.pointsToPonder.isEmpty)
+    }
+
+    func testBookmarkConversionPreservesIdentityContentAndMembershipsAfterReload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let repository = CollectionsFileRepository(directory: directory)
+        let store = CollectionsStore(repository: repository); await store.load()
+        let passage = samplePassage(kind: .bookmark, insight: "", endVerse: 3)
+        store.addPassage(passage)
+        let folder = try XCTUnwrap(store.createCollection(name: "Study", detail: "", parentID: nil, accent: .gold))
+        store.addMembership(artifactID: passage.id, collectionID: folder)
+        XCTAssertTrue(store.turnBookmarkToGleaning(passage.id))
+        XCTAssertFalse(store.turnBookmarkToGleaning(passage.id))
+        XCTAssertFalse(store.turnBookmarkToGleaning(UUID()))
+        store.updateInsight(id: passage.id, insight: "Reflect on grace.")
+        await store.flush()
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        let converted = try XCTUnwrap(reopened.passage(id: passage.id))
+        XCTAssertEqual(converted.kind, .gleaning)
+        XCTAssertEqual(converted.passageText, passage.passageText)
+        XCTAssertEqual(converted.spans, passage.spans)
+        XCTAssertEqual(converted.editionID, passage.editionID)
+        XCTAssertTrue(reopened.contains(passage.id, in: folder))
+        XCTAssertEqual(converted.gleaningNoteTitle, "Gleaning from \"Romans 8:1–3 (WEB)\"")
+        XCTAssertTrue(converted.noteContent.contains("Reflect on grace."))
+        XCTAssertTrue(converted.noteContent.contains(passage.passageText))
+    }
+
+    func testPointsSurviveBackupRestoreAndPermanentDeleteRequiresTrash() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let id = try XCTUnwrap(store.addPointToPonder(question: "What is faith?", collectionID: StudyCollection.unfiledID))
+        store.permanentlyDeletePoint(id)
+        XCTAssertEqual(store.pointsToPonder.count, 1)
+        let backup = try store.exportBackupSnapshot()
+        let restored = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        await restored.restoreBackupSnapshot(backup)
+        XCTAssertEqual(restored.pointsToPonder, store.pointsToPonder)
+        XCTAssertTrue(restored.presentedArtifacts(for: StudyCollection.unfiledID, includingDescendants: false, notes: []).contains { $0.id == id })
+    }
+
+    func testFolderChooserExcludesInactiveBranchesAndRestoresTrashedDestination() throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let active = try XCTUnwrap(store.createCollection(name: "Active", detail: "", parentID: nil, accent: .sage))
+        let deleted = try XCTUnwrap(store.createCollection(name: "Deleted", detail: "", parentID: nil, accent: .sage))
+        let child = try XCTUnwrap(store.createCollection(name: "Promoted child", detail: "", parentID: deleted, accent: .sage))
+        let archived = try XCTUnwrap(store.createCollection(name: "Archived", detail: "", parentID: nil, accent: .sage))
+        let archivedChild = try XCTUnwrap(store.createCollection(name: "Hidden child", detail: "", parentID: archived, accent: .sage))
+        store.moveCollectionToTrash(id: deleted)
+        store.archiveCollection(id: archived)
+        let ids = Set(store.outline().map { $0.collection.id })
+        XCTAssertEqual(ids, [active, child])
+        XCTAssertFalse(ids.contains(StudyCollection.unfiledID))
+        XCTAssertFalse(ids.contains(archivedChild))
+        XCTAssertEqual(store.outline().first(where: { $0.collection.id == child })?.depth, 0)
+        store.restoreCollectionFromTrash(id: deleted)
+        XCTAssertTrue(store.outline().contains { $0.collection.id == deleted })
+        store.unarchiveCollection(id: archived)
+        XCTAssertTrue(store.outline().contains { $0.collection.id == archivedChild && $0.depth == 1 })
     }
 
     private func samplePassage(kind: SavedPassageKind, insight: String, endVerse: Int) -> SavedPassage {

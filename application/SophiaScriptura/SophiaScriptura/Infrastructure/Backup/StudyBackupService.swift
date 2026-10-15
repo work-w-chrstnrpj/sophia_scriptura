@@ -82,7 +82,7 @@ enum StudyBackupService {
         try notes.protection.require(notes.snapshot.notes.map(\.protectionID), in: .notes)
         try collections.protection.require(collections.collections.map(\.protectionID), in: .collections)
         _ = try NotesFileRepository.inspectArchive(envelope.notes)
-        guard (1...2).contains(envelope.collections.schemaVersion) else { throw StudyBackupError.unsupported }
+        guard (1...3).contains(envelope.collections.schemaVersion) else { throw StudyBackupError.unsupported }
         await notes.restore(envelope.notes)
         guard notes.notice == "Notes backup restored. The pre-restore copy is available in Backups." else { throw StudyBackupError.invalid }
         await annotations.restore(envelope.annotations, document: readerDocument)

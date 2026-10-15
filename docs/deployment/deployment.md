@@ -528,3 +528,70 @@ App background audio and the extension point are supplied by explicit plist inpu
 `AppInfoSupplement.plist` and `StudyActivityWidgetInfo.plist`. Verify the built plists,
 not only the build settings. See the [build investigation](../testing/sp030-build-investigation.md)
 for reproduced errors, corrections and verification boundaries.
+
+### SP-044 swipe dismissal follow-up — 2026-10-14
+
+Owner-requested fixes remove Collection card ellipsis, limit actions to one open
+record, restore body swipe-back and dismiss actions on vertical finger scrolling.
+Four focused UI cases passed across `build/sp044/dismiss-r1.xcresult` and
+`dismiss-r2.xcresult`. Installer dry-run, signed Debug build, strict signature and
+bundle checks, in-place install and normal launch passed on `iPad ni Paj`.
+Version remains 1.2.0/build 24, bundle `com.personal.SophiaScriptura`; no uninstall
+or data reset. Logs: `build/ipad-install/logs/20261014-230023-28190/` and
+`build/sp044/ipad-dismiss-install.log`. Physical interaction acceptance remains open;
+see [SP-044](../../tickets/SP-044-consistent-record-swipe-actions.md).
+
+SP-044 Subfolders polish follow-up (2026-10-14): plain Arrange label and immediate
+child-folder counts passed the focused nested-hierarchy UI check and screenshot
+review. Signed build, strict signature/bundle checks and in-place iPad installation
+passed (`build/ipad-install/logs/20261014-232102-29009/`). Launch was blocked by the
+locked iPad (CoreDevice/FBS error 7); unlock and open Sophia manually. Same bundle,
+1.2.0/build 24; no uninstall or data reset.
+
+### SP-045 build and pending delivery — 2026-10-15
+
+Study duplication, annotation-reference cleanup, retractable tools and Journal Type
+passed focused domain/protection and two UI flows. Signed Debug build and strict
+signature/identity checks passed. Installer retry could not install because CoreDevice
+returned error 4016 (device connectivity/power usage assertions unavailable).
+Logs: `build/sp045/install.log`. Bundle remains com.personal.SophiaScriptura,
+1.2.0/build 24. Existing app/data were preserved; installation/launch are pending.
+
+### SP-045 Journal Type icons — 2026-10-15
+
+The Unset/book, Diaristic/quill and Spiritual/owl update passed installer dry-run,
+signed Debug build, strict signature/identity checks, in-place installation and
+normal launch on `iPad ni Paj`. Existing app/data preserved; version remains
+1.2.0/build 24. Evidence: `build/sp045/journal-icons/ipad-install.log`.
+Physical appearance and interaction acceptance remain open.
+
+Journal Type native-menu icon correction (2026-10-15): signed build, strict
+signature/identity checks, in-place installation and normal launch passed on
+`iPad ni Paj`. Existing data preserved; version remains 1.2.0/build 24.
+Evidence: `build/sp045/journal-icons/menu-fix-install.log`.
+
+### SP-046 v1.3.0 — 2026-10-15
+
+Installer dry-run, signed Debug build, strict signature/bundle identity, in-place
+installation and normal launch passed on `iPad ni Paj`. Version **1.3.0/build 25**,
+bundle `com.personal.SophiaScriptura`. No uninstall, data reset or translation sync.
+Initial CoreDevice 4016 was resolved after the owner unlocked/reconnected the iPad.
+Evidence: `build/sp046/ipad-install-retry.log`. The source includes the existing
+SP-044/SP-045 worktree changes. Physical feature acceptance remains open; see
+[SP-046](../../tickets/SP-046-points-to-ponder-and-study-conversions.md).
+
+SP-046 owner follow-up (2026-10-15): the active-folder chooser and matching bookmark
+buttons passed signed Debug build, strict signature/identity checks, in-place install
+and normal launch on `iPad ni Paj`. Installed-app query confirms **1.3.0/build 25**.
+Existing app/data preserved. Evidence: `build/sp046/fixes/ipad-install.log` and
+`installed-app.log`.
+
+SP-046 transparent Gleaning button follow-up: signed build, strict signature/identity,
+in-place installation and normal launch passed on `iPad ni Paj`, 1.3.0/build 25.
+Evidence: `build/sp046/fixes/transparent-ipad-install.log`. Existing data preserved.
+
+SP-046 Gleaning action follow-up: Turn to Note now follows See the whole chapter
+with the same transparent full-width style as Turn into Gleaning. Signed build,
+strict signature/identity, in-place install and normal launch passed on `iPad ni Paj`,
+1.3.0/build 25. Existing data preserved. Log:
+`build/sp046/fixes/gleaning-layout-ipad-install.log`.

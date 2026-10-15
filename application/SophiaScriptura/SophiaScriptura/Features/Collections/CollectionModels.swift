@@ -8,6 +8,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
     case link
     case bookmark
     case gleaning
+    case pointToPonder
 
     var id: Self { self }
 
@@ -20,6 +21,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
         case .link: return "Links"
         case .bookmark: return "Bookmarks"
         case .gleaning: return "Gleanings"
+        case .pointToPonder: return "Points to Ponder"
         }
     }
 
@@ -32,6 +34,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
         case .link: return "link"
         case .bookmark: return "bookmark.fill"
         case .gleaning: return "laurel.leading"
+        case .pointToPonder: return "questionmark.bubble"
         }
     }
 }
@@ -381,7 +384,7 @@ struct StudyCollection: Codable, Identifiable, Hashable {
         StudyCollection(
             id: unfiledID,
             name: "No Folder",
-            detail: "Notes, bookmarks, gleanings, and links that are not in a folder.",
+            detail: "Notes, points to ponder, bookmarks, gleanings, and links that are not in a folder.",
             parentID: nil,
             accent: accent,
             modifiedAt: modifiedAt,
@@ -434,6 +437,9 @@ struct SavedPassage: Codable, Identifiable, Hashable {
         return "\(bookTitle) \(chapter):\(verses) (\(versionAbbreviation))"
     }
 
+    var gleaningNoteTitle: String { "Gleaning from \"\(referenceLabel)\"" }
+    var noteContent: String { referenceLabel + "\n\n" + passageText + (insight.isEmpty ? "" : "\n\n" + insight) }
+
     func matches(bookID: String, chapter: Int, verse: Int, editionID: String) -> Bool {
         self.bookID == bookID && self.chapter == chapter && self.editionID == editionID
             && verse >= startVerse && verse <= endVerse
@@ -470,7 +476,16 @@ struct StudyConversation: Codable, Identifiable, Hashable {
     }
 }
 
+struct PointToPonder: Codable, Identifiable, Hashable {
+    let id: UUID
+    var question: String
+    var createdAt: Date
+    var trashedAt: Date? = nil
+}
+
 struct CollectionsSnapshot: Codable, Equatable {
+    var pointsToPonder: [PointToPonder] = []
+    var requiredSchemaVersion: Int { !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1 }
     var schemaVersion = 1
     var revision = 0
     var collections: [StudyCollection] = []
@@ -482,13 +497,14 @@ struct CollectionsSnapshot: Codable, Equatable {
     var unfiledAccent: CollectionAccent = .stone
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, revision, collections, passages, savedAnnotations, links, conversations, memberships, unfiledAccent
+        case pointsToPonder, schemaVersion, revision, collections, passages, savedAnnotations, links, conversations, memberships, unfiledAccent
     }
 
     init(
         schemaVersion: Int = 1,
         revision: Int = 0,
         collections: [StudyCollection] = [],
+        pointsToPonder: [PointToPonder] = [],
         passages: [SavedPassage] = [],
         savedAnnotations: [SavedAnnotation] = [],
         links: [SavedLink] = [],
@@ -499,6 +515,7 @@ struct CollectionsSnapshot: Codable, Equatable {
         self.schemaVersion = schemaVersion
         self.revision = revision
         self.collections = collections
+        self.pointsToPonder = pointsToPonder
         self.passages = passages
         self.savedAnnotations = savedAnnotations
         self.links = links
@@ -512,6 +529,7 @@ struct CollectionsSnapshot: Codable, Equatable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 0
         collections = try container.decodeIfPresent([StudyCollection].self, forKey: .collections) ?? []
+        pointsToPonder = try container.decodeIfPresent([PointToPonder].self, forKey: .pointsToPonder) ?? []
         passages = try container.decodeIfPresent([SavedPassage].self, forKey: .passages) ?? []
         savedAnnotations = try container.decodeIfPresent([SavedAnnotation].self, forKey: .savedAnnotations) ?? []
         links = try container.decodeIfPresent([SavedLink].self, forKey: .links) ?? []
@@ -544,6 +562,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
     case note
     case bookmark
     case gleaning
+    case pointToPonder
     case conversation
     case link
 
@@ -557,6 +576,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         case .note: return "Notes"
         case .bookmark: return "Bookmarks"
         case .gleaning: return "Gleanings"
+        case .pointToPonder: return "Points to Ponder"
         case .conversation: return "Conversations"
         case .link: return "Links"
         }
@@ -572,6 +592,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         case .link: return .link
         case .bookmark: return .bookmark
         case .gleaning: return .gleaning
+        case .pointToPonder: return .pointToPonder
         }
     }
 }

@@ -220,6 +220,32 @@ import ImageIO
         inkRecoveryGeneration = UUID(); rejectedInk = nil
         Task { [weak self] in await self?.loadRejectedInk() }
     }
+    /// Copies local value payloads, preserving protection while giving the note a new identity.
+    @discardableResult func duplicate(_ id: UUID) -> UUID? {
+        guard loaded, !restoring else { return nil }
+        guard snapshot.notes.count < 200 else { notice = "Notes has reached its 200-note safety limit."; return nil }
+        guard let source = snapshot.notes.first(where: { $0.id == id }), source.isActiveInLibrary,
+              !isLocked(source), collections?.concealsNote(id) != true else { return nil }
+        if selectedNoteID == id { flushSurface?() }
+        guard let original = snapshot.notes.first(where: { $0.id == id }) else { return nil }
+        var copy = original
+        copy.id = UUID(); copy.title = String(original.title.prefix(193)) + " (Copy)"
+        copy.createdAt = Date(); copy.updatedAt = copy.createdAt
+        copy.deletedAt = nil; copy.archivedAt = nil; copy.trashedAt = nil
+        do {
+            try copy.validate()
+            var candidate = snapshot; candidate.notes.append(copy)
+            try candidate.validate()
+            let bytes = candidate.notes.reduce(0) { total, note in
+                total + (note.page?.ink.count ?? 0) + note.allObjects.reduce(0) { $0 + $1.payload.count }
+            }
+            guard bytes <= NotesFileRepository.archiveLimit / 3,
+                  try JSONEncoder().encode(candidate).count <= NotesFileRepository.archiveLimit else { throw NotesError.limit }
+        } catch { report(error); return nil }
+        snapshot.notes.append(copy); changed()
+        return copy.id
+    }
+
     @discardableResult func create(
         kind: NoteKind = .page,
         quote: NoteQuote? = nil,
@@ -938,7 +964,7 @@ import ImageIO
 
     enum LibraryStatusChange {
         case page(PageStatus), prayer(PrayerStatus)
-        case emotional(JournalEmotionalState?), mental(JournalMentalState?)
+        case emotional(JournalEmotionalState?), mental(JournalMentalState?), journalType(JournalType)
     }
 
     /// Updates a library item without selecting it or changing the editor route.
@@ -954,6 +980,8 @@ import ImageIO
             content.status = status; next.content = .prayer(content)
         case (.emotional(let state), .journal(var content)):
             content.emotionalState = state; next.content = .journal(content)
+        case (.journalType(let type), .journal(var content)):
+            content.journalType = type; next.content = .journal(content)
         case (.mental(let state), .journal(var content)):
             content.mentalState = state; next.content = .journal(content)
         default: return
@@ -995,6 +1023,13 @@ import ImageIO
             guard case .journal(var content) = note.content else { return }
             content.emotionalState = state
             note.content = .journal(content)
+        }, record: false)
+    }
+
+    func setJournalType(_ type: JournalType) {
+        edit({ note in
+            guard case .journal(var content) = note.content else { return }
+            content.journalType = type; note.content = .journal(content)
         }, record: false)
     }
 

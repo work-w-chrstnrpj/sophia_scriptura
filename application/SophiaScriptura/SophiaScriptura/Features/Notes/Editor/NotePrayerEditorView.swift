@@ -9,6 +9,7 @@ struct NotePrayerEditorView: View {
     @State private var rename = false
     @State private var title = ""
     @State private var newUpdate = ""
+    @FocusState private var updateInputFocused: Bool
     @State private var editingUpdate: PrayerUpdate?
     @State private var editingUpdateBody = ""
     @State private var confirmClear = false
@@ -326,6 +327,8 @@ struct NotePrayerEditorView: View {
 
             HStack(alignment: .top, spacing: 10) {
                 TextField("Share an update…", text: $newUpdate, axis: .vertical)
+                    .accessibilityIdentifier("notes.prayer.update.input")
+                    .focused($updateInputFocused)
                     .lineLimit(1...4)
                     .padding(12)
                     .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -333,6 +336,7 @@ struct NotePrayerEditorView: View {
                 Button("Share") {
                     session.addPrayerUpdate(newUpdate)
                     newUpdate = ""
+                    updateInputFocused = false
                 }
                 .buttonStyle(CollectionProminentButtonStyle())
                 .disabled(newUpdate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -347,6 +351,14 @@ struct NotePrayerEditorView: View {
                 VStack(spacing: 12) {
                     ForEach(prayer?.updates ?? []) { update in
                         PrayerUpdateRow(update: update, theme: theme)
+                            .studySwipeReveal(identifier: "notes.prayer.update.swipe.\(update.id)") {
+                                Button("Edit", systemImage: "pencil") {
+                                    editingUpdate = update; editingUpdateBody = update.body
+                                }
+                                .accessibilityIdentifier("notes.prayer.update.swipe.edit")
+                                Button("Delete", systemImage: "trash", role: .destructive) { confirmDeleteUpdate = update }
+                                    .accessibilityIdentifier("notes.prayer.update.swipe.delete")
+                            }
                             .contextMenu {
                                 Button {
                                     editingUpdate = update

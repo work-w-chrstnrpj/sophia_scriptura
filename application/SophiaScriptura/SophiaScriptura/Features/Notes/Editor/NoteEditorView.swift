@@ -8,6 +8,7 @@ struct NoteEditorView: View {
     var reader: ReaderSession
     @ObservedObject var collections: CollectionsStore
     @AppStorage("notes.scriptureVisible") private var scriptureVisible = true
+    @AppStorage("notes.editor.toolsExpanded") private var toolsExpanded = true
     @State private var rename = false
     @State private var title = ""
     @State private var gallery: String?
@@ -204,62 +205,70 @@ struct NoteEditorView: View {
     private var editorToolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) { titleButton }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button(session.toolsVisible ? "Hide Pencil tools" : "Pencil tools", systemImage: session.toolsVisible ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle") {
-                session.toolsVisible.toggle()
-                session.toolsRequest = UUID()
+            if session.note?.kind == .page || session.note?.kind == .journal {
+                Button(toolsExpanded ? "Collapse editing tools" : "Expand editing tools", systemImage: toolsExpanded ? "chevron.right" : "chevron.left") { toolsExpanded.toggle() }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("notes.tools.collapse")
+                    .accessibilityValue(toolsExpanded ? "Expanded" : "Collapsed")
             }
-            .labelStyle(.iconOnly)
-            .accessibilityIdentifier("notes.tools")
-            .accessibilityValue(session.toolsVisible ? "Active" : "Hidden")
-            if session.note?.kind == .canvas {
-                Button("Text box", systemImage: "textformat") { session.insert(.text) }
-                    .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.insert.text")
-                Button("Shapes", systemImage: "square.on.circle") { gallery = "Shapes" }
-                    .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.shapes")
-                    .popover(isPresented: galleryBinding("Shapes")) { NoteInsertGallery(session: session, kind: "Shapes") { gallery = nil } }
-                Button("Stickers", systemImage: "face.smiling") { gallery = "Stickers" }
-                    .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.stickers")
-                    .popover(isPresented: galleryBinding("Stickers")) { NoteInsertGallery(session: session, kind: "Stickers") { gallery = nil } }
-                Menu("Insert", systemImage: "plus") {
-                    Button("Text box") { session.insert(.text) }
-                    Button("Sticky note") { session.insert(.text, tint: .yellow) }
-                    Button("Shape") { gallery = "Shapes" }
-                    Button("Sticker") { gallery = "Stickers" }
-                    Button("Image from Files") { importing = true }
-                    Button("Link") { linkPrompt = true }
-                    Button("Table") { session.insert(.table) }
-                    Button("Bullet list") { session.insert(.bullets) }
-                    Button("Numbered list") { session.insert(.numbered) }
+            if session.note?.kind == .canvas || toolsExpanded {
+                Button(session.toolsVisible ? "Hide Pencil tools" : "Pencil tools", systemImage: session.toolsVisible ? "pencil.tip.crop.circle.fill" : "pencil.tip.crop.circle") {
+                    session.toolsVisible.toggle()
+                    session.toolsRequest = UUID()
                 }
                 .labelStyle(.iconOnly)
-                .accessibilityIdentifier("notes.insert")
-            } else if session.note?.kind == .page || session.note?.kind == .journal {
-                Button("Text format", systemImage: "textformat") { showFormatPopover = true }
-                    .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.format")
-                    .popover(isPresented: $showFormatPopover, arrowEdge: .top) {
-                        NoteFormatPopover(session: session)
+                .accessibilityIdentifier("notes.tools")
+                .accessibilityValue(session.toolsVisible ? "Active" : "Hidden")
+                if session.note?.kind == .canvas {
+                    Button("Text box", systemImage: "textformat") { session.insert(.text) }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.insert.text")
+                    Button("Shapes", systemImage: "square.on.circle") { gallery = "Shapes" }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.shapes")
+                        .popover(isPresented: galleryBinding("Shapes")) { NoteInsertGallery(session: session, kind: "Shapes") { gallery = nil } }
+                    Button("Stickers", systemImage: "face.smiling") { gallery = "Stickers" }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.stickers")
+                        .popover(isPresented: galleryBinding("Stickers")) { NoteInsertGallery(session: session, kind: "Stickers") { gallery = nil } }
+                    Menu("Insert", systemImage: "plus") {
+                        Button("Text box") { session.insert(.text) }
+                        Button("Sticky note") { session.insert(.text, tint: .yellow) }
+                        Button("Shape") { gallery = "Shapes" }
+                        Button("Sticker") { gallery = "Stickers" }
+                        Button("Image from Files") { importing = true }
+                        Button("Link") { linkPrompt = true }
+                        Button("Table") { session.insert(.table) }
+                        Button("Bullet list") { session.insert(.bullets) }
+                        Button("Numbered list") { session.insert(.numbered) }
                     }
-                Button("Checkbox", systemImage: "checklist") { session.insertCheckbox() }
                     .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.insert.checkbox")
-                Button("Table", systemImage: "tablecells") { session.insert(.table) }
+                    .accessibilityIdentifier("notes.insert")
+                } else if session.note?.kind == .page || session.note?.kind == .journal {
+                    Button("Text format", systemImage: "textformat") { showFormatPopover = true }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.format")
+                        .popover(isPresented: $showFormatPopover, arrowEdge: .top) {
+                            NoteFormatPopover(session: session)
+                        }
+                    Button("Checkbox", systemImage: "checklist") { session.insertCheckbox() }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.insert.checkbox")
+                    Button("Table", systemImage: "tablecells") { session.insert(.table) }
+                        .labelStyle(.iconOnly)
+                        .accessibilityIdentifier("notes.insert.table")
+                    Menu("Attach", systemImage: "paperclip") {
+                        Button("Link", systemImage: "link") { linkPrompt = true }
+                        Button("Take Photo", systemImage: "camera") { beginCamera() }
+                        Button("Choose Photo", systemImage: "photo") { choosePhoto = true }
+                        Button("Scan Text", systemImage: "text.viewfinder") { beginScan(.text) }
+                        Button("Scan Document", systemImage: "doc.viewfinder") { beginScan(.document) }
+                        Button(recorder.recording ? "Stop Recording" : "Record Audio", systemImage: recorder.recording ? "stop.circle" : "mic") { toggleRecording() }
+                        Button("Attach Audio", systemImage: "waveform") { importAudio = true }
+                    }
                     .labelStyle(.iconOnly)
-                    .accessibilityIdentifier("notes.insert.table")
-                Menu("Attach", systemImage: "paperclip") {
-                    Button("Link", systemImage: "link") { linkPrompt = true }
-                    Button("Take Photo", systemImage: "camera") { beginCamera() }
-                    Button("Choose Photo", systemImage: "photo") { choosePhoto = true }
-                    Button("Scan Text", systemImage: "text.viewfinder") { beginScan(.text) }
-                    Button("Scan Document", systemImage: "doc.viewfinder") { beginScan(.document) }
-                    Button(recorder.recording ? "Stop Recording" : "Record Audio", systemImage: recorder.recording ? "stop.circle" : "mic") { toggleRecording() }
-                    Button("Attach Audio", systemImage: "waveform") { importAudio = true }
+                    .accessibilityIdentifier("notes.attach")
                 }
-                .labelStyle(.iconOnly)
-                .accessibilityIdentifier("notes.attach")
             }
             if session.note?.kind == .canvas {
                 Menu {
@@ -296,6 +305,16 @@ struct NoteEditorView: View {
                 pageStatusMenu
             }
             if session.note?.kind == .journal {
+                Menu {
+                    Picker("Journal Type", selection: Binding(get: { session.note?.journalContent?.journalType ?? .spiritual }, set: { session.setJournalType($0) })) {
+                        ForEach(JournalType.allCases, id: \.self) { choice in
+                        Label { Text(choice.label) } icon: { JournalTypeImages.image(for: choice) }.tag(choice)
+                    }
+                    }
+                } label: { JournalTypeImages.image(for: session.note?.journalContent?.journalType ?? .unset) }
+                .accessibilityLabel("Journal Type")
+                .accessibilityValue(session.note?.journalContent?.journalType.label ?? JournalType.spiritual.label)
+                .accessibilityIdentifier("notes.journal.type")
                 let emotion = session.note?.journalContent?.emotionalState
                 let mind = session.note?.journalContent?.mentalState
                 Button { journalSheet = .emotional } label: {

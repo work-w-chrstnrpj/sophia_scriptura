@@ -28,17 +28,19 @@ struct CollectionArtifactRow: View {
 
     private var deleteTitle: String {
         switch artifact.kind {
+        case .pointToPonder: return "Delete Point to Ponder"
         case .gleaning: return "Delete Gleaning"
         case .link: return "Delete Link"
         case .note: return "Delete Note"
         case .conversation: return "Delete Conversation"
+        case .annotation: return "Remove Annotation Reference"
         default: return "Delete Bookmark"
         }
     }
 
     private var canDeleteArtifact: Bool {
         switch artifact.kind {
-        case .bookmark, .gleaning, .link, .conversation:
+        case .pointToPonder, .bookmark, .gleaning, .link, .conversation, .annotation:
             return true
         case .note:
             guard let notes,
@@ -76,8 +78,13 @@ struct CollectionArtifactRow: View {
             }
             .accessibilityIdentifier("collections.open.\(artifact.title)")
             .contextMenu { actions }
-            // Kept outside the record's identifier and context menu so it stays a distinct, tappable control.
-            artifactActionsMenu
+        }
+        .studySwipeReveal(enabled: !cards, identifier: "collections.swipe.\(artifact.id)") {
+            Menu("More", systemImage: "ellipsis") { actions }
+                .accessibilityIdentifier("collections.swipe.more")
+            if placement != .subfolder, canDeleteArtifact {
+                Button("Delete", systemImage: "trash", role: .destructive, action: deleteArtifact)
+            }
         }
     }
 
@@ -135,7 +142,7 @@ struct CollectionArtifactRow: View {
                 }
             }
             .padding(.leading, 14)
-            .padding(.trailing, 44)
+            .padding(.trailing, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: cards ? Self.cardHeight : Self.listHeight)
@@ -146,22 +153,6 @@ struct CollectionArtifactRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-
-    private var artifactActionsMenu: some View {
-        Menu {
-            actions
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color(theme.palette.secondary))
-                .padding(10)
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.borderlessButton)
-        .accessibilityLabel("Item actions")
-        .accessibilityIdentifier("collections.artifact.menu.\(artifact.id.uuidString)")
     }
 
     @ViewBuilder

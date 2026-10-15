@@ -33,6 +33,149 @@ final class NotesUITests: XCTestCase {
         XCTAssertTrue(create.waitForExistence(timeout: 5))
         create.tap()
     }
+    func testJournalCardTypeMenuIcons() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "journal")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        for choice in ["Diaristic Journal", "Spiritual Journal", "Unset"] {
+            app.staticTexts["Untitled Journal"].firstMatch.press(forDuration: 1)
+            let menu = app.buttons["Journal Type"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 5))
+            let field = XCTAttachment(screenshot: app.screenshot())
+            field.name = "Journal Type field before " + choice
+            field.lifetime = .keepAlways; add(field)
+            menu.tap()
+            for title in ["Unset", "Diaristic Journal", "Spiritual Journal"] {
+                XCTAssertTrue(app.buttons[title].waitForExistence(timeout: 5))
+            }
+            let choices = XCTAttachment(screenshot: app.screenshot())
+            choices.name = "Journal Type choices before " + choice
+            choices.lifetime = .keepAlways; add(choices)
+            app.buttons[choice].tap()
+        }
+    }
+
+    func testDuplicateNoteRetractableToolsAndJournalType() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "page")
+        let collapse = app.buttons["notes.tools.collapse"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5))
+        if app.buttons["notes.format"].exists { collapse.tap() }
+        XCTAssertFalse(app.buttons["notes.format"].exists)
+        XCTAssertTrue(app.buttons["notes.options"].exists)
+        collapse.tap(); XCTAssertTrue(app.buttons["notes.format"].exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.staticTexts["Untitled Note"].firstMatch.press(forDuration: 1)
+        app.buttons["notes.duplicate"].tap()
+        XCTAssertTrue(app.staticTexts["Untitled Note (Copy)"].waitForExistence(timeout: 5))
+        newNote(app, kind: "journal")
+        XCTAssertEqual(app.buttons["notes.journal.type"].value as? String, "Unset")
+        app.buttons["notes.journal.type"].tap(); app.buttons["Diaristic Journal"].tap()
+        XCTAssertEqual(app.buttons["notes.journal.type"].value as? String, "Diaristic Journal")
+        app.buttons["notes.journal.type"].tap(); app.buttons["Spiritual Journal"].tap()
+        XCTAssertEqual(app.buttons["notes.journal.type"].value as? String, "Spiritual Journal")
+        app.buttons["notes.journal.type"].tap(); app.buttons["Unset"].tap()
+        XCTAssertEqual(app.buttons["notes.journal.type"].value as? String, "Unset")
+        app.buttons["notes.tools.collapse"].tap()
+        XCTAssertFalse(app.buttons["notes.format"].exists)
+        XCTAssertTrue(app.buttons["notes.journal.type"].exists)
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "Collapsed Journal editing tools"; capture.lifetime = .keepAlways; add(capture)
+    }
+
+    func testNotesListAndPrayerUpdatesRevealActionsOnSwipe() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "page")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["notes.viewOptions"].tap()
+        let cards = app.buttons["Cards"]
+        XCTAssertTrue(cards.waitForExistence(timeout: 5)); cards.tap()
+        // Dismiss the menu without selecting a record.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.4)).tap()
+        let title = app.staticTexts["Untitled Note"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.swipeLeft()
+        XCTAssertTrue(app.buttons["notes.swipe.more"].waitForExistence(timeout: 5))
+        app.buttons["notes.swipe.more"].tap()
+        XCTAssertTrue(app.buttons["notes.editNote"].waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.4)).tap()
+        app.buttons["notes.swipe.more"].swipeRight()
+        XCTAssertFalse(app.buttons["notes.swipe.more"].exists)
+        app.buttons["notes.viewOptions"].tap(); cards.tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.4)).tap()
+        title.swipeLeft()
+        XCTAssertTrue(app.buttons["notes.swipe.more"].waitForExistence(timeout: 5), "Cards also reveal actions")
+        app.buttons["notes.swipe.more"].swipeRight()
+        title.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["notes.editNote"].waitForExistence(timeout: 5), "Holding retains the full menu")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.4)).tap()
+        newNote(app, kind: "prayer")
+        let input = app.descendants(matching: .any)["notes.prayer.update.input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText("Swipe update fixture")
+        app.buttons["notes.prayer.update.share"].tap()
+        let text = app.staticTexts["Swipe update fixture"].firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 5)); text.swipeLeft()
+        XCTAssertTrue(app.buttons["notes.prayer.update.swipe.edit"].waitForExistence(timeout: 5))
+        app.buttons["notes.prayer.update.swipe.delete"].tap()
+        XCTAssertTrue(app.alerts["Delete this update?"].waitForExistence(timeout: 5))
+        app.alerts["Delete this update?"].buttons["Cancel"].tap()
+        XCTAssertTrue(text.exists)
+    }
+
+    func testOnlyOneSwipeRailAndDismissFromRecordOrScroll() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "page")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        newNote(app, kind: "prayer")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["notes.viewOptions"].tap(); app.buttons["Cards"].tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.4)).tap()
+        let page = app.staticTexts["Untitled Note"].firstMatch
+        let prayer = app.staticTexts["Untitled Prayer"].firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 5))
+        let pageX = page.frame.minX
+        page.swipeLeft()
+        XCTAssertEqual(app.buttons.matching(identifier: "notes.swipe.more").count, 1)
+        prayer.swipeLeft()
+        XCTAssertEqual(app.buttons.matching(identifier: "notes.swipe.more").count, 1, "Opening another row closes the first")
+        XCTAssertEqual(page.frame.minX, pageX, accuracy: 2)
+
+        // Start on the shifted record's blank body, not on an action button.
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let y = prayer.frame.midY
+        origin.withOffset(CGVector(dx: 160, dy: y)).press(forDuration: 0.05,
+            thenDragTo: origin.withOffset(CGVector(dx: 420, dy: y)))
+        XCTAssertFalse(app.buttons["notes.swipe.more"].exists, "Swipe-back on the record itself closes the rail")
+        prayer.swipeLeft()
+        XCTAssertTrue(app.buttons["notes.swipe.more"].exists)
+        origin.withOffset(CGVector(dx: 160, dy: prayer.frame.midY)).press(forDuration: 0.05,
+            thenDragTo: origin.withOffset(CGVector(dx: 160, dy: prayer.frame.midY - 140)))
+        XCTAssertFalse(app.buttons["notes.swipe.more"].exists, "Vertical scrolling dismisses actions")
+        XCTAssertFalse(app.scrollViews["notes.viewport"].exists, "Dismissal must not open a note")
+    }
+
+    func testPrayerUpdateVerticalDragStillScrolls() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "prayer")
+        let input = app.descendants(matching: .any)["notes.prayer.update.input"].firstMatch
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText((1...55).map { "Line \($0) of prayer update." }.joined(separator: "\n"))
+        app.buttons["notes.prayer.update.share"].tap()
+        let hideKeyboard = app.buttons["Hide keyboard"]
+        if hideKeyboard.exists { hideKeyboard.tap() }
+        let update = app.descendants(matching: .any).matching(NSPredicate(format: "identifier MATCHES %@", "notes.prayer.update.[A-F0-9-]+")).firstMatch
+        XCTAssertTrue(update.waitForExistence(timeout: 5))
+        let before = update.frame.minY
+        let startY = min(before + 80, app.frame.height - 220)
+        XCTAssertGreaterThan(startY, before, "The drag must start inside the update")
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: app.frame.midX, dy: startY))
+        start.press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: app.frame.midX, dy: startY - 260)))
+        XCTAssertLessThan(update.frame.minY, before - 40, "A vertical drag over a swipe-enabled update must scroll")
+        XCTAssertFalse(app.buttons["notes.prayer.update.swipe.delete"].exists)
+    }
+
     func testHoldNoteStatusMenus() {
         let app = launch(); notes(app)
         newNote(app, kind: "page")

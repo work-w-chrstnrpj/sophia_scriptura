@@ -622,3 +622,33 @@ stamp sequence runs on card appearance and active-tab entry, cancels while hidde
 and respects Reduce Motion. Hosts retain their own selection, context actions and
 navigation. Fixed 176pt size and Collection list mode remain. Locked notes conceal
 previews and stamps in both hosts. No persistence or protection-policy changes.
+
+## SP-044 record action consistency
+
+Long press retains the complete action menu. Collection material lists and cards no longer
+show a permanent ellipsis; swipe left reveals More/Delete where eligible. Notes
+cards/lists gain the same swipe rail; Prayer updates reveal Edit/Delete. Rightward
+swipe closes actions; no full-swipe commit. Existing confirmations and access
+guards apply. Notes multiselect disables swipe. Accessibility Show/Hide actions
+and Reduce Motion handling provide alternatives to gestures/settling animation.
+
+SP-044 follow-up: only one record rail is open at a time. Swipe right on the record
+body, tap its shifted body, or start vertical finger scrolling to close it. Opening
+another record rail or switching tabs also dismisses it. Collection cards retain
+the hold menu without a permanent ellipsis. Drag onset/settling are shortened;
+record commands and confirmations remain unchanged.
+
+SP-045: the held note menu (also swipe More) offers Duplicate Note for accessible
+active notes. The copy is an independent unfiled note titled with `(Copy)`. Page
+and Journal expose a chevron to collapse/re-expand Pencil, text-format and insertion
+controls. Status, undo/redo and options remain visible; the local expanded preference
+is shared between Page and Journal. Journal Type is a separate book-icon menu with
+Diaristic Journal and Spiritual Journal, also available in held note status settings.
+
+## SP-046 initial note titles
+
+Points to Ponder → Explore → Turn into a Note opens the existing New note modal with
+the question as its editable title. Gleaning → Turn into a Note uses
+`Gleaning from "Book Chapter:Verse (Translation)"` and seeds reference, passage text
+and insight content. Type/color selection and existing title/capacity limits apply.
+Cancellation creates no note; source material remains saved.

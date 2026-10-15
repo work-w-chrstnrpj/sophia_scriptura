@@ -20,6 +20,7 @@ struct CollectionDetailView: View {
     var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
+    var exploreQuestion: (String) -> UUID? = { _ in nil }
     var trashConversation: (UUID) -> Void = { _ in }
     var books: [ScriptureBook] = []
 
@@ -40,11 +41,13 @@ struct CollectionDetailView: View {
     @State private var showingSubfolderEditor = false
     @State private var showingEditor = false
     @State private var showingDeleteAlert = false
+    @State private var pointCard: PointToPonder?
     @State private var passageCard: UUID?
     @State private var linkCard: UUID?
     @State private var conversationCard: UUID?
     @State private var organizing: Organize?
     @State private var pendingDeletion: CollectionArtifact?
+    @State private var duplicatingCollection: StudyCollection?
     @State private var editingSubfolder: StudyCollection?
     @State private var movingSubfolder: StudyCollection?
     @State private var deletingSubfolder: StudyCollection?
@@ -90,7 +93,7 @@ struct CollectionDetailView: View {
         }
         .task { if store.isLocked(collectionID) { await store.requestAccess(collectionID) } }
         .onChange(of: protection.unlocked) { _, _ in
-            if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; passageCard = nil; linkCard = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
+            if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; pointCard = nil; passageCard = nil; linkCard = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
         }
     }
 
@@ -131,6 +134,9 @@ struct CollectionDetailView: View {
                         createConversation: createConversation
                     )
                 }
+                .sheet(item: $duplicatingCollection) { folder in
+                    CollectionDuplicateSheet(store: store, folderID: folder.id)
+                }
                 .sheet(isPresented: $showingEditor) {
                     CollectionEditorSheet(store: store, parentID: collection.parentID, editingID: collectionID)
                 }
@@ -140,8 +146,10 @@ struct CollectionDetailView: View {
                 .sheet(item: $editingSubfolder) { subfolder in
                     CollectionEditorSheet(store: store, parentID: subfolder.parentID, editingID: subfolder.id)
                 }
+                .modifier(PointToPonderFlow(store: store, notes: notes, point: pointCard, collectionID: collectionID,
+                    openNote: { openNote($0, collectionID) }, exploreQuestion: exploreQuestion, close: { pointCard = nil }))
                 .sheet(item: Binding(get: { passageCard.map(PassageCardID.init) }, set: { passageCard = $0?.id })) { card in
-                    PassageCardSheet(store: store, passageID: card.id, seeChapter: openPassage)
+                    PassageCardSheet(store: store, passageID: card.id, seeChapter: openPassage, notes: notes, openNote: { openNote($0, collectionID) })
                 }
                 .sheet(item: Binding(get: { linkCard.map(StudyLinkID.init) }, set: { linkCard = $0?.id })) { card in
                     if let link = store.link(id: card.id) {
@@ -219,6 +227,8 @@ struct CollectionDetailView: View {
                 if !collection.isUnfiled {
                     Button("Add Study Material", systemImage: "plus") { showingPicker = true }
                     Button("New Subfolder", systemImage: "folder.badge.plus") { showingSubfolderEditor = true }
+                    Button("Duplicate Collection", systemImage: "doc.on.doc") { duplicatingCollection = collection }
+                        .accessibilityIdentifier("collections.duplicate")
                     Button("Edit Collection…", systemImage: "pencil") { showingEditor = true }
                     if collection.protectionID == nil {
                         Button("Protect Collection", systemImage: "lock") { Task { await store.setProtected(collection.id, enabled: true) } }
@@ -347,6 +357,7 @@ struct CollectionDetailView: View {
                                 bookTitleForCode: bookTitleForCode,
                                 openCompanion: openCompanion,
                                 createConversation: createConversation,
+                                exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
                                 books: books
                             )
@@ -356,6 +367,7 @@ struct CollectionDetailView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             if !store.isLocked(child.id) {
+                                Button("Duplicate Collection", systemImage: "doc.on.doc") { duplicatingCollection = child }
                                 Button("Edit Collection", systemImage: "pencil") { editingSubfolder = child }
                                 Button("Move Collection", systemImage: "folder") { movingSubfolder = child }
                             }
@@ -388,7 +400,8 @@ struct CollectionDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color(theme.palette.ink))
                     .lineLimit(1)
-                Text(store.isLocked(child.id) ? "Locked" : CollectionCount.items(store.membershipCount(for: child.id, includingDescendants: true, notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)))
+                Text(subfolderSummary(child))
+                    .accessibilityIdentifier("collections.subfolder.counts.\(child.name)")
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(Color(theme.palette.secondary))
@@ -434,15 +447,13 @@ struct CollectionDetailView: View {
                 }
                 .accessibilityLabel("Study material view options")
                 .accessibilityIdentifier("collections.filter")
-                if !collection.isUnfiled {
-                    Button {
-                        showingPicker = true
-                    } label: {
-                        Label("Add", systemImage: "plus")
-                    }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
-                    .accessibilityIdentifier("collections.addMaterial")
+                Button {
+                    showingPicker = true
+                } label: {
+                    Label("Add", systemImage: "plus")
                 }
+                .buttonStyle(CollectionSecondaryButtonStyle())
+                .accessibilityIdentifier("collections.addMaterial")
             }
 
             if visibleArtifacts.isEmpty {
@@ -572,6 +583,14 @@ struct CollectionDetailView: View {
         }
     }
 
+    private func subfolderSummary(_ child: StudyCollection) -> String {
+        guard !store.isLocked(child.id) else { return "Locked" }
+        let items = store.membershipCount(for: child.id, includingDescendants: true,
+                                          notes: notes.snapshot.notes, annotationSnapshot: annotationSnapshot)
+        let folders = store.children(of: child.id).count
+        return "\(CollectionCount.items(items)) · \(CollectionCount.subfolders(folders))"
+    }
+
     private func subfolderArrangeMenu(_ collection: StudyCollection, children: [StudyCollection]) -> some View {
         let selected = savedArrange(for: collection.id)
         return Menu {
@@ -589,8 +608,12 @@ struct CollectionDetailView: View {
             }
         } label: {
             Label("Arrange", systemImage: "arrow.up.arrow.down")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color(theme.palette.secondary))
+                .padding(.vertical, 12)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(CollectionSecondaryButtonStyle())
+        .buttonStyle(.plain)
         .accessibilityLabel("Arrange subfolders")
         .accessibilityIdentifier("collections.subfolder.arrange")
         .disabled(children.isEmpty)
@@ -604,6 +627,7 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactTitle(_ item: CollectionArtifact) -> String {
         switch item.kind {
+        case .pointToPonder: return "Move this question to Trash?"
         case .note: return "Move \"\(item.title)\" to Trash?"
         case .conversation: return "Delete \"\(item.title)\"?"
         default: return "Delete \(item.title)?"
@@ -612,6 +636,10 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactMessage(_ item: CollectionArtifact) -> String {
         switch item.kind {
+        case .pointToPonder:
+            return "Restore it from Settings → Trash → Points to Ponder."
+        case .annotation:
+            return "Only the saved Collections reference is removed. The annotation ink is not changed."
         case .note:
             return "Trash keeps the note for \(TrashRetention.dayCount) days. Restore it from Settings → Trash, or delete it permanently there."
         case .conversation:
@@ -623,6 +651,8 @@ struct CollectionDetailView: View {
 
     private func confirmDeleteArtifact(_ item: CollectionArtifact) {
         switch item.kind {
+        case .pointToPonder: store.trashPoint(item.id)
+        case .annotation: store.deleteAnnotationReference(item.id)
         case .link: store.deleteLink(item.id)
         case .bookmark, .gleaning: store.deletePassage(item.id)
         case .conversation: trashConversation(item.id)
@@ -633,6 +663,8 @@ struct CollectionDetailView: View {
 
     private func open(_ artifact: CollectionArtifact) {
         switch artifact.kind {
+        case .pointToPonder:
+            pointCard = store.pointsToPonder.first { $0.id == artifact.id && $0.trashedAt == nil }
         case .note:
             openNote(artifact.id, collectionID)
         case .bookmark, .gleaning:

@@ -24,6 +24,7 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var selectionGlow
     @State private var chrome = ShellChromeState()
+    @State private var swipeActions = StudySwipeCoordinator()
     private var theme: AppTheme {
         AppTheme(appearance: reader.preferences.appearance, dark: reader.preferences.theme == "dark" || (reader.preferences.theme == "system" && colorScheme == .dark))
     }
@@ -103,6 +104,12 @@ struct RootTabView: View {
                         bookTitleForCode: { code in reader.books.first { $0.id == code }?.title ?? code },
                         openCompanion: { selection = .companion; chrome.reveal() },
                         createConversation: { companion.createConversation() },
+                        exploreQuestion: { question in
+                            guard let id = companion.prepareReflectionQuestion(question) else { return nil }
+                            selection = .companion; chrome.reveal()
+                            Task { await companion.sendMessage() }
+                            return id
+                        },
                         trashConversation: { companion.moveConversationToTrash($0) }
                     ).environment(\.noteCardsActive, selection == .collections).tabPresentation(.collections, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
@@ -221,10 +228,10 @@ struct RootTabView: View {
             CollectionEditorSheet(store: collections, parentID: nil)
         }
         .background(Color(palette.paper).ignoresSafeArea())
-        .background(ScrollActivityObserver {
+        .background(ScrollActivityObserver(onActivity: {
             chrome.reveal()
             sophy.noteUserActivity()
-        })
+        }, onVerticalActivity: { swipeActions.close() }))
         .background(ProtectionWindowObserver(protection: protection, domain: selection == .notes ? .notes : selection == .collections ? .collections : nil))
         .sheet(item: Binding(get: { protection.prompt }, set: { _ in })) { prompt in
             ItemUnlockView(protection: protection, prompt: prompt).id(prompt.id)
@@ -232,6 +239,7 @@ struct RootTabView: View {
         .tint(Color(palette.accent))
         .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
+        .environment(\.studySwipeCoordinator, swipeActions)
         .environment(notes)
         .environmentObject(userProfile)
     }
@@ -339,6 +347,7 @@ struct RootTabView: View {
             if expanded { selection = .companion; chrome.reveal(); companion.panelExpandedToTab = false }
         }
         .onChange(of: selection) { _, _ in
+            swipeActions.close()
             sophy.noteUserActivity()
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }

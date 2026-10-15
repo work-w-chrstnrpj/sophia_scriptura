@@ -250,3 +250,24 @@ and Collections, including previews, dates, protection glyphs and stamp activati
 
 `Features/Activity/ActivityChartAnimation.swift` owns the shared animated distribution
 and bar chart views used by Activity analytics and distribution details.
+
+`DesignSystem/StudySwipeReveal.swift` owns SP-044 shared record swipe presentation
+for Collections, Notes and Prayer update scroll-stack hosts.
+
+SP-044 dismissal follow-up: RootTabView supplies StudySwipeCoordinator for a single
+open action rail. AppShell/ScrollActivityObserver passively dismisses it on vertical
+finger intent; StudySwipeReveal keeps the shifted record body available for closing.
+Collection cards and lists omit the permanent item ellipsis.
+
+SP-045: CollectionDuplicateSheet presents folder copy choices; CollectionsStore
+owns atomic tree/membership copy and saved annotation-reference cleanup. JournalType
+is an additive Notes domain field, while NoteEditorView owns the retractable tools.
+
+## SP-046 study material ownership
+
+`Features/Collections/PointToPonderSheets.swift` owns question creation/card and serial
+Explore → Note modal flow. `CollectionModels.swift` owns PointToPonder values and
+saved-passage note titles/content; CollectionsStore owns lifecycle/conversion commands.
+The existing Collections generation repository/all-data backup carry schema 3 points.
+`DesignSystem/StudyNoteDestinationPicker.swift` accepts initial New note title/content.
+SettingsTrashViews exposes question recovery; RootTabView supplies Companion routing.

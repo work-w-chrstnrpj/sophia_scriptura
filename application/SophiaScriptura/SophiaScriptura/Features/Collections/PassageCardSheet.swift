@@ -11,6 +11,10 @@ struct PassageCardSheet: View {
     let passageID: UUID
     var seeChapter: (SavedPassage) -> Void
 
+    var notes: NotesSession? = nil
+    var openNote: (UUID) -> Void = { _ in }
+    @State private var creatingNote = false
+
     @State private var editing = false
     @State private var draft = ""
     @State private var confirmingClear = false
@@ -34,6 +38,17 @@ struct PassageCardSheet: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
+                }
+            }
+        }
+        .sheet(isPresented: $creatingNote) {
+            if let notes, let passage = store.passage(id: passageID) {
+                NoteCreatorSheet(notes: notes, initialTitle: passage.gleaningNoteTitle,
+                    initialContent: .companionResponse(text: passage.noteContent, anchor: nil)) { id in
+                    store.link(notes: notes.snapshot.notes)
+                    _ = store.setMemberships(artifactID: id, collectionIDs: Set(store.collectionIDs(containing: passageID).filter { !store.isLocked($0) }))
+                    dismiss()
+                    openNote(id)
                 }
             }
         }
@@ -96,6 +111,21 @@ struct PassageCardSheet: View {
                 }
                 .buttonStyle(CollectionProminentButtonStyle(fullWidth: true))
                 .accessibilityIdentifier("collections.seeChapter")
+
+                if isGleaning, notes != nil {
+                    Button("Turn into a Note", systemImage: "note.text") {
+                        commitIfEditing()
+                        creatingNote = true
+                    }
+                    .buttonStyle(CollectionSecondaryButtonStyle(fullWidth: true, transparent: true))
+                    .accessibilityIdentifier("collections.gleaning.toNote")
+                } else if !isGleaning {
+                    Button("Turn into a Gleaning", systemImage: "laurel.leading") {
+                        if store.turnBookmarkToGleaning(passageID) { editing = true; insightFocused = true }
+                    }
+                    .buttonStyle(CollectionSecondaryButtonStyle(fullWidth: true, transparent: true))
+                    .accessibilityIdentifier("collections.bookmark.toGleaning")
+                }
             }
             .padding(.horizontal, 28)
             .padding(.top, 8)

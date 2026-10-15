@@ -40,3 +40,17 @@ Unit and simulator UI evidence belong to the tickets. Physical Touch ID/Face ID,
 - [Apple: biometric authentication without device-passcode fallback](https://developer.apple.com/documentation/localauthentication/logging-a-user-into-your-app-with-face-id-or-touch-id)
 - [Apple: localizedFallbackTitle and hiding the system fallback](https://developer.apple.com/documentation/localauthentication/lacontext/localizedfallbacktitle)
 - [Apple: device-only Keychain accessibility and backup migration](https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly)
+
+SP-045 duplication retains source protection bindings. Notes copying rejects locked
+notes and notes concealed by collection access. Collection copying preflights every
+active descendant and source parent; copying membership edges requires Notes access
+for protected member notes. No partial tree is published on rejected or failed saves.
+Annotation-reference cleanup checks affected folder access and never deletes ink.
+
+## SP-046 Collections schema extension
+
+Collections stores containing Points to Ponder (including Trash) write schema 3,
+regardless of protection. Schemas 1/2 still load with no points. Existing credential
+bindings, ancestor route guards and backup preflights are retained. Older versions
+reject schema 3 safely. Collection relocking dismisses the question/Explore/New note
+flow. Newly created material inherits only accessible source folder memberships.

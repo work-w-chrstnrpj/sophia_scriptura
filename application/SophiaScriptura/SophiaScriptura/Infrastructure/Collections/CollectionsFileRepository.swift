@@ -53,7 +53,7 @@ actor CollectionsFileRepository: CollectionsRepository {
         guard current.revision == expectedRevision else { throw CollectionsError.stale }
         var next = snapshot
         next.revision = current.revision + 1
-        next.schemaVersion = next.collections.contains(where: { $0.protectionID != nil }) ? 2 : 1
+        next.schemaVersion = next.requiredSchemaVersion
         try commit(next, previous: currentPointer, recovered: recovered)
         return next
     }
@@ -104,7 +104,7 @@ actor CollectionsFileRepository: CollectionsRepository {
                 }
             }
             if updated {
-                protectedFallback.schemaVersion = 2
+                protectedFallback.schemaVersion = protectedFallback.requiredSchemaVersion
                 let securePrevious = Pointer(id: UUID())
                 try encode(protectedFallback).write(to: url(securePrevious), options: .atomic)
                 fallback = securePrevious
@@ -119,7 +119,7 @@ actor CollectionsFileRepository: CollectionsRepository {
     }
 
     private func encode(_ snapshot: CollectionsSnapshot) throws -> Data {
-        guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
         let payload = try JSONEncoder().encode(snapshot)
         let data = try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
         return data
@@ -130,7 +130,7 @@ actor CollectionsFileRepository: CollectionsRepository {
         guard envelope.schemaVersion == 1 else { throw CollectionsError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw CollectionsError.invalid }
         let snapshot = try JSONDecoder().decode(CollectionsSnapshot.self, from: envelope.payload)
-        guard (1...2).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
         return snapshot
     }
 

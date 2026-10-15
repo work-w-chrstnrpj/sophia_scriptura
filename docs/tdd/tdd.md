@@ -1190,3 +1190,34 @@ Recommended sequence: SP-042 Canvas → SP-043 Canvas → SP-041 read-only, foll
 independently selected surface/write/remote expansions. A workflow skill can orchestrate
 implemented tools later; Markdown instructions alone do not add selection/OCR/network
 capabilities. Ticket-local criteria are proposals and all new verification is Not Run.
+
+SP-044: StudySwipeReveal provides shared transient horizontal action reveal for
+ScrollView-hosted Collection/Notes records and Prayer updates. Host menus and
+commands retain access, confirmation and persistence ownership; no data change.
+
+SP-044 dismissal follow-up: RootTabView supplies StudySwipeCoordinator for a single
+open action rail. AppShell/ScrollActivityObserver passively dismisses it on vertical
+finger intent; StudySwipeReveal keeps the shifted record body available for closing.
+Collection cards and lists omit the permanent item ellipsis.
+
+SP-044 Collection detail polish: Arrange uses a plain menu label alongside the
+outlined New Subfolder action. Subfolder preview metadata combines the existing
+item total with active immediate child-folder count; locked previews retain concealment.
+
+SP-045 adds guarded collection-tree duplication (optionally reusing membership item
+IDs), independent note copies, annotation tombstone filtering/reference cleanup,
+retractable Page/Journal tools and additive Journal Type: new journals start Unset; legacy missing/unknown types default
+to Spiritual. Type controls show a book (Unset), quill (Diaristic), or owl (Spiritual).
+See the selected ticket and Notes contract for identity, compatibility and access rules.
+
+## SP-046 — v1.3.0 Points to Ponder and conversions
+
+Collections owns question-only PointToPonder records (up to 200 characters), with
+folder memberships and recoverable Trash. Explore serially presents the Companion /
+Note choice; Notes uses the existing creation modal with an editable question title.
+Companion uses the existing configured provider/model, preset and send pipeline.
+Bookmark → Gleaning keeps the saved passage identity/content/memberships. Gleaning →
+Note prefills `Gleaning from "Book Chapter:Verse (Translation)"` and reference, passage,
+insight content. Source questions/gleanings remain saved. Collections schema 3 stores
+points; legacy schemas 1/2 default to none. Older builds reject schema 3 safely.
+See [SP-046](../../tickets/SP-046-points-to-ponder-and-study-conversions.md).

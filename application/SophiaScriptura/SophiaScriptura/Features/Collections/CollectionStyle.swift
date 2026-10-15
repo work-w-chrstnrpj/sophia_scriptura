@@ -71,6 +71,7 @@ extension CollectionArtifactKind {
         case .annotation: return CollectionAccent.plum.color
         case .note: return CollectionAccent.sage.color
         case .conversation: return CollectionAccent.slate.color
+        case .pointToPonder: return CollectionAccent.plum.color
         case .link, .gleaning: return CollectionAccent.gold.color
         }
     }
@@ -171,14 +172,16 @@ struct CollectionSecondaryButtonStyle: ButtonStyle {
     @Environment(\.appTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     var destructive = false
+    var fullWidth = false
+    var transparent = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.semibold))
+            .font(fullWidth ? .body.weight(.semibold) : .subheadline.weight(.semibold))
             .foregroundStyle(destructive ? Color(CollectionAccent.oxblood.uiColor) : Color(theme.palette.ink))
             .padding(.horizontal, 14)
-            .frame(minHeight: 36)
-            .background(Capsule().fill(Color(theme.palette.soft)))
+            .frame(maxWidth: fullWidth ? .infinity : nil, minHeight: fullWidth ? 48 : 36)
+            .background(Capsule().fill(transparent ? Color.clear : Color(theme.palette.soft)))
             .overlay(Capsule().stroke(Color(theme.palette.rule), lineWidth: 1))
             .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
             .contentShape(Capsule())

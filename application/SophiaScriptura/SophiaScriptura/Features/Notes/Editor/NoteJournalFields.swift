@@ -216,3 +216,68 @@ struct JournalFieldPicker: View {
         }
     }
 }
+
+/// Native menus require Image labels; arbitrary Shape views can be dropped.
+enum JournalTypeImages {
+    static func image(for type: JournalType) -> Image {
+        switch type {
+        case .unset: Image(systemName: "book")
+        case .diaristic: Image(uiImage: quill)
+        case .spiritual: Image(uiImage: owl)
+        }
+    }
+
+    private static let quill = render(.diaristic)
+    private static let owl = render(.spiritual)
+
+    private static func render(_ type: JournalType) -> UIImage {
+        let size = CGSize(width: 20, height: 20)
+        return UIGraphicsImageRenderer(size: size).image { renderer in
+            let context = renderer.cgContext
+            context.addPath(JournalTypeDrawing(type: type).path(in: CGRect(origin: .zero, size: size)).cgPath)
+            context.setStrokeColor(UIColor.black.cgColor)
+            context.setLineWidth(1.5)
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.strokePath()
+        }.withRenderingMode(.alwaysTemplate)
+    }
+}
+
+private struct JournalTypeDrawing: Shape {
+    let type: JournalType
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height)
+        }
+        if type == .diaristic {
+            // Curved feather with a central shaft and short barbs.
+            p.move(to: point(0.16, 0.9))
+            p.addQuadCurve(to: point(0.86, 0.08), control: point(0.42, 0.22))
+            p.addQuadCurve(to: point(0.31, 0.7), control: point(0.94, 0.69))
+            p.move(to: point(0.16, 0.9)); p.addLine(to: point(0.78, 0.19))
+            for (x, y) in [(0.39, 0.64), (0.51, 0.5), (0.63, 0.36)] {
+                p.move(to: point(x, y)); p.addLine(to: point(x + 0.18, y - 0.01))
+            }
+        } else {
+            // Ear tufts, rounded body, paired eyes and triangular beak.
+            p.move(to: point(0.18, 0.36)); p.addLine(to: point(0.16, 0.1))
+            p.addLine(to: point(0.36, 0.22))
+            p.addQuadCurve(to: point(0.64, 0.22), control: point(0.5, 0.15))
+            p.addLine(to: point(0.84, 0.1)); p.addLine(to: point(0.82, 0.36))
+            p.addCurve(to: point(0.5, 0.91), control1: point(0.97, 0.69), control2: point(0.76, 0.91))
+            p.addCurve(to: point(0.18, 0.36), control1: point(0.24, 0.91), control2: point(0.03, 0.69))
+            for x in [CGFloat(0.23), 0.53] {
+                p.addEllipse(in: CGRect(x: rect.minX + x * rect.width, y: rect.minY + 0.3 * rect.height, width: 0.24 * rect.width, height: 0.25 * rect.height))
+                p.move(to: point(x + 0.12, 0.4)); p.addLine(to: point(x + 0.12, 0.45))
+            }
+            p.move(to: point(0.44, 0.57)); p.addLine(to: point(0.56, 0.57))
+            p.addLine(to: point(0.5, 0.67)); p.closeSubpath()
+            p.move(to: point(0.26, 0.62)); p.addQuadCurve(to: point(0.35, 0.8), control: point(0.24, 0.74))
+            p.move(to: point(0.74, 0.62)); p.addQuadCurve(to: point(0.65, 0.8), control: point(0.76, 0.74))
+        }
+        return p
+    }
+}

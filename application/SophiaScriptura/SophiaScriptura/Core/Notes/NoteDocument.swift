@@ -309,10 +309,22 @@ enum JournalMentalState: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum JournalType: String, Codable, CaseIterable, Sendable {
+    case unset, diaristic, spiritual
+    var label: String {
+        switch self {
+        case .unset: "Unset"
+        case .diaristic: "Diaristic Journal"
+        case .spiritual: "Spiritual Journal"
+        }
+    }
+}
+
 struct JournalContent: Codable, Equatable, Sendable {
     var page = NotePage()
     var legacyObjects: [NoteObject] = []
     var scriptureVisible = true
+    var journalType: JournalType = .unset
     var emotionalState: JournalEmotionalState?
     var mentalState: JournalMentalState?
 
@@ -325,7 +337,7 @@ struct JournalContent: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case page, legacyObjects, scriptureVisible, emotionalState, mentalState
+        case page, legacyObjects, scriptureVisible, emotionalState, mentalState, journalType
     }
 
     init(from decoder: Decoder) throws {
@@ -333,6 +345,7 @@ struct JournalContent: Codable, Equatable, Sendable {
         page = try container.decode(NotePage.self, forKey: .page)
         legacyObjects = try container.decode([NoteObject].self, forKey: .legacyObjects)
         scriptureVisible = try container.decode(Bool.self, forKey: .scriptureVisible)
+        journalType = try container.decodeIfPresent(String.self, forKey: .journalType).flatMap(JournalType.init(rawValue:)) ?? .spiritual
         emotionalState = try container.decodeIfPresent(String.self, forKey: .emotionalState).flatMap(JournalEmotionalState.init(rawValue:))
         mentalState = try container.decodeIfPresent(String.self, forKey: .mentalState).flatMap(JournalMentalState.init(rawValue:))
     }
@@ -342,6 +355,7 @@ struct JournalContent: Codable, Equatable, Sendable {
         try container.encode(page, forKey: .page)
         try container.encode(legacyObjects, forKey: .legacyObjects)
         try container.encode(scriptureVisible, forKey: .scriptureVisible)
+        try container.encode(journalType.rawValue, forKey: .journalType)
         try container.encodeIfPresent(emotionalState?.rawValue, forKey: .emotionalState)
         try container.encodeIfPresent(mentalState?.rawValue, forKey: .mentalState)
     }

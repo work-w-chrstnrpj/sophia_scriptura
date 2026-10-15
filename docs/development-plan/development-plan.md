@@ -5,6 +5,51 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v1.3.0 — owner-selected publication, 2026-10-15
+
+Owner authorized commit/push/merge/release of the current worktree as v1.3.0/build 25.
+Scope: SP-044 swipe refinements, SP-045 duplication/Journal tools, SP-046 Points to
+Ponder and study conversions, active save destinations and final button wording/style.
+Full local unit suite: 403 passed; three final-label UI journeys passed, zero failures.
+Final source is signed, installed
+in place and launched on the owner's iPad. Hosted verification/publication follows
+the main merge; physical/live-provider acceptance remains separate. See
+[release notes](../releases/v1.3.0.md).
+
+## SP-046 — v1.3.0 study material conversions, 2026-10-15
+
+[SP-046](../../tickets/SP-046-points-to-ponder-and-study-conversions.md) adds Points to
+Ponder, question → Companion/new note, Bookmark → Gleaning and Gleaning → new note.
+Owner selected implementation and in-place iPad delivery. Version 1.3.0/build 25;
+111 domain/protection/Companion tests and two focused UI journeys passed. Owner follow-up fixes exclude
+inactive save destinations and align bookmark conversion button order/size. Signed
+build, in-place iPad install and launch passed; physical acceptance and release
+publication remain separate.
+
+## SP-045 — owner-selected study record refinement, 2026-10-15
+
+[SP-045](../../tickets/SP-045-study-record-duplication-and-journal-type.md) fixes
+annotation tombstone presentation, adds collection/note duplication, retractable
+Page/Journal tools and backward-compatible Journal Type. Collection copies reuse
+existing items by owner choice; standalone note duplicates are independent. Focused
+domain/protection and two new UI flows passed; signed build/signature checks passed.
+Journal Type follow-up adds Unset for new journals and book/quill/owl type icons;
+legacy journals retain Spiritual. Physical acceptance remains open. See the ticket
+for coverage and delivery evidence.
+
+## SP-044 — owner-selected interaction refinement, 2026-10-14
+
+[SP-044](../../tickets/SP-044-consistent-record-swipe-actions.md) removes the permanent
+Collection material-list/card ellipsis and adds shared swipe action reveal to Collection
+lists, Notes cards/lists and Prayer updates, retaining long-press menus and existing
+confirmations/access commands. Implemented: four focused UI tests and signed iPad
+build/signature checks passed. The follow-up signed build was installed in place and launched on the paired iPad;
+physical interaction acceptance remains open. Owner follow-up for
+single-open rails, body swipe-back, scroll dismissal and faster release/settling
+passed four focused UI cases across two runs. Further owner-requested polish makes
+Arrange plain and adds direct child-folder counts to subfolder previews; the nested
+hierarchy UI check and screenshot review passed. Evidence is in the ticket.
+
 ## v1.2.0 — owner-selected publication, 2026-10-14
 
 Owner authorized commit/push/merge/release of all current changes as v1.2.0/build 24.

@@ -15,6 +15,7 @@ struct CollectionsView: View {
     var bookTitleForCode: (String) -> String = { $0 }
     var openCompanion: () -> Void = {}
     var createConversation: () -> UUID? = { nil }
+    var exploreQuestion: (String) -> UUID? = { _ in nil }
     var trashConversation: (UUID) -> Void = { _ in }
     @State private var sophyFolder: StudyCollection?
     @State private var searchText = ""
@@ -22,6 +23,7 @@ struct CollectionsView: View {
     @State private var sort: CollectionLibrarySort = .modified
     @State private var showingNewCollection = false
     @State private var editingCollection: StudyCollection?
+    @State private var duplicatingCollection: StudyCollection?
     @State private var movingCollection: StudyCollection?
     @State private var deletingCollection: StudyCollection?
     @State private var showArchivedCollections = false
@@ -106,6 +108,9 @@ struct CollectionsView: View {
             .sheet(isPresented: $showingNewCollection) {
                 CollectionEditorSheet(store: store, parentID: nil)
             }
+            .sheet(item: $duplicatingCollection) { collection in
+                CollectionDuplicateSheet(store: store, folderID: collection.id)
+            }
             .sheet(item: $movingCollection) { collection in
                 CollectionFolderMoveSheet(store: store, folderID: collection.id)
             }
@@ -155,6 +160,7 @@ struct CollectionsView: View {
                     bookTitleForCode: bookTitleForCode,
                     openCompanion: openCompanion,
                     createConversation: createConversation,
+                                exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
                     books: reader?.books ?? []
                 )
@@ -186,6 +192,7 @@ struct CollectionsView: View {
                 bookTitleForCode: bookTitleForCode,
                 openCompanion: openCompanion,
                 createConversation: createConversation,
+                                exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
                 books: reader?.books ?? []
             )
@@ -199,6 +206,8 @@ struct CollectionsView: View {
                 Button("Edit No Folder Color", systemImage: "paintpalette") { editingCollection = collection }
             } else {
                 if !store.isLocked(collection.id) {
+                    Button("Duplicate Collection", systemImage: "doc.on.doc") { duplicatingCollection = collection }
+                        .accessibilityIdentifier("collections.duplicate")
                     Button("Edit Collection", systemImage: "pencil") { editingCollection = collection }
                     Button("Move Collection", systemImage: "folder") { movingCollection = collection }
                 }

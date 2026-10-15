@@ -8,6 +8,9 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-046](SP-046-points-to-ponder-and-study-conversions.md) | implemented; simulator verified; installed/launched; physical acceptance open | v1.3.0 Points to Ponder and study material conversions |
+| [SP-045](SP-045-study-record-duplication-and-journal-type.md) | implemented; physical acceptance open | Annotation references, collection/note duplication, retractable tools and Journal Type |
+| [SP-044](SP-044-consistent-record-swipe-actions.md) | implemented; physical acceptance pending; owner selected | Shared long-press/swipe actions for Collection/Notes records and Prayer updates |
 | [SP-041](SP-041-sophia-mcp-bridge.md) | draft; planning complete; implementation unselected | Paired MCP bridge: scoped reads, reviewed writes and per-client compatibility gates |
 | [SP-042](SP-042-selected-handwriting-to-text.md) | draft; planning complete; implementation unselected | Local box/lasso ink transcription, editable review and safe typed insertion |
 | [SP-043](SP-043-lasso-handwriting-sophy-enhancement.md) | draft; planning complete; implementation unselected | Reviewed handwriting transcription → Sophy enhancement → Copy/Insert, retaining ink |

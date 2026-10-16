@@ -20,6 +20,7 @@ struct CollectionArtifactRow: View {
     var archiveNote: (() -> Void)? = nil
     var notes: NotesSession? = nil
     var onJournalField: ((JournalFieldSheet) -> Void)? = nil
+    var editLink: (() -> Void)? = nil
     var cards = false
     static let listHeight: CGFloat = 80
     static let cardHeight: CGFloat = 176
@@ -157,6 +158,10 @@ struct CollectionArtifactRow: View {
 
     @ViewBuilder
     private var actions: some View {
+        if artifact.kind == .link, let editLink {
+            Button("Edit Link", systemImage: "pencil", action: editLink)
+                .accessibilityIdentifier("collections.artifact.editLink")
+        }
         if artifact.kind == .note, let notes,
            let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }),
            !notes.isLocked(note), notes.collections?.concealsNote(note.id) != true {

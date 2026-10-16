@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private extension UTType {
+    static let sophiaStudyMaterial = UTType(exportedAs: "org.sophia.study-material", conformingTo: .data)
     static let sophiaCollectionFolder = UTType(exportedAs: "org.sophia.collection-folder", conformingTo: .data)
 }
 
@@ -49,8 +50,11 @@ private struct CollectionFolderDragModifier: ViewModifier {
                     .allowsHitTesting(false)
             }
         }
-        .onDrop(of: [UTType.sophiaCollectionFolder], isTargeted: $targeted) { providers in
-            CollectionFolderDrag.receive(providers, store: store, parentID: folder.id)
+        .onDrop(of: [UTType.sophiaCollectionFolder, UTType.sophiaStudyMaterial], isTargeted: $targeted) { providers in
+            if providers.count == 1, providers.first?.hasItemConformingToTypeIdentifier(UTType.sophiaStudyMaterial.identifier) == true {
+                return CollectionStudyMaterialDrag.receive(providers, store: store, destination: folder.id)
+            }
+            return CollectionFolderDrag.receive(providers, store: store, parentID: folder.id)
         }
     }
 }
@@ -103,5 +107,53 @@ struct CollectionFolderMoveSheet: View {
             CollectionFolderDrag.receive(providers, store: store, parentID: parentID, expectedID: folderID) { dismiss() }
         }
         .accessibilityIdentifier("collections.move.destination.\(parentID?.uuidString ?? "root")")
+    }
+}
+
+private struct CollectionStudyMaterialDrag: Codable {
+    let artifactID: UUID
+    let sourceID: UUID
+
+    static func provider(id: UUID, sourceID: UUID) -> NSItemProvider {
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: UTType.sophiaStudyMaterial.identifier, visibility: .ownProcess) { completion in
+            completion(try? JSONEncoder().encode(Self(artifactID: id, sourceID: sourceID)), nil)
+            return nil
+        }
+        return provider
+    }
+
+    @MainActor static func receive(_ providers: [NSItemProvider], store: CollectionsStore, destination: UUID) -> Bool {
+        guard providers.count == 1, let provider = providers.first else { return false }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.sophiaStudyMaterial.identifier) { data, _ in
+            guard let data, data.count <= 512, let value = try? JSONDecoder().decode(Self.self, from: data) else { return }
+            Task { @MainActor in
+                _ = store.moveStudyMaterial(value.artifactID, from: value.sourceID, to: destination)
+            }
+        }
+        return true
+    }
+}
+
+private struct CollectionStudyMaterialDragModifier: ViewModifier {
+    let artifactID: UUID
+    let sourceID: UUID
+    @ObservedObject var store: CollectionsStore
+    let enabled: Bool
+    let prepare: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled && !store.isLocked(sourceID) {
+            content.onDrag {
+                prepare()
+                return CollectionStudyMaterialDrag.provider(id: artifactID, sourceID: sourceID)
+            }
+        } else { content }
+    }
+}
+
+extension View {
+    func collectionStudyMaterialDrag(_ id: UUID, sourceID: UUID, store: CollectionsStore, enabled: Bool, prepare: @escaping () -> Void) -> some View {
+        modifier(CollectionStudyMaterialDragModifier(artifactID: id, sourceID: sourceID, store: store, enabled: enabled, prepare: prepare))
     }
 }

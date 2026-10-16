@@ -5,6 +5,23 @@ revision under SP-001; phase outcomes are ready for review, not authorization to
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
 
+## v1.3.1 — owner-selected publication, 2026-10-16
+
+Owner authorized commit, push, merge and release of the current fixes as
+v1.3.1/build 26: SP-046 compact/red Delete card and SP-047 link editing, material
+subfolder drops and icon-only section headers. All 406 unit tests and three focused UI journeys passed, zero failures. Signed
+build, signature/identity, versioned in-place iPad install and launch passed. Physical acceptance remains separate.
+See [release notes](../releases/v1.3.1.md).
+
+## SP-047 — owner-selected Collections fixes, 2026-10-16
+
+[SP-047](../../tickets/SP-047-link-editing-and-study-material-drag.md) adds saved-link
+editing and material → subfolder drag/drop through existing Collections persistence.
+69 domain/protection tests and the edit/drag/relaunch UI flow passed; signed
+build, in-place iPad install and launch passed. Physical acceptance remains open. The SP-046 compact/red Delete
+question-card follow-up passed its UI flow and was installed/launched. These follow-ups
+are newer than the published v1.3.0 tag; no new release is selected.
+
 ## v1.3.0 — owner-selected publication, 2026-10-15
 
 Owner authorized commit/push/merge/release of the current worktree as v1.3.0/build 25.

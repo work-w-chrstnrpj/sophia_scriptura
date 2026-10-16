@@ -104,35 +104,66 @@ private struct PointToPonderCard: View {
     let delete: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    @State private var contentHeight: CGFloat = 360
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    Image(systemName: "questionmark.bubble").font(.largeTitle).foregroundStyle(.secondary)
-                    Text(question)
-                        .font(.system(.title, design: .serif))
-                        .multilineTextAlignment(.center)
-                        .textSelection(.enabled)
-                        .accessibilityIdentifier("ponder.card.question")
-                    Button("Explore", systemImage: "sparkle.magnifyingglass", action: explore)
-                        .buttonStyle(CollectionProminentButtonStyle(fullWidth: true))
-                        .accessibilityIdentifier("ponder.explore")
-                    Button("Delete", systemImage: "trash", role: .destructive) { confirmingDelete = true }
-                        .accessibilityIdentifier("ponder.delete")
-                }
-                .padding(28)
-                .frame(maxWidth: 620)
-                .frame(maxWidth: .infinity)
-            }
-            .appSurface()
-            .navigationTitle("Point to Ponder")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Close") { dismiss() } } }
+        fittedCard
             .alert("Move this question to Trash?", isPresented: $confirmingDelete) {
                 Button("Delete", role: .destructive, action: delete)
                 Button("Cancel", role: .cancel) {}
             } message: { Text("Restore it from Settings → Trash → Points to Ponder.") }
+    }
+
+    @ViewBuilder private var fittedCard: some View {
+        if #available(iOS 18.0, *) {
+            card.presentationSizing(.form.fitted(horizontal: false, vertical: true))
+        } else {
+            card.presentationDetents([.height(contentHeight)])
         }
+    }
+
+    private var card: some View {
+        ViewThatFits(in: .vertical) {
+            content
+            ScrollView { content }
+        }
+        .appSurface()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ponder.card")
+    }
+
+    private var content: some View {
+        VStack(spacing: 24) {
+            HStack(alignment: .center, spacing: 16) {
+                Text("Point to Ponder").font(.headline)
+                Spacer(minLength: 8)
+                Button("Close", systemImage: "xmark") { dismiss() }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(CollectionSecondaryButtonStyle())
+                    .accessibilityIdentifier("ponder.close")
+            }
+            Image(systemName: "questionmark.bubble").font(.largeTitle).foregroundStyle(.secondary)
+            Text(question)
+                .font(.system(.title, design: .serif))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .accessibilityIdentifier("ponder.card.question")
+            VStack(spacing: 12) {
+                Button("Explore", systemImage: "sparkle.magnifyingglass", action: explore)
+                    .buttonStyle(CollectionProminentButtonStyle(fullWidth: true))
+                    .accessibilityIdentifier("ponder.explore")
+                Button("Delete", systemImage: "trash", role: .destructive) { confirmingDelete = true }
+                    .buttonStyle(CollectionProminentButtonStyle(fullWidth: true, destructive: true))
+                    .accessibilityIdentifier("ponder.delete")
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: 620)
+        .frame(maxWidth: .infinity)
+        .background(GeometryReader { proxy in
+            Color.clear.onAppear { contentHeight = proxy.size.height }
+                .onChange(of: proxy.size.height) { _, height in contentHeight = height }
+        })
     }
 }

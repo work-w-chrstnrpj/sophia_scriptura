@@ -23,6 +23,14 @@
 			<key>UTTypeConformsTo</key>
 			<array><string>public.data</string></array>
 		</dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>org.sophia.study-material</string>
+            <key>UTTypeDescription</key>
+            <string>Sophia Study Material</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string></array>
+        </dict>
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>

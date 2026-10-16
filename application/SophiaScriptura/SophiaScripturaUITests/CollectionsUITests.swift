@@ -83,7 +83,17 @@ final class CollectionsUITests: XCTestCase {
         let point = item(question, in: app)
         XCTAssertTrue(point.waitForExistence(timeout: 5)); point.tap()
         XCTAssertTrue(app.staticTexts["ponder.card.question"].waitForExistence(timeout: 5))
+        let deleteButton = app.buttons["ponder.delete"]
+        let exploreButton = app.buttons["ponder.explore"]
+        XCTAssertTrue(deleteButton.exists)
+        XCTAssertEqual(deleteButton.frame.width, exploreButton.frame.width, accuracy: 1)
+        XCTAssertEqual(deleteButton.frame.height, exploreButton.frame.height, accuracy: 1)
+        let card = app.descendants(matching: .any)["ponder.card"].firstMatch
+        XCTAssertLessThanOrEqual(card.frame.maxY - deleteButton.frame.maxY, 40)
         snap("Point question", app)
+        deleteButton.tap()
+        XCTAssertTrue(app.alerts["Move this question to Trash?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Cancel"].tap()
         app.buttons["ponder.explore"].tap()
         XCTAssertTrue(app.buttons["ponder.note"].waitForExistence(timeout: 5))
         app.buttons["ponder.note"].tap()
@@ -158,6 +168,49 @@ final class CollectionsUITests: XCTestCase {
         XCTAssertFalse(app.buttons["collections.choose.Removed destination"].exists)
         snap("Deleted folder excluded from save choices", app)
         app.buttons["collections.save.confirm"].tap()
+    }
+
+    func testEditLinkAndDragItIntoSubfolderPersists() {
+        let app = launch(); openCollections(app)
+        createCollection("Link parent", in: app)
+        app.buttons["collections.folder.Link parent"].tap()
+        app.buttons["collections.newSubfolder"].tap()
+        let name = app.textFields["Name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Link child")
+        app.buttons["Create"].tap()
+        app.buttons["collections.addMaterial"].tap()
+        app.buttons["collections.newLink"].tap()
+        let title = app.textFields["collections.newLink.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5)); title.tap(); title.typeText("Original link")
+        let url = app.textFields["collections.newLink.url"]
+        url.tap(); url.typeText("example.com")
+        app.buttons["collections.newLink.create"].tap()
+        app.buttons["Done"].tap()
+        let original = item("Original link", in: app)
+        XCTAssertTrue(original.waitForExistence(timeout: 5)); original.tap()
+        app.buttons["collections.link.edit"].tap()
+        let editTitle = app.textFields["collections.editLink.title"]
+        XCTAssertTrue(editTitle.waitForExistence(timeout: 5)); editTitle.tap()
+        editTitle.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Original link".count) + "Edited link")
+        let editURL = app.textFields["collections.editLink.url"]
+        editURL.tap(); editURL.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "https://example.com".count) + "https://example.org/revised")
+        app.buttons["collections.editLink.save"].tap()
+        XCTAssertTrue(app.buttons["collections.link.edit"].waitForExistence(timeout: 5))
+        snap("Edited saved link", app)
+        app.buttons["Done"].tap()
+        let material = item("Edited link", in: app)
+        let target = app.buttons["collections.folder.Link child"]
+        XCTAssertTrue(material.waitForExistence(timeout: 5)); XCTAssertTrue(target.exists)
+        material.press(forDuration: 1.2, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.5)
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !material.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 5), .completed)
+        target.tap()
+        XCTAssertTrue(material.waitForExistence(timeout: 5))
+        app.terminate(); app.launch(); openCollections(app)
+        app.buttons["collections.folder.Link parent"].tap()
+        app.buttons["collections.folder.Link child"].tap()
+        XCTAssertTrue(material.waitForExistence(timeout: 5)); material.tap()
+        XCTAssertTrue(app.staticTexts["https://example.org/revised"].waitForExistence(timeout: 5))
     }
 
     func testDragRootAndNestedFoldersPersists() {

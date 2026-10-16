@@ -43,6 +43,7 @@ struct CollectionDetailView: View {
     @State private var showingDeleteAlert = false
     @State private var pointCard: PointToPonder?
     @State private var passageCard: UUID?
+    @State private var editingLink: SavedLink?
     @State private var linkCard: UUID?
     @State private var conversationCard: UUID?
     @State private var organizing: Organize?
@@ -93,7 +94,7 @@ struct CollectionDetailView: View {
         }
         .task { if store.isLocked(collectionID) { await store.requestAccess(collectionID) } }
         .onChange(of: protection.unlocked) { _, _ in
-            if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; pointCard = nil; passageCard = nil; linkCard = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
+            if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; pointCard = nil; passageCard = nil; linkCard = nil; editingLink = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
         }
     }
 
@@ -152,14 +153,17 @@ struct CollectionDetailView: View {
                     PassageCardSheet(store: store, passageID: card.id, seeChapter: openPassage, notes: notes, openNote: { openNote($0, collectionID) })
                 }
                 .sheet(item: Binding(get: { linkCard.map(StudyLinkID.init) }, set: { linkCard = $0?.id })) { card in
-                    if let link = store.link(id: card.id) {
-                        StudyLinkSheet(link: link)
+                    if store.link(id: card.id) != nil {
+                        StudyLinkSheet(store: store, linkID: card.id, collectionID: collectionID)
                     }
                 }
                 .sheet(item: Binding(get: { conversationCard.map(StudyConversationID.init) }, set: { conversationCard = $0?.id })) { card in
                     if let conversation = store.conversation(id: card.id) {
                         StudyConversationSheet(conversation: conversation, seeCompanion: openCompanion)
                     }
+                }
+                .sheet(item: $editingLink) { link in
+                    StudyLinkEditorSheet(store: store, linkID: link.id, collectionID: collectionID)
                 }
                 .sheet(item: $organizing) { item in
                     CollectionDestinationPicker(store: store, artifact: item.artifact, mode: item.mode, notes: notes)
@@ -334,8 +338,11 @@ struct CollectionDetailView: View {
                     showingSubfolderEditor = true
                 } label: {
                     Label("New Subfolder", systemImage: "plus")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 16, height: 44)
                 }
                 .buttonStyle(CollectionSecondaryButtonStyle())
+                .accessibilityLabel("New Subfolder")
                 .accessibilityIdentifier("collections.newSubfolder")
             }
             if children.isEmpty {
@@ -442,6 +449,8 @@ struct CollectionDetailView: View {
                     }
                 } label: {
                     Label(filter == .all ? "View" : filter.title, systemImage: "line.3.horizontal.decrease.circle")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Color(theme.palette.secondary))
                 }
@@ -451,8 +460,11 @@ struct CollectionDetailView: View {
                     showingPicker = true
                 } label: {
                     Label("Add", systemImage: "plus")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 16, height: 44)
                 }
                 .buttonStyle(CollectionSecondaryButtonStyle())
+                .accessibilityLabel("Add Study Material")
                 .accessibilityIdentifier("collections.addMaterial")
             }
 
@@ -505,8 +517,10 @@ struct CollectionDetailView: View {
             onJournalField: { field in
                 libraryJournalField = LibraryJournalFieldContext(noteID: artifact.id, field: field)
             },
+            editLink: artifact.kind == .link ? { editingLink = store.link(id: artifact.id) } : nil,
             cards: cards
         )
+        .collectionStudyMaterialDrag(artifact.id, sourceID: collectionID, store: store, enabled: placement != .subfolder) { store.link(notes: notes.snapshot.notes) }
     }
 
     private func emptyMaterial(_ collection: StudyCollection) -> some View {
@@ -608,9 +622,10 @@ struct CollectionDetailView: View {
             }
         } label: {
             Label("Arrange", systemImage: "arrow.up.arrow.down")
+                .labelStyle(.iconOnly)
+                .frame(width: 44, height: 44)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Color(theme.palette.secondary))
-                .padding(.vertical, 12)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

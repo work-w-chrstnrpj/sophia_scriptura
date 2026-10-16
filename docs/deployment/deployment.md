@@ -595,3 +595,27 @@ with the same transparent full-width style as Turn into Gleaning. Signed build,
 strict signature/identity, in-place install and normal launch passed on `iPad ni Paj`,
 1.3.0/build 25. Existing data preserved. Log:
 `build/sp046/fixes/gleaning-layout-ipad-install.log`.
+
+### SP-046 compact card / SP-047 link edit and material drag — 2026-10-16
+
+Installer dry-run, signed Debug build, strict signature/identity checks, in-place
+installation and normal launch passed on `iPad ni Paj`. Installed-app query confirms
+1.3.0/build 25 (`com.personal.SophiaScriptura`). Initial install hit a connection
+reset; retry succeeded. Existing data preserved without uninstall, reset or sync.
+Logs: `build/sp047/ipad-install-retry.log`, `installed-app.log`. The compact red
+Delete card, saved-link editing and material drop fixes are newer than the published
+v1.3.0 source tag; physical interaction acceptance remains open.
+
+SP-047 collection section headers (2026-10-16): Arrange, New Subfolder, View and Add
+show icons only while retaining descriptive accessibility names and 44-point targets.
+Installer dry-run, signed build, strict signature/identity checks, in-place install
+and normal launch passed on `iPad ni Paj`. Existing data preserved; version remains
+1.3.0/build 25. Log: `build/sp047/icon-headers/ipad-install.log`.
+
+### v1.3.1 release build — 2026-10-16
+
+Version 1.3.1/build 26 passed installer dry-run, signed Debug build, strict
+signature/bundle-identity checks, in-place install and normal launch on `iPad ni Paj`.
+Installed-app query confirms the new version. Existing data preserved without
+uninstall, reset or translation sync. Evidence: `build/v131-release/ipad-install.log`
+and `installed-app.log`. Physical acceptance remains separate from installation.

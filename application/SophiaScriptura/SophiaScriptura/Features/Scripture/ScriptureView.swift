@@ -224,7 +224,7 @@ struct ScriptureView: View {
             PassageSaveSheet(store: collections, draft: draft)
         }
         .sheet(item: Binding(get: { hubLinkCard.map(StudyLinkID.init) }, set: { hubLinkCard = $0?.id })) { card in
-            if let link = collections.link(id: card.id) { StudyLinkSheet(link: link) }
+            if collections.link(id: card.id) != nil { StudyLinkSheet(store: collections, linkID: card.id) }
         }
         .sheet(item: $hubShare) { share in ScriptureActivitySheet(text: share.text) }
         .sheet(isPresented: $showNarrationPlayer) {

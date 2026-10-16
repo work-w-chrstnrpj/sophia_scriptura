@@ -985,6 +985,44 @@ final class CollectionsStore: ObservableObject {
         return link.id
     }
 
+    @discardableResult
+    func updateLink(id: UUID, title: String, url: String, from collectionID: UUID? = nil) -> Bool {
+        guard !rejectWhileSophyCommits() else { return false }
+        if let collectionID {
+            guard let folder = collection(id: collectionID), folder.isUnfiled || folder.isActiveInLibrary,
+                  allowChanges([collectionID]) else { return false }
+        }
+        guard let index = links.firstIndex(where: { $0.id == id }) else { return false }
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let parsed = URL(string: trimmed),
+              let scheme = parsed.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = parsed.host, !host.isEmpty else {
+            notice = "Use a full http or https address."; return false
+        }
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        links[index].title = title.isEmpty ? host : String(title.prefix(120))
+        links[index].url = trimmed
+        notice = nil
+        for folderID in collectionIDs(containing: id) { touch(folderID) }
+        enqueueWrite()
+        return true
+    }
+
+    /// A drop changes only the explicit source edge, after revalidating the live route.
+    @discardableResult
+    func moveStudyMaterial(_ id: UUID, from source: UUID, to destination: UUID) -> Bool {
+        let activeIDs = Set(outline().map { $0.collection.id })
+        guard let sourceFolder = collection(id: source), sourceFolder.isUnfiled || activeIDs.contains(source),
+              activeIDs.contains(destination),
+              knownItem(id), allowChanges([source, destination]) else { return false }
+        if sourceFolder.isUnfiled {
+            guard !hasFiledMembership(id) else { notice = "This item has already been filed."; return false }
+        } else {
+            guard contains(id, in: source) else { notice = "The item is no longer in the source collection."; return false }
+        }
+        return move(artifactID: id, from: source, to: destination)
+    }
+
     func deleteLink(_ id: UUID) {
         guard !rejectWhileSophyCommits() else { return }
 

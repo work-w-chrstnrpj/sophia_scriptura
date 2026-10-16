@@ -271,3 +271,9 @@ saved-passage note titles/content; CollectionsStore owns lifecycle/conversion co
 The existing Collections generation repository/all-data backup carry schema 3 points.
 `DesignSystem/StudyNoteDestinationPicker.swift` accepts initial New note title/content.
 SettingsTrashViews exposes question recovery; RootTabView supplies Companion routing.
+
+SP-047 extends `StudyMaterialSheets.swift` with the shared link editor, and
+`CollectionFolderMove.swift` with the separate own-process material drag payload.
+CollectionsStore owns link updates and access-checked material moves. Folder tiles
+accept folder/material types declared in `AppInfoSupplement.plist`; existing
+Collections generation schemas remain unchanged.

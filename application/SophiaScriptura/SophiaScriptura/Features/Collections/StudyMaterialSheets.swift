@@ -8,7 +8,11 @@ struct StudyLinkSheet: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    let link: SavedLink
+    @ObservedObject var store: CollectionsStore
+    let linkID: UUID
+    var collectionID: UUID? = nil
+    @State private var editing = false
+    private var link: SavedLink { store.link(id: linkID) ?? SavedLink(id: linkID, title: "Link unavailable", url: "", createdAt: .distantPast) }
 
     var body: some View {
         NavigationStack {
@@ -44,10 +48,56 @@ struct StudyLinkSheet: View {
             .appSurface()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Edit") { editing = true }
+                        .disabled(store.link(id: linkID) == nil)
+                        .accessibilityIdentifier("collections.link.edit")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }.fontWeight(.semibold)
                 }
             }
+        }
+        .sheet(isPresented: $editing) {
+            StudyLinkEditorSheet(store: store, linkID: linkID, collectionID: collectionID)
+        }
+    }
+}
+
+struct StudyLinkEditorSheet: View {
+    @ObservedObject var store: CollectionsStore
+    let linkID: UUID
+    var collectionID: UUID? = nil
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var url = ""
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Title", text: $title).accessibilityIdentifier("collections.editLink.title")
+                TextField("https://", text: $url)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    .accessibilityIdentifier("collections.editLink.url")
+                if let error { Text(error).foregroundStyle(.red) }
+            }
+            .appSurface()
+            .navigationTitle("Edit Link")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if store.updateLink(id: linkID, title: title, url: url, from: collectionID) { dismiss() }
+                        else { error = store.notice ?? "This link is no longer available." }
+                    }
+                    .accessibilityIdentifier("collections.editLink.save")
+                }
+            }
+        }
+        .onAppear {
+            if let link = store.link(id: linkID) { title = link.title; url = link.url }
         }
     }
 }

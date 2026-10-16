@@ -1221,3 +1221,12 @@ Note prefills `Gleaning from "Book Chapter:Verse (Translation)"` and reference, 
 insight content. Source questions/gleanings remain saved. Collections schema 3 stores
 points; legacy schemas 1/2 default to none. Older builds reject schema 3 safely.
 See [SP-046](../../tickets/SP-046-points-to-ponder-and-study-conversions.md).
+
+## Post-v1.3.0 link editing and study material filing (SP-047)
+
+Saved link updates preserve ID/date/verse anchors/memberships and validate the same
+http(s)/host boundary as creation. Collections material drops carry only source and
+artifact UUIDs in an own-process typed payload. Receipt rechecks active routes,
+source membership and Notes/Collections access before moving the source edge;
+other assignments are retained. Existing schemas/generations remain unchanged.
+See [SP-047](../../tickets/SP-047-link-editing-and-study-material-drag.md).

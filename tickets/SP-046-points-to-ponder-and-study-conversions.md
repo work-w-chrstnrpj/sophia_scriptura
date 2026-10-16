@@ -124,3 +124,22 @@ Final release UI gate: all three selected journeys passed, zero failures, on iPa
 (A16) simulator in `build/v130-release/ui.xcresult`. The final labels, transparent
 button dimensions/order, note content/title, deleted-folder exclusion and question
 cancel/reopen/create flows are verified. Local release gates are complete.
+
+## Post-release question-card correction — 2026-10-15
+
+Owner reported Delete appeared as plain non-red text and the question sheet left
+excess empty space. The card now uses the shared full-width filled destructive
+button, matching Explore's dimensions. A compact header retains Close. On iOS 18+
+form presentation fits content vertically; iOS 17 uses measured content height.
+A vertical fallback scroll accommodates constrained space/large text. This changes
+presentation only; confirmation, Trash and Explore/Note handoffs are retained.
+Verification and installation evidence: `build/sp046/compact-card/`. This follow-up
+is outside the already-published immutable v1.3.0 source tag.
+
+Compact-card follow-up verified: `build/sp046/compact-card/check-r2.xcresult` passed
+question/Explore/note, matching Delete/Explore dimensions, compact bottom margin and
+Delete confirmation cancellation. Exported screenshot reviewed. Initial accessibility
+identifier inheritance was fixed with an explicit containing accessibility element.
+Signed build, strict signature/identity, in-place install and launch passed; included
+again in SP-047's final installed build. iOS 17 fallback and physical accessibility
+remain unverified by the iOS 27 simulator run.

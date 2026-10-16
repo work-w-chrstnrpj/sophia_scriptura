@@ -554,6 +554,67 @@ final class CollectionsStoreTests: XCTestCase {
         XCTAssertTrue(store.outline().contains { $0.collection.id == archivedChild && $0.depth == 1 })
     }
 
+    func testEditLinkValidatesAndPreservesIdentityAnchorsAndFilingAfterReload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let repository = CollectionsFileRepository(directory: directory)
+        let store = CollectionsStore(repository: repository); await store.load()
+        let folder = try XCTUnwrap(store.createCollection(name: "Links", detail: "", parentID: nil, accent: .sage))
+        let verse = VerseID(book: "ROM", chapter: 8, verse: 1)
+        let id = try XCTUnwrap(store.addLink(title: "Original", url: "https://example.com/old", verse: verse, editionID: "web.engwebp"))
+        store.addMembership(artifactID: id, collectionID: folder)
+        let original = try XCTUnwrap(store.link(id: id))
+        XCTAssertFalse(store.updateLink(id: id, title: "Bad", url: "javascript:alert(1)", from: folder))
+        XCTAssertEqual(store.link(id: id), original)
+        XCTAssertTrue(store.updateLink(id: id, title: "  Revised  ", url: " https://example.org/new ", from: folder))
+        await store.flush()
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        let edited = try XCTUnwrap(reopened.link(id: id))
+        XCTAssertEqual(edited.title, "Revised"); XCTAssertEqual(edited.url, "https://example.org/new")
+        XCTAssertEqual(edited.id, original.id); XCTAssertEqual(edited.verse, verse)
+        XCTAssertEqual(edited.editionID, original.editionID); XCTAssertEqual(edited.createdAt, original.createdAt)
+        XCTAssertTrue(reopened.contains(id, in: folder))
+        XCTAssertTrue(reopened.updateLink(id: id, title: " ", url: "https://example.net"))
+        XCTAssertEqual(reopened.link(id: id)?.title, "example.net")
+        XCTAssertFalse(reopened.updateLink(id: UUID(), title: "Missing", url: "https://example.com"))
+    }
+
+    func testMaterialDropMovesOnlySourceEdgeAndRejectsStaleSourceOrInactiveTarget() async throws {
+        let repository = CollectionsFileRepository(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let store = CollectionsStore(repository: repository); await store.load()
+        let root = try XCTUnwrap(store.createCollection(name: "Root", detail: "", parentID: nil, accent: .sage))
+        let child = try XCTUnwrap(store.createCollection(name: "Child", detail: "", parentID: root, accent: .sage))
+        let other = try XCTUnwrap(store.createCollection(name: "Other", detail: "", parentID: nil, accent: .sage))
+        let id = try XCTUnwrap(store.addLink(title: "Link", url: "https://example.com"))
+        store.addMembership(artifactID: id, collectionID: root); store.addMembership(artifactID: id, collectionID: other)
+        XCTAssertTrue(store.moveStudyMaterial(id, from: root, to: child))
+        XCTAssertFalse(store.contains(id, in: root)); XCTAssertTrue(store.contains(id, in: child)); XCTAssertTrue(store.contains(id, in: other))
+        XCTAssertFalse(store.moveStudyMaterial(id, from: root, to: other))
+        XCTAssertFalse(store.moveStudyMaterial(id, from: StudyCollection.unfiledID, to: root))
+        store.archiveCollection(id: root)
+        XCTAssertFalse(store.moveStudyMaterial(id, from: other, to: child))
+        store.unarchiveCollection(id: root)
+        store.moveCollectionToTrash(id: child)
+        XCTAssertFalse(store.moveStudyMaterial(id, from: other, to: child))
+        await store.flush()
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        XCTAssertTrue(reopened.contains(id, in: child)); XCTAssertTrue(reopened.contains(id, in: other))
+        XCTAssertFalse(reopened.contains(id, in: root))
+        let unfiled = try XCTUnwrap(store.addLink(title: "Unfiled", url: "https://example.net"))
+        XCTAssertTrue(store.moveStudyMaterial(unfiled, from: StudyCollection.unfiledID, to: root))
+    }
+
+    func testLinkEditAndMaterialDropRejectLockedRouteWithoutChanges() throws {
+        let folder = StudyCollection(protectionID: UUID(), id: UUID(), name: "Locked", detail: "", accent: .sage, modifiedAt: Date())
+        let active = StudyCollection(id: UUID(), name: "Open", detail: "", accent: .sage, modifiedAt: Date())
+        let id = UUID()
+        let link = SavedLink(id: id, title: "Original", url: "https://example.com", createdAt: Date())
+        let edges: Set<CollectionMembership> = [CollectionMembership(collectionID: folder.id, artifactID: id)]
+        let store = CollectionsStore(collections: [folder, active], artifacts: [], memberships: edges, links: [link])
+        XCTAssertFalse(store.updateLink(id: id, title: "Changed", url: "https://example.net", from: folder.id))
+        XCTAssertFalse(store.moveStudyMaterial(id, from: folder.id, to: active.id))
+        XCTAssertEqual(store.link(id: id), link); XCTAssertEqual(store.memberships, edges)
+    }
+
     private func samplePassage(kind: SavedPassageKind, insight: String, endVerse: Int) -> SavedPassage {
         SavedPassage(
             id: UUID(),

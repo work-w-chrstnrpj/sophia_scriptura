@@ -394,3 +394,21 @@ outlined secondary style; See the whole chapter retains its accent fill.
 Gleaning card follow-up: **Turn into a Note** sits below **See the whole chapter**,
 using the same transparent outlined full-width style and height as the bookmark's
 **Turn into a Gleaning** action. Conversion/title/content behavior is retained.
+
+Post-v1.3.0 Point to Ponder card correction: Delete uses a filled red destructive
+button with the same full-width dimensions as Explore. The question modal fits its
+content vertically with 24-point outer margins and a compact Close header; content
+can scroll when constrained. Existing confirmation and Trash behavior remains.
+
+## SP-047 link editing and material drag/drop
+
+Open a saved Link → Edit, or hold the material / swipe More → Edit Link. Title and
+URL edits save in place; Cancel retains the original. Invalid web URLs show an error.
+Drag directly listed material onto a subfolder tile to move it from the current
+folder into that child; other assignments remain. The same drop support exists on
+folder tiles. Locked/stale/inactive routes reject the operation. Aggregate rows from
+Include Subfolders require opening their owning folder before dragging.
+
+Owner header polish (2026-10-16): collection-detail Arrange, New Subfolder, Study
+Material View and Add controls show icons only, with descriptive accessibility
+labels retained and 44-point targets. Menu actions and creation behavior are unchanged.

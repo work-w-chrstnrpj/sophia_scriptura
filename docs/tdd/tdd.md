@@ -2,11 +2,14 @@
 
 This is the canonical source of technical intent for Sophia Scriptura. Source files
 remain the final implementation truth; when they diverge from this document, update this
-document. Status: revised planning draft, 2026-09-29. Technical choices marked proposed
-need the linked planning evidence before implementation. The app contains the six-tab scaffold and an isolated SP-006 native canvas experiment;
-SP-007 also adds a temporary Collections workspace with in-memory folders and sample
-memberships; it does not implement production storage or artifact routing. The broader
-design is not implemented. Requirements live in the
+document. Source reconciliation: **2026-10-18**, against the v1.3.1 baseline plus SP-048 and
+the owner-selected v1.3.2/build 27 release metadata. The app implements all six study tabs, persistent annotations,
+Canvas/Page/Prayer/Journal Notes, Collections, multi-provider Companion and Quiz Me,
+Activity, music, Sophy and AO Scripture narration. SP-006 remains an isolated DEBUG
+experiment. Version 1.3.2/build 27 includes SP-048 and the documentation reconciliation.
+Implementation does not close outstanding physical, accessibility, provider-quality or
+suspension checks. Dated checkpoints below preserve their original evidence; current
+contracts and later selected tickets supersede earlier proposals. Requirements live in the
 [product specification](../product-specification/product-specification.md).
 
 Development follows the [owner-directed AI workflow](../guidelines/ai-structure-guidelines.md).
@@ -79,16 +82,16 @@ Primary workflows:
 | Area | Decision | Rationale |
 | --- | --- | --- |
 | Target device | Confirmed: owner's iPad A16 | Owner reports iPadOS 26.6.2 and non-Pro Apple Pencil; exact Pencil model is unknown. Xcode 26.6 was verified locally. |
-| Platform | Proposed: native SwiftUI with UIKit/PencilKit bridges | Deployment target follows device confirmation; iPadOS 17+ is the scaffold setting, not a newly approved requirement. |
-| Developer account | Proposed: free Personal Team signing | Periodic reinstall is a tradeoff to review; no paid membership assumed. |
+| Platform | Implemented: native SwiftUI with UIKit/PencilKit bridges | iPadOS 17+ application; personal iPad deployment. |
+| Developer account | Implemented: free Personal Team signing | In-place signed deployment uses `scripts/install-ipad.sh`; no paid membership assumed. |
 | Scripture rendering | Implemented in SP-009: continuous TextKit 1 chapter surface with horizontal chapter swipes | SP-009 must prove continuous scrolling, passage selection and accessibility; annotation geometry remains a later native gate. |
 | Scripture visual system | Implemented SP-009 refinement: OldPaper reader/shell and seven persisted color/type presets | Shared presentation tokens and bundled offline OFL fonts implement the [Scripture screen specification](../design/scripture-screen-specification.md). Reader unit/UI evidence is tracked in SP-009; owner visual acceptance is recorded in the 2026-09-29 M2 closure; VoiceOver is waived for that closure. SP-008 physical validation and SP-012 actual-reader behavior are owner-accepted; SP-012 implements annotation storage/recovery. |
-| Translations | Confirmed: prioritize free access; prefer NIV, NLT, NKJV, or ESV | WEB is the proposed bundled base; preferred-version availability is not promised. |
-| Offline | Proposed: complete permitted base text plus policy-controlled online content | Free access does not imply permanent offline storage rights. |
+| Translations | Implemented: bundled WEBP, API.Bible NASB/NLT/NKJV and eligible Hello AO editions | `MultiSourceTranslationLibrary` coordinates source-specific stores and authorization. Legacy NIV references remain; ESV/SP-032 is still a draft. |
+| Offline | Implemented: bundled SQLite plus source-specific offline stores | API.Bible payloads are encrypted with lease policy; Hello AO uses validated generations. Availability and rights remain source-specific. |
 | Notes | Confirmed: expandable canvas with freely positioned text, ink, and images; explicit grouping | Objects stay independent until deliberately grouped. Growth limits, detailed selection/resize behavior, and export remain open. |
 | Audio | Confirmed preference: human narration | Provider/edition rights remain open; TTS is not an approved substitute. |
-| AI | Proposed: provider-neutral boundary, one provider first, Keychain secrets | Selected-context online use and source retrieval accepted. Provider/model, source access and numeric cost controls remain open; shared foundation and all four preset wordings approved; runtime and behavior evaluation pending. |
-| Storage | Reader slice implemented: immutable bundled SQLite Scripture plus local-only SwiftData reader state; remaining study data stays proposed | The maintained reader contract defines identity, loading and restore behavior. Notes/ink/media and full backup remain SP-005 work. |
+| AI | Implemented: multi-provider BYOK, Keychain credentials and bundled preset snapshots | `ProviderRegistry`, `PromptPresetCatalog` and `CompanionContextBuilder` own adapters, resolved instructions and bounded request context. Live-provider quality and theological evaluation remain separate gates. |
+| Storage | Implemented: bundled SQLite, SwiftData reader state and feature-owned checked local stores | Notes/annotations, Collections, Companion and Activity have persistence/recovery; `StudyBackupService` composes study archives. See maintained data/security contracts for limits and exclusions. |
 | Annotation persistence | Implemented in SP-012: edition/revision + chapter + layer UUID + preserved layout | Versioned generation commits, recovery and ink-only backup follow the annotation contract; owner-reported physical Pencil and restore acceptance closed M3 on 2026-10-03. |
 
 Non-goals: multi-user, cloud sync, App Store release, monetization, Android/web.
@@ -125,9 +128,9 @@ See [SP-006](../../tickets/SP-006-native-canvas-experiment.md) and the
 ### Owner-selected shell motion — SP-011, 2026-09-29
 
 The six-tab dock shows on launch/resume, tab interaction and finger panning, then hides
-after three seconds of inactivity. A small reveal handle stays reachable. The shell allocates separate vertical regions for content and footer, with 20-point
-bottom content clearance for descendant SwiftUI scroll surfaces. This keeps the viewport
-stable while hiding/revealing and lets final rows clear the footer. It slides mounted tab surfaces left/right
+after three seconds of inactivity. A small reveal handle stays reachable. The dock overlays the full-height viewport. SwiftUI library/settings scroll surfaces
+receive 100-point bottom clearance; open Notes editors receive none. Hiding/revealing
+the dock does not change reader/ink geometry. It slides mounted tab surfaces left/right
 without recreating their navigation state. A theme-colored selection glow moves between
 tabs. Reduce Motion uses a fade. AppShell owns the transient timer and a passive UIKit
 finger observer; feature views do not own shell timing or expose provider/content data.
@@ -214,9 +217,9 @@ Recommended stack: SwiftUI for screens/design system; UIKit and PencilKit for ca
 Pencil lifecycle and the native tool picker; Swift concurrency for async work; URLSession
 behind provider adapters; Keychain for keys; AVFoundation for permitted audio playback.
 SwiftData reader preferences and immutable bundled SQLite Scripture are selected by the
-[reader data contract](../data/scripture-reader-contract.md). Separate drawing/media files
-and the remaining study-data schema stay proposed until their SP-005 slices specify
-atomic-save/recovery/migration boundaries. A custom TextKit-backed reader is selected;
+[reader data contract](../data/scripture-reader-contract.md). Feature-owned Notes, annotation, Collections, Companion and Activity stores now define
+atomic-save/recovery boundaries in their repositories and maintained contracts; the
+entity sketches below are not a unified SwiftData schema. A custom TextKit-backed reader is selected;
 YouVersion remains an optional future content integration, not a rendering dependency. Keep
 XCTest/XCUITest for the existing test targets. No third-party architecture framework is
 required initially; Swift Package Manager manages dependencies only when justified.
@@ -292,7 +295,14 @@ bundled database must not replace reader state. Restricted future editions requi
 own verified retention, quotation, export, TTS, narration and AI-use policy; API access
 alone is not permission to retain a full text.
 
-### 7.3 User data (SwiftData)
+### 7.3 User data (feature-owned stores)
+
+The records below include historical conceptual sketches. Current types live in
+`Core/Notes/NoteDocument.swift`, `Core/Companion/CompanionModels.swift`,
+`Features/Collections/CollectionModels.swift` and `Core/Activity/ActivityModels.swift`.
+These use feature-owned checked file stores, not a shared SwiftData study model.
+Notes writes schema v3 normally/v4 with protection; Companion writes v3; Collections
+writes its required schema through v3. Reader state alone uses SwiftData.
 
 - Implemented `NoteDocument` (SP-013, 2026-10-01): shared identity/title/tags and deletion,
   with exactly one tagged `NoteContent` payload. Canvas owns positioned objects, including
@@ -332,7 +342,11 @@ alone is not permission to retain a full text.
 
 For M3 ink, the [annotation contract](../data/scripture-annotation-contract.md) supersedes
 the drawing-path sketch below: stable UUID identities, immutable generations and a
-validated atomic manifest commit. Notes/image storage and full-app backup remain proposed.
+validated atomic manifest commit. Production Notes/media storage is defined by the
+[Notes contract](../data/notes-contract.md). `StudyBackupService` exports Notes, annotations,
+Activity, Collections, Companion and optional Sophy history; it excludes provider secrets,
+licensed Scripture payloads, user music files and the Sophy execution journal. Restore
+invokes feature stores sequentially; do not describe it as a single cross-store transaction.
 
 - PencilKit drawings: `ink/{versionId}/{bookUSFM}.{chapter}.layer{n}.drawing`.
 - Note images: `notes/{noteId}/{imageId}.heic`.
@@ -390,23 +404,27 @@ defines bounded ESV passage caching, explicit loading, online narration and an o
 a Crossway-imposed expiry period. Persistent audio caching remains permission-gated;
 API.Bible authorization and development exceptions do not transfer to ESV.
 
-### 8.2a Planned v1.0.0 multi-source Scripture library
+### 8.2a Implemented multi-source Scripture library — v1.0.0 onward
 
-[SP-033–038](../../tickets/SP-033-v100-multi-source-translation-release.md) plan a
-source-neutral edition registry with independent bundled WEBP, API.Bible and AO Lab
-adapters. Preserve existing WEBP/API.Bible IDs and authorization; replace prefix-derived
+[SP-033–039](../../tickets/SP-033-v100-multi-source-translation-release.md) implement a
+source-neutral edition boundary with independent bundled WEBP, API.Bible and AO Lab
+adapters through `MultiSourceTranslationLibrary`. Preserve existing WEBP/API.Bible IDs and authorization; replace prefix-derived
 reference identity and policy with explicit backward-compatible metadata before adding
-AO editions. AO catalog discovery, eligibility review, chapter normalization, atomic
-offline generations and manual updates remain proposed behavior. WEB is an edition
+AO editions. AO catalog discovery, eligibility checks, chapter normalization, validated
+offline generations and explicit download management are implemented in
+`Infrastructure/Scripture/HelloAO/`. WEB is an edition
 family, not an HTTP provider; AO WEB variants are not automatically interchangeable with
 the bundled WEBP. No cross-source fallback, automatic fetch or shared license exception.
 ESV, if implemented through SP-032, retains its separate bounded-passage policy.
-The [proposed execution guide](../design/v100-translation-implementation-guide.md)
+The [execution guide](../design/v100-translation-implementation-guide.md)
 refines source policy, identities, content normalization and crash-safe generations.
 D2/D3 are owner-decided; D1 is decided: KJV, BSB, ASV, LSV and WEBU; verification remains open
-Owner reports API.Bible NIV replaced by NASB; target NASB/NLT/NKJV. Owner confirmed NASB 1995; exact provider ID
-and rights remain verification inputs; current source still lists NIV. Preserve legacy NIV
-study references; do not transfer its Debug authorization to NASB..
+`LicensedTranslation.approved` lists NASB (`b8ee27bcd1cae43a-01`), NLT and NKJV.
+Legacy NIV study references remain readable. Authenticated NASB rights/lease acceptance
+remains open; do not infer permission from its presence in the source list.
+`ScriptureNarrationSession` and the Hello AO narration transport implement bounded
+chapter playback/media downloads, timing validation and music arbitration under SP-039;
+this supersedes the original M7 abandonment for that selected scope only.
 
 ### 8.3 LLM provider (BYOK, provider-agnostic)
 
@@ -520,10 +538,11 @@ Select indexed relationships versus embedded references when the data contract i
   wording: shared
   Christian foundation plus Biblical Studies and Christian Living. Apologetics and Tough
   Questions wording in revision 2 is now also owner-approved. No instruction text changed at approval.
-- Future integration must resolve `{{sharedGuardrail}}` exactly once in the selected
-  `systemInstruction` and send the composed context in the provider-supported instruction
-  role on every request, including follow-ups. Never transmit the unresolved placeholder.
-  There is no runtime consumer or provider integration yet; approval is for wording only.
+- `PromptPresetCatalog` loads the bundled seed and resolves `{{sharedGuardrail}}` into
+  the selected preset snapshot. `CompanionContextBuilder` includes the resolved instruction
+  on requests and follow-ups, with bounded saved turns and explicit attachments. Provider
+  adapters map this request into supported instruction roles. Wording approval does not
+  certify model behavior or source accuracy.
 - Presets are user-editable in Settings; edits never delete the built-in defaults
   (defaults can be reset).
 - ASK-from-scripture attaches the permitted complete involved verse(s), selected wording,
@@ -569,13 +588,14 @@ Select indexed relationships versus embedded references when the data contract i
   and provider costs remain open. Explain the passage/note context sent off-device;
   include only deliberately selected context. Review seed prompts before using them.
 
-### 12.1 Conversational memory — requirement confirmed; architecture proposed
+### 12.1 Conversational memory — implemented local history and bounded request context
 
 REQ-024 confirms contextual follow-ups and clarifications. This is conversation-scoped
 state, not a promise of perfect recall or automatic learning about the user across chats.
 It does not require a Sophia server or provider-hosted conversation storage.
 
-Proposed responsibilities:
+Implemented responsibility split (`CompanionFileRepository`, `CompanionContextBuilder`
+and provider adapters); the policy expectations below do not certify every behavior:
 
 - Conversation store: persist ordered user/assistant messages, passage references, selected
   edition/context, resolved preset snapshot/version and relevant source metadata locally.
@@ -590,12 +610,10 @@ Proposed responsibilities:
   requests automatically. SP-016 selects the multi-adapter BYOK boundary and local
   context-composition contract; each implementation ticket rechecks its provider's current
   API and model capabilities.
-- Long conversations: reserve room for the answer and current question; preserve recent
-  turns and important explicit corrections, using provenance-linked summaries or selected
-  older messages when history exceeds the context budget. Summaries are lossy and may be
-  wrong; keep original permitted history available and ask for clarification when an omitted
-  detail matters. Never imply the model received every saved message. Do not preserve a
-  deleted message through an old summary; invalidate/rebuild derived memory when needed.
+- Long conversations: the current builder selects recent complete assistant/user turns
+  within its character budget and appends the pending question. It does not implement
+  provenance-linked summarization or cross-chat learning. Local saved history can be longer
+  than the transmitted context; never imply the model received every saved message.
 - UI/session state: closing the panel, maximizing to the tab or reopening the app retains
   the same conversation. Show failed/partial replies explicitly; retry must not duplicate
   turns. Pin the instruction version for an existing conversation rather than silently
@@ -647,7 +665,8 @@ Christian History sources remains a quality gap; the UI must not represent an AI
 independently verified.
 
 Question selection is provider-generated and locally cached under SP-019. Each selectable
-type targets 20 Easy, 10 Average and 6 Difficult prepared questions, enough for two
+type/difficulty now follows SP-048: minimum target 100 and capacity 200 prepared
+questions, superseding the earlier two-quiz policy. The original implementation held two
 single-type quizzes. Refill first makes each bucket playable, then builds spare capacity.
 Starting a quiz uses available cached questions immediately; starting, completing and
 quitting request in-app reconciliation. A first or depleted quiz waits for provider
@@ -699,11 +718,14 @@ must return inspectable evidence; otherwise the UI states that no external sourc
 retrieved. Keys are stored per provider/account in Keychain and excluded from records, logs,
 diagnostics and exports.
 
-### 12.5 Sophy / Lady Wisdom — v0.4.0 approved planning, not implemented
+### 12.5 Sophy / Lady Wisdom — implemented from v0.4.0
 
 The [normative execution guide](../design/sophy-implementation-guide.md) specifies
-proposed action schemas, lifecycle/recovery, source filtering, shared routing, UI handoffs
-and verification packages. These are implementation requirements, not shipped behavior.
+action schemas, lifecycle/recovery, source filtering, shared routing, UI handoffs
+and verification packages. `Core/Sophy`, `Infrastructure/Sophy` and `Features/Sophy`
+implement validation, history/journal storage, reviewed actions and enhancement flows.
+Settings must enable Lady Wisdom before the character appears. Remaining acceptance
+is tracked in [SP-029 review](../testing/sp029-sophy-review.md).
 
 [SP-029](../../tickets/SP-029-v040-sophy-lady-wisdom.md) defines a distinct, quiet
 illustrated companion sharing Companion's BYOK provider/model choice, with Hugging Face
@@ -768,8 +790,8 @@ is introduced. Implementation, recovery, verification and device gates are in SP
   the former total goal to Reading and summing active mode goals for the total threshold.
   Analytics PNG
   export renders the complete selected chart range. See SP-020 for incomplete
-  acceptance and physical-device verification. M7 Scripture audio is **abandoned** by owner
-  decision on 2026-10-04; narration will not resume without a new explicit ticket.
+  acceptance and physical-device verification. Original M7 Scripture audio was abandoned
+  on 2026-10-04; later owner-selected SP-039 implements AO narration with its own gates.
 - Settings (fills the idea's gaps): theme mode; font family/size/line spacing;
   default translation; red-letter toggle; TTS voice and speed; AI provider + key + model
   + temperature; prompt-preset editor; data export/import; storage usage; cache refresh;
@@ -803,13 +825,17 @@ These are planned checks, not reports of passing tests.
 
 ## 16. Deployment Assumptions
 
-- Proposed: free Personal Team signing on the owner's Mac. Provisioning expires after
+- Implemented: free Personal Team signing on the owner's Mac. Provisioning expires after
   7 days; review reinstall and backup workflow before daily use. Paid membership has
   not been requested. See [Apple account guidance](https://developer.apple.com/help/account/basics/about-your-developer-account).
-- No CI/CD, no server, no store submission. Data safety relies on periodic manual export.
+- `.github/workflows/release.yml` builds and unit-tests the simulator app on main pushes
+  or manual dispatch, then publishes source releases for untagged Xcode versions with notes.
+  Device signing/install remains local; no runtime server or App Store submission exists.
+  Data safety relies on local recovery generations and owner-created Files exports.
 - Verified 2026-09-14: Xcode 26.6 is installed at `/Applications/Xcode.app`; the default
   developer directory points to Command Line Tools. A command-scoped `DEVELOPER_DIR`
-  selected full Xcode for version inspection. No successful app build is recorded.
+  selected full Xcode for version inspection. Later successful builds, tests and signed
+  in-place installations are recorded in the testing/deployment guides and release notes.
 
 ## 17. Out-of-Scope Behavior
 
@@ -834,7 +860,7 @@ Primary evidence checked 2026-09-14 (recheck before integrating a provider):
 - [API.Bible editions](https://docs.api.bible/guides/bibles/) and [terms](https://api.bible/terms-and-conditions): access and content restrictions.
 - [ESV conditions](https://www.esv.org/api/): standard noncommercial use and cache limits.
 
-## Owner answer integration — 2026-09-16
+## Historical owner answer integration — 2026-09-16
 
 The product specification's Q1–Q12 register governs the newly confirmed product choices.
 Use warm-paper/book-like styling; nested topic collections and shared memberships; intact
@@ -856,7 +882,7 @@ tickets require owner review before coding resumes.
 
 ## SP-009 implementation evidence
 
-The M2 reader is under implementation and acceptance. See [reader evidence](../testing/sp009-reader-evidence.md) for the exact source snapshot, checks, remaining design gaps and physical gates. The first renderer uses TextKit 1 with a chapter-wide UTF-16 map; this is not a failed TextKit 2 experiment or an accepted M3 annotation layout. Scripture content and reader metadata are implemented; the remaining study-data sketches remain proposed.
+M2 is closed under owner-revised acceptance; SP-012 later adds production annotations. See [reader evidence](../testing/sp009-reader-evidence.md) for the exact source snapshot, checks, remaining design gaps and physical gates. The first renderer uses TextKit 1 with a chapter-wide UTF-16 map; this is not a failed TextKit 2 experiment or an accepted M3 annotation layout. Scripture content and reader metadata are implemented; later feature contracts supersede the remaining study-data sketches.
 
 ### Owner reader revision — 2026-09-22
 
@@ -882,7 +908,7 @@ focus. This is transient rendering, never saved highlighting or native text sele
 The redundant branding/collapse row and its Settings toggle are removed. The serialized
 controlsExpanded preference is retained for backward compatibility but no longer affects UI.
 
-### Licensed-edition account verification — 2026-09-22
+### Historical licensed-edition account verification — 2026-09-22
 
 Owner selected NIV, NLT and NKJV. Authenticated API.Bible catalog checks confirmed NIV11,
 NLT and NKJV metadata access. Full-edition downloads remain unresolved: section 8's
@@ -1230,3 +1256,17 @@ artifact UUIDs in an own-process typed payload. Receipt rechecks active routes,
 source membership and Notes/Collections access before moving the source edge;
 other assignments are retained. Existing schemas/generations remain unchanged.
 See [SP-047](../../tickets/SP-047-link-editing-and-study-material-drag.md).
+
+## SP-048 Quiz Me bank lifecycle correction
+
+The existing schema-3 Companion bank persists unused prepared questions. Buckets
+remain scoped by provider configuration, adapter, model, edition, contract, type and
+difficulty. SP-048 uses 100 as the minimum refill target and 200 as capacity; low
+buckets refill toward 200, surplus stays, reservations above the minimum request
+replacement of the consumed quantity. Ready starts never await provider generation.
+Quiz/exam/Again reservations schedule refill while the quiz is active; cold exam
+preparation requests only its deficit. Work serves playable sets first, then rotates
+small batches across buckets and saves each validated merge before the next request.
+Lifecycle/settings events reconcile demand with bounded in-app retries; iPadOS
+background execution is not guaranteed. No storage migration or bank reset applies.
+See [SP-048](../../tickets/SP-048-quiz-bank-lifecycle-and-summary-actions.md).

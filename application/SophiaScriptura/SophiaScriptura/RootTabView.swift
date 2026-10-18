@@ -375,7 +375,7 @@ struct RootTabView: View {
             protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil))
-            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders() }
+            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); companion.scheduleQuizCacheWarmup() }
             else { chrome.stop(); Task { await collections.flush(); await companion.flush(); await activity.flush() } }
         }
     }

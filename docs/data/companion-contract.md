@@ -149,15 +149,19 @@ question history retains the generated key and provenance disclosure for review.
 
 SP-019 stores prepared quiz questions in Companion snapshot schema v3. Each cached item is
 independent of a session and is scoped to one provider configuration, adapter, model,
-edition, difficulty, game type and prompt-contract version. The target is 100 prepared
-items per selectable type and difficulty bucket (18 buckets per provider/model/edition scope).
-Refill requests questions in batches of 10. On quiz start, the session takes the
+edition, difficulty, game type and prompt-contract version. SP-048 uses 100 as a minimum refill target and 200 as the hard capacity per type /
+difficulty bucket (18 buckets per provider/model/edition scope). Below 100, warmup
+fills toward 200; reservations above the minimum request replacement of the consumed
+quantity without discarding surplus. Refills request at most 10 questions per batch
+and await each validated merge's serialized save before requesting more. On quiz start, the session takes the
 required items from the cache and creates session-specific question records in the same
 in-memory mutation before the next serialized generation save. Prior v1/v2 snapshots
 decode with an empty cache; existing quiz history is not rewritten. Deleting a provider
 configuration removes its prepared items. Keys remain only in Keychain.
 Reconciliation fills one playable quiz per bucket before spare capacity, and is requested
-on start, completion, quit, app load and return to foreground. A running refill incorporates newer priorities
+on start/Again/exam, completion, quit, app load and return to foreground. Ready starts
+await only local reservation persistence, not provider generation. Cold starts request
+only missing questions; exams recheck readiness after each small batch. A running refill incorporates newer priorities
 at the next batch boundary, prioritizing the selected type and difficulty. Failed warmups leave existing questions intact and use bounded
 in-app retries; iPadOS suspension may prevent completion.
 Transmission is capability-checked at initial prompt, follow-up, summary, retry and retrieval

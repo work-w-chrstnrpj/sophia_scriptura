@@ -2,7 +2,8 @@ import Foundation
 
 /// SP-019 prepared-question pool sizing (per provider/model/edition/type/difficulty bucket).
 enum QuizQuestionCachePolicy {
-    static let bucketTargetCount = 100
+    static let bucketMinimumCount = 100
+    static let bucketTargetCount = 200
     /// Provider completions are requested in smaller batches to stay within output limits.
     static let refillBatchSize = 10
 }

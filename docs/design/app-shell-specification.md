@@ -1,9 +1,11 @@
 # App Shell and Cross-Screen Specification
 
-Status: design proposal for owner review; implementation is not authorized by this
-document. This specification defines the shared frame around Scripture, Collections,
-Notes, Companion, Activity and Settings so individual screen designs feel like one
-premium study workspace.
+Source reconciliation: 2026-10-18. RootTabView implements the shared six-tab frame,
+mounted navigation, dock, theme, protection lifecycle and cross-feature overlays. Music,
+Activity, meditation, Sophy, PiP and narration are wired through their sessions/coordinators.
+The layout and ownership sketches below retain design intent; they are not a literal file
+inventory or evidence of full physical/accessibility acceptance. New scope still requires
+owner selection.
 
 Related documents: [UX specification](ux-specification.md),
 [Scripture screen specification](scripture-screen-specification.md),
@@ -65,8 +67,9 @@ reveal target offers access from screens without scrolling.
 Tab surfaces remain mounted and slide in their left/right order. The selected capsule
 and icon use a subtle glow from the current appearance accent, with the capsule gliding
 to the destination. Reduce Motion fades content without lateral travel or glow animation.
-Timer work is cancelled while inactive and restarted on resume. Other shell capabilities
-below remain proposed until separately selected and implemented.
+Timer work is cancelled while inactive and restarted on resume. Later tickets implement
+shared music/Activity controls, Sophy and PiP. RootTabView also reconciles committed
+Live Activity state and SP-048 quiz-bank demand on foreground return.
 
 ## Top-level destinations
 

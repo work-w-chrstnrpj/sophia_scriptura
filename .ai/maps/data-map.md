@@ -11,7 +11,8 @@ The accepted reader slice lives in `docs/data/scripture-reader-contract.md`: imm
 bundled SQLite Scripture, stable edition/revision/reference identities and SwiftData
 reader state behind repositories. `tickets/SP-009-first-offline-scripture-reader.md`
 implements that slice. SP-005 still owns later study-data relationships, drawing/media,
-recovery, export and migration contracts. Do not use the SP-006 sample schema as a
+recovery, export and migration intent; later feature repositories/contracts now implement
+these slices. Do not use the SP-006 sample schema as a
 production contract.
 
 SP-009 implements reader state in `Infrastructure/Persistence/ReaderStateStore.swift` and
@@ -30,7 +31,9 @@ no Scripture text or credentials and does not replace reader/licensed/Notes stor
   contract `docs/data/notes-contract.md`. Notes-only generations and Files archive include
   ink/media; separate from SP-006 fixtures and SP-012 annotations. No migration of the separate experiment or Scripture stores.
 
-SP-013 schema v3: a note stores one Canvas/Page content case. Page attachments have UTF-16
+SP-013 introduced schema v3 Canvas/Page content; current NoteContent also includes
+Prayer and Journal. NotesFileRepository writes v4 when protection bindings are present,
+otherwise v3, and accepts v1–v4. Page attachments have UTF-16
 anchors; Canvas ink remains framed. v1/v2 decode by page presence; first v3 publication
 retains `before-note-types.notes` and leaves `before-study-page.notes` untouched.
 
@@ -46,3 +49,24 @@ SP-020 Activity uses `Core/Activity/ActivityModels.swift` and
 `Infrastructure/Activity/ActivityFileRepository.swift`. The local Activity-v1 envelope
 has a SHA-256 payload checksum, previous-file recovery, and a separate pre-restore archive.
 Quiz linkage stores only a quiz-session ID, mode, date and duration.
+
+Current additional storage boundaries (reviewed 2026-10-18):
+
+- Licensed text: `Infrastructure/Persistence/EncryptedBibleStore.swift` plus
+  `Infrastructure/Security/ScriptureKeychain.swift`; AO downloads use independent
+  `Infrastructure/Scripture/HelloAO/HelloAOStore.swift` generations. Neither is a study
+  backup payload. Reader preferences remain separate SwiftData state.
+- Collections: `Infrastructure/Collections/CollectionsFileRepository.swift` writes the
+  required schema through v3 (Points to Ponder); older snapshots default absent questions.
+  `Features/Collections/CollectionModels.swift` owns values, memberships and schema needs.
+- Sophy: `Infrastructure/Sophy/SophyFileRepository.swift` owns separate History and
+  execution-journal stores. Optional visible history participates in full study exports;
+  the execution journal does not.
+- `Infrastructure/Backup/StudyBackupService.swift` composes Notes, annotations, Activity,
+  Collections, Companion and optional Sophy History. Restore calls stores sequentially;
+  do not assume cross-store atomicity. Credentials, licensed text and user music files
+  are excluded. Protection preflight is defined in `docs/security/item-protection.md`.
+- Access locks: `Features/Protection/` plus device credential Keychain storage. Study
+  records carry credential bindings; this is access protection, not content encryption.
+- SP-048 changes bank lifecycle without a new Companion schema; unused cached questions
+  and each validated merged refill batch persist through the existing snapshot repository.

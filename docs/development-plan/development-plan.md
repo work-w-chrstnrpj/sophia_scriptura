@@ -1,9 +1,48 @@
 # Development Plan — Sophia Scriptura
 
-Revision: 2026-10-04. This is the main phase/progress tracker. Owner-requested roadmap
+Revision: 2026-10-18. This is the main phase/progress tracker. Owner-requested roadmap
 revision under SP-001; phase outcomes are ready for review, not authorization to code.
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
+
+## v1.3.2 — owner-selected publication, 2026-10-18
+
+Owner authorized commit, push, merge and source release as v1.3.2/build 27.
+Scope: SP-048 Quiz Me ready-bank lifecycle/refill durability, matched summary controls,
+source-grounded documentation reconciliation and the complete app README. Bravado skill
+and showcase outputs remain outside this release. No data migration/reset or additional
+feature ticket is selected. Final simulator build and 414 unit tests passed, zero
+failures/skips, on Xcode 27.0 / iPad (A16) iOS 27.0. Portrait/landscape summary renders
+and local documentation checks passed. Publication follows merge through the hosted
+Release workflow. Verification evidence is in
+[release notes](../releases/v1.3.2.md); physical/provider acceptance remains separate.
+
+## Documentation reconciliation — 2026-10-18
+
+Owner requested documentation alignment with the current source. Reviewed `ae573a9`
+(v1.3.1/build 26), uncommitted SP-048, root session composition, provider/preset wiring,
+translation/narration and feature persistence/backup boundaries. Corrected stale scaffold,
+in-memory Collections, absent-provider and original-M7-only descriptions in the canonical
+TDD/product map, project/source maps, README, release index and agent guidance. Existing
+SP-048 edits/evidence are retained; no app implementation, release or new acceptance is
+claimed. Documentation checks: local links/source paths, bundled preset consistency and
+`git diff --check`; native tests are not rerun for this documentation-only reconciliation.
+
+Owner-requested README expansion: added a connected study walkthrough, all six tabs,
+Sophy, narration/music/system controls, storage/privacy boundaries, technology and
+architecture, setup, release-versus-working-tree status and documentation navigation.
+Verified descriptions against the current source and checked README links/anchors;
+no application changes or new runtime verification were performed.
+
+## SP-048 — owner-selected Quiz Me fixes, 2026-10-18
+
+[SP-048](../../tickets/SP-048-quiz-bank-lifecycle-and-summary-actions.md) matches
+summary buttons and changes bank lifecycle to immediate ready-bank starts,
+reservation-triggered replacement, 100 minimum / 200 capacity per type/difficulty
+and scoped provider/edition, durable batched refill and foreground reconciliation.
+Implemented: 414 unit tests passed and portrait/landscape summary renders reviewed.
+Signed build, signature/identity checks, in-place iPad install and normal launch
+passed after signing was restored. Physical acceptance remains open. Included in owner-selected v1.3.2.
 
 ## v1.3.1 — owner-selected publication, 2026-10-16
 
@@ -403,8 +442,8 @@ its passage anchor and permitted attachment. The owner writes the question; no g
 "Help me understand…" turn or automatic send occurs. OLA behavior is preserved.
 
 **Quiz Me refinements selected 2026-10-02:** SP-018 uses the selected provider for
-strict-JSON questions with distinct difficulty rubrics. SP-019 now targets 20 Easy, 10 Average
-and 6 Difficult questions per selectable type; a warm quiz starts from the local cache and
+strict-JSON questions with distinct difficulty rubrics. SP-048 supersedes SP-019 sizing with a 100-question minimum target and 200-question
+capacity per type/difficulty bucket; a warm quiz starts from the local cache and
 replenishment is requested on start, completion and quit while the app remains active. Full recent-question lists are no longer
 sent to the provider. Sophia rejects invalid structure and local exact/strong-overlap
 repeats and labels questions/keys as AI-generated. Real-provider factual accuracy, more

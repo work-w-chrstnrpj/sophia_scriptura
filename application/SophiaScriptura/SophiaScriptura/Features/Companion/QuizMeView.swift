@@ -35,6 +35,14 @@ struct QuizMeView: View {
                         standardSetupContent
                     }
 
+                    if readyToStart {
+                        Text("Ready to start. Fresh questions replenish automatically while you quiz.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Start when you are ready. Only missing questions need to be prepared; you do not need to fill the whole bank first.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+
                     if session.quizCacheRefilling {
                         Label("Preparing fresh questions in the background", systemImage: "arrow.triangle.2.circlepath")
                             .font(.caption)
@@ -215,18 +223,12 @@ struct QuizMeView: View {
         return selectedTypes.isEmpty
     }
 
-    private var startButtonTitle: String {
-        if isExamMode {
-            return session.hasExamCache(questionCount: examQuestionCount.rawValue, editionID: "web-engwebp")
-                ? "Start exam"
-                : "Prepare first exam"
-        }
-        return session.hasCachedQuestions(
-            types: Array(selectedTypes),
-            difficulty: difficulty,
-            editionID: "web-engwebp"
-        ) ? "Start quiz" : "Prepare first quiz"
+    private var readyToStart: Bool {
+        if isExamMode { return session.hasExamCache(questionCount: examQuestionCount.rawValue, editionID: "web-engwebp") }
+        return session.hasCachedQuestions(types: Array(selectedTypes), difficulty: difficulty, editionID: "web-engwebp")
     }
+
+    private var startButtonTitle: String { isExamMode ? "Start exam" : "Start quiz" }
 
     private func scheduleWarmup() {
         if isExamMode {

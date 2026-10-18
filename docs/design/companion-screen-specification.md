@@ -180,8 +180,8 @@ Activity stores duration, date, mode, title and quiz-session ID only; quiz answe
 remain owned by Companion. Deleting quiz history leaves a linked Activity record with a
 source-deleted state.
 
-Quiz Me prepares up to 100 questions per selectable type and difficulty bucket (replenished in
-batches of 10). Settings can switch Companion to Exam mode: 25, 50, or 100 random questions from
+SP-048 uses a minimum target of 100 questions and capacity of 200 per selectable
+type/difficulty bucket (replenished in batches of at most 10). Settings can switch Companion to Exam mode: 25, 50, or 100 random questions from
 that pool with an optional whole-exam timer (5, 10, or 15 minutes). Standard Quiz Me still uses
 type and difficulty selection with per-question timing when enabled.
 A warm session opens from the local cache; a first or depleted session waits for the selected
@@ -216,3 +216,11 @@ factual keys and perceived difficulty because those properties are not proven lo
 - Provider accounts, purchases or bundled Sophia credentials.
 - A general autonomous agent, background web research or actions outside the displayed
   request.
+
+## SP-048 ready-bank setup and summary actions
+
+The setup button remains Start quiz/Start exam. Readiness copy states that a ready
+session can start immediately; otherwise only missing questions need preparation.
+Refilling in-app does not disable a ready start. Reservations trigger replacement
+while the quiz is active. The final page gives Quiz again and Done matching expanded
+label geometry and height, retaining their secondary/primary styling.

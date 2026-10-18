@@ -30,11 +30,11 @@ from Xcode). It is explicitly not a production or App Store product.
 
 Target user: one person doing personal Bible study and discipleship.
 
-Intended user workflows (mostly not implemented):
+Implemented study workflows (see source and tickets for acceptance limits):
 
 - Read scripture across multiple translations. Free access is prioritized; NIV, NLT,
   NKJV and ESV are preferred. Provider access and offline permissions remain subject
-  to SP-002; WEB is a proposed bundled base. See TDD §8.
+  to source-specific policy. Bundled WEBP, API.Bible NASB/NLT/NKJV and eligible Hello AO editions are implemented; ESV remains a draft. See TDD §8.
 - Toggle a transparent Apple Pencil annotation layer over the text, with an optional
   extended ruled writing area beside the scripture column.
 - Tap chapter and verse numbers to see everything anchored to that verse: notes,
@@ -46,7 +46,7 @@ Intended user workflows (mostly not implemented):
 - Take OneNote-style notes mixing typed text, ink, images, tables, quotes, and link
   cards; group by tag; sort by title or date; view as cards or a list.
 - Group notes, conversations, scriptures, and links into collections shown as folders.
-- Listen to permitted narration or on-device text-to-speech where content rights allow.
+- Listen to permitted AO narration through SP-039; ESV audio remains draft scope and TTS is not an approved substitute.
 - Track reading sessions with a timer or manual entry and view local analytics.
 
 Highest-level system responsibilities: render scripture with tappable verse anchors,
@@ -63,9 +63,10 @@ through a provider-agnostic bring-your-own-key adapter without leaking secrets.
   SP-013 adds validated Notes generations with ink/images and Notes-only recovery.
   SP-009 implements bundled read-only SQLite plus local-only SwiftData reader state.
   SP-010 adds AES-GCM-encrypted Core Data payloads and device-only Keychain state for
-  licensed editions; remaining study data contracts are still staged by feature.
+  licensed editions. Collections, Companion, Activity and Sophy have independent local
+  stores; StudyBackupService composes study exports through feature owners.
 - Testing: `XCTest (unit and UI); manual test cases under tests/ and docs/testing.`
-- Deployment: `Personal sideload from Xcode to the owner's iPad (free Apple Developer account, 7-day signing validity). No CI/CD, no server, no App Store distribution.`
+- Deployment: `Personal sideload from Xcode to the owner's iPad (free Apple Developer account, 7-day signing validity). GitHub Actions verifies/publishes source releases; device signing/install remains local. No runtime server or App Store distribution.`
 
 ## Repository Map
 
@@ -73,12 +74,12 @@ Update this map whenever the project structure changes.
 
 - `application/`: the SwiftUI iPad app. `application/SophiaScriptura/` holds the Xcode
  project: the six tabs (Scripture, Collections, Notes, Companion, Activity, Settings)
- with the SP-013 Notes library/editor, isolated SP-006 experiment, and SP-007 in-memory
- Collections prototype. M6 adds `Core/Companion/`, `Infrastructure/Companion/` (local
+ with the SP-013 Notes library/editor, isolated SP-006 experiment, and persisted
+ Collections workspace (SP-015 onward). M6 adds `Core/Companion/`, `Infrastructure/Companion/` (local
  generations, Keychain provider keys, streaming adapters, bundled prompt presets,
  SP-019 quiz refill coordinator) and `Features/Companion/` (conversation UI, session,
  quiz cache orchestration). Collections
-  separates library/detail, picker/editor, components, styling and temporary data; Core
+  separates library/detail, picker/editor, components, styling and persisted store commands; Core
   contains Scripture domain contracts, selection mapping, annotation and Notes contracts,
   plus remaining placeholder protocols. Infrastructure contains Notes recovery,
   reader SQLite/SwiftData adapters and SP-010's API.Bible,
@@ -269,7 +270,7 @@ cross-tab Activity control and passes the reader's verse catalog into Reading se
 `Core/Activity/` also defines reminder values; `Infrastructure/Activity/ActivityReminderNotifications.swift`
 owns local notification scheduling and `Features/Activity/ActivityRemindersView.swift`
 owns their editor. Settings exposes one-time reminder cleanup. Analytics can export PNG.
-M7 narration is postponed. SP-021 adds `Core/Music/`, `Infrastructure/Music/`, `Features/Music/`, and AppShell Now Active plus `StudyAudioCoordinator` for background music; owner-approved track files remain a gate before SP-021 closes.
+Original M7 narration was abandoned; later SP-039 adds AO narration. SP-021 adds `Core/Music/`, `Infrastructure/Music/`, `Features/Music/`, and AppShell Now Active plus `StudyAudioCoordinator` for background music; the owner closed M8 with placeholder tracks; commercial track rights remain separate.
 
 ## SP-022 structure update
 
@@ -363,3 +364,12 @@ PointToPonder values, Trash lifecycle and Bookmark → Gleaning commands. Collec
 schema 3 and all-data backups include points; older schemas default to none.
 NoteCreatorSheet accepts initial titles/content; existing NotesSession and Companion
 retain creation/send ownership. SettingsTrashViews exposes point recovery.
+
+## Source documentation checkpoint — 2026-10-18
+
+v1.3.2/build 27 includes the SP-048 Quiz Me bank lifecycle changes and documentation
+reconciliation. `QuizQuestionCachePolicy` sets 100 minimum / 200
+capacity per scoped type/difficulty bucket with 10-question refill batches.
+`CompanionQuizCache` owns reservation-triggered refill; `CompanionSession` guards initial
+load and persistence; RootTabView reconciles foreground demand. Physical/provider-quality
+and suspension acceptance remain separate from recorded simulator/build/install evidence.

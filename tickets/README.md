@@ -8,6 +8,7 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-048](SP-048-quiz-bank-lifecycle-and-summary-actions.md) | implemented and installed; physical acceptance open | Persistent Quiz Me bank replenishment and equal summary actions |
 | [SP-047](SP-047-link-editing-and-study-material-drag.md) | simulator verified; installed/launched; physical acceptance open | Saved-link editing and study-material drag into subfolders |
 | [SP-046](SP-046-points-to-ponder-and-study-conversions.md) | implemented; simulator verified; installed/launched; physical acceptance open | v1.3.0 Points to Ponder and study material conversions |
 | [SP-045](SP-045-study-record-duplication-and-journal-type.md) | implemented; physical acceptance open | Annotation references, collection/note duplication, retractable tools and Journal Type |

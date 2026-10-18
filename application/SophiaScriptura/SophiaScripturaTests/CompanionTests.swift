@@ -604,25 +604,21 @@ final class CompanionTests: XCTestCase {
     }
 
     func testBibleQuizAndBibleOrFalseBuildRunnableQuestions() async throws {
-        let response = try generatedQuizJSON(types: [.bibleQuiz, .bibleOrFalse], difficulty: .difficult)
         let session = CompanionSession(
-            presetCatalog: try PromptPresetCatalog.bundled(),
-            repository: nil,
+            presetCatalog: try PromptPresetCatalog.bundled(), repository: nil,
             credentials: InMemoryCompanionCredentialsStore(),
-            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter(scriptedChunks: [response])])
+            registry: ProviderRegistry(adapters: [DynamicQuizAdapter(recorder: .init())])
         )
-        try session.saveProviderKey("key", adapterID: "mock", accountLabel: "Test")
-        let quizID = try await session.startQuiz(
-            types: [.bibleQuiz, .bibleOrFalse],
-            difficulty: .difficult,
-            editionID: "web-engwebp",
-            timed: false
-        )
+        try session.saveProviderKey("key", adapterID: "dynamic-quiz", accountLabel: "Test")
+        let quizID = try await session.startQuiz(types: [.bibleQuiz, .bibleOrFalse], difficulty: .difficult,
+            editionID: "web-engwebp", timed: false)
         let questions = session.quizQuestions.filter { $0.sessionID == quizID }
         XCTAssertEqual(questions.count, QuizDifficulty.difficult.questionCount)
         XCTAssertTrue(questions.contains { $0.type == .bibleQuiz })
         XCTAssertTrue(questions.contains { $0.type == .bibleOrFalse })
         XCTAssertTrue(questions.allSatisfy { $0.choices.count >= 2 })
+        session.quizCacheWarmTask?.cancel()
+        session.quizCacheRetryTask?.cancel()
     }
 
     func testCompletedQuizRecordsReviewingAndQuizDeletionKeepsActivityTime() async throws {
@@ -783,14 +779,17 @@ final class CompanionTests: XCTestCase {
         session.apply(CompanionSnapshot(providerConfigurations: [configuration]))
 
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .easy }.count, 100)
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .average }.count, 100)
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 100)
-        let batchesPerBucket = QuizQuestionCachePolicy.bucketTargetCount / QuizQuestionCachePolicy.refillBatchSize
-        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .easy }.count, 200)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .average }.count, 200)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 200)
+        let initialCalls = QuizDifficulty.allCases.reduce(0) { total, level in
+            total + 1 + Int(ceil(Double(QuizQuestionCachePolicy.bucketTargetCount - level.questionCount) / Double(QuizQuestionCachePolicy.refillBatchSize)))
+        }
+        XCTAssertEqual(recorder.callCount, initialCalls)
+        XCTAssertEqual(Array(recorder.requestedCounts.prefix(3)), QuizDifficulty.allCases.map(\.questionCount))
 
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket)
+        XCTAssertEqual(recorder.callCount, initialCalls)
 
         let scope = try XCTUnwrap(session.cachedQuizQuestions.first?.scope)
         let reserved = session.reserveCachedQuestions(
@@ -799,8 +798,32 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(reserved?.count, 3)
         XCTAssertTrue(session.hasCachedQuestions(types: [.bibleQuiz], difficulty: .difficult, editionID: "web-engwebp"))
         await session.warmQuizCache(types: [.bibleQuiz])
-        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 100)
-        XCTAssertEqual(recorder.callCount, 3 * batchesPerBucket + 1)
+        XCTAssertEqual(session.cachedQuizQuestions.filter { $0.type == .bibleQuiz && $0.difficulty == .difficult }.count, 200)
+        XCTAssertEqual(recorder.callCount, initialCalls + 1)
+    }
+
+    func testColdExamGeneratesOnlyMissingQuestionRatherThanWholeBucket() async throws {
+        let keys = InMemoryCompanionCredentialsStore()
+        let config = ProviderConfigurationRecord(adapterID: "dynamic-quiz", accountLabel: "Test", defaultModelID: "mock")
+        try keys.writeKey("key", for: config.id)
+        let recorder = DynamicQuizAdapter.Recorder()
+        let session = CompanionSession(presetCatalog: try PromptPresetCatalog.bundled(), repository: nil,
+            credentials: keys, registry: ProviderRegistry(adapters: [DynamicQuizAdapter(recorder: recorder)]))
+        let scope = QuizQuestionCacheScope(providerConfigurationID: config.id, adapterID: config.adapterID, modelID: "mock", editionID: "web-engwebp")
+        let cached = (0..<24).map { index in
+            CachedQuizQuestion(id: UUID(), scope: scope, difficulty: .easy, type: .bibleQuiz,
+                prompt: "Cached question \(index)", choices: ["Yes", "No"],
+                answerKey: QuizAnswerKey(referenceLabel: "Genesis 1:1", choiceIndex: 0),
+                explanation: "Explanation", generatedAt: Date(), promptHash: "cached-\(index)")
+        }
+        session.apply(CompanionSnapshot(providerConfigurations: [config], cachedQuizQuestions: cached))
+        // Hold the asynchronous refill so this assertion measures only foreground preparation.
+        session.quizCacheWarmTask = Task { try? await Task.sleep(for: .seconds(60)) }
+        defer { session.quizCacheWarmTask?.cancel() }
+        let id = try await session.startExamQuiz(questionCount: 25, editionID: scope.editionID, timed: false, sessionTimeLimitSeconds: nil)
+        XCTAssertEqual(session.quizQuestions(for: id).count, 25)
+        XCTAssertEqual(recorder.requestedCounts, [1])
+        XCTAssertTrue(session.cachedQuizQuestions.isEmpty)
     }
 
     func testExamStartDrawsFromMixedCache() async throws {
@@ -1058,6 +1081,9 @@ private struct DynamicQuizAdapter: LLMProviderAdapter {
     final class Recorder: @unchecked Sendable {
         private let lock = NSLock()
         private var storedCallCount = 0
+        private var counts: [Int] = []
+        var requestedCounts: [Int] { lock.lock(); defer { lock.unlock() }; return counts }
+        func recordCount(_ count: Int) { lock.lock(); counts.append(count); lock.unlock() }
 
         var callCount: Int {
             lock.lock()
@@ -1095,7 +1121,11 @@ private struct DynamicQuizAdapter: LLMProviderAdapter {
         } else {
             count = 0
         }
-        let planned = Array(repeating: QuizType.bibleQuiz, count: count)
+        recorder.recordCount(count)
+        let marker = "questions in this exact type order: "
+        let plan = request.systemInstruction.components(separatedBy: marker).dropFirst().first?
+            .components(separatedBy: ".").first?.components(separatedBy: ", ").compactMap(QuizType.init(rawValue:)) ?? []
+        let planned = plan.isEmpty ? Array(repeating: QuizType.bibleQuiz, count: count) : plan
         let questions = planned.enumerated().map { index, type in
             let choices: [String]
             switch type {

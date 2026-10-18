@@ -48,9 +48,11 @@ final class CompanionSession: ObservableObject {
     var quizCacheWarmTask: Task<Void, Never>?
     var quizCacheRetryTask: Task<Void, Never>?
     var quizCachePriorityTypes: [QuizType] = []
+    var quizCachePriorityEditionID = "web-engwebp"
     var quizCachePriorityDifficulty: QuizDifficulty?
     var quizCacheReconcilePending = false
     var quizCacheRetryAttempts = 0
+    var quizCacheRefillTargets: [QuizQuestionCacheCoordinator.BucketKey: Int] = [:]
     let quizCacheCoordinator = QuizQuestionCacheCoordinator()
     var onCollectionsSync: ((StudyConversation) -> Void)?
     var onCollectionsRemove: ((UUID) -> Void)?
@@ -90,11 +92,17 @@ final class CompanionSession: ObservableObject {
 
     func clearNotice() { notice = nil }
 
+    private var hasLoaded = false
+    private var loading = false
+
     func load() async {
-        guard let repository else { return }
+        guard !hasLoaded, !loading, let repository else { return }
+        loading = true
+        defer { loading = false }
         do {
             let load = try await repository.load()
             apply(load.snapshot)
+            hasLoaded = true
             purgeExpiredTrash()
             conversations.forEach { syncCollections($0) }
             if load.recovered { notice = "Recovered the previous Companion revision." }
@@ -1208,8 +1216,8 @@ final class CompanionSession: ObservableObject {
         quizQuestions.append(contentsOf: generated)
         activeQuizSessionID = quiz.id
         scheduleSave()
+        scheduleQuizCacheWarmup(prioritizedTypes: selectedTypes, prioritizedDifficulty: difficulty, editionID: editionID)
         await flush()
-        scheduleQuizCacheWarmup(prioritizedTypes: selectedTypes, prioritizedDifficulty: difficulty)
         return quiz.id
     }
 
@@ -1261,8 +1269,8 @@ final class CompanionSession: ObservableObject {
         quizSessions[index] = quiz
         quizQuestions.append(contentsOf: generated)
         scheduleSave()
+        scheduleQuizCacheWarmup(prioritizedTypes: quiz.types, prioritizedDifficulty: quiz.difficulty, editionID: quiz.editionID)
         await flush()
-        scheduleQuizCacheWarmup(prioritizedTypes: quiz.types, prioritizedDifficulty: quiz.difficulty)
     }
 
     func submitQuizAnswer(sessionID: UUID, questionID: UUID, answer: String, choiceIndex: Int?) {

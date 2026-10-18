@@ -123,7 +123,7 @@ struct QuizSessionView: View {
                         } label: {
                             Label(loadingNextRound ? "Preparing next round…" : "Quiz again", systemImage: "arrow.clockwise")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity)
+                                .frame(maxWidth: .infinity, minHeight: 24)
                                 .padding(.vertical, 6)
                         }
                         .buttonStyle(.bordered)
@@ -131,13 +131,16 @@ struct QuizSessionView: View {
                         .disabled(loadingNextRound)
                         .accessibilityIdentifier("quiz.again")
                     }
-                    Button("Done") { session.finishQuiz(sessionID: quizID, intentional: true) }
+                    Button { session.finishQuiz(sessionID: quizID, intentional: true) } label: {
+                        Text("Done")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 24)
+                            .padding(.vertical, 6)
+                    }
                         .buttonStyle(.borderedProminent)
                         .foregroundStyle(Color(theme.palette.paper))
                         .tint(Color(theme.palette.accent))
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .accessibilityIdentifier("quiz.done")
                 }
             }
         }

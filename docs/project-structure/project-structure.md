@@ -1,13 +1,15 @@
 # Project Structure — Sophia Scriptura
 
-Status: M2 reader, M3 annotations and M4/SP-013 Notes implementation; physical Notes
-acceptance pending, 2026-09-29.
+Source reconciliation: 2026-10-18, v1.3.2/build 27, including SP-048.
+All six tabs have implemented workflows. Current ownership is summarized here; dated
+sections below explain how those boundaries evolved. Physical/provider/accessibility
+acceptance remains governed by the matching tickets.
 
 | Path | Responsibility and present state |
 | --- | --- |
 | `application/SophiaScriptura/SophiaScriptura.xcodeproj/` | App, unit and UI targets; simulator build verified |
 | `application/SophiaScriptura/SophiaScriptura/Features/` | Six tabs; `Notes/` has the SP-013 library and editor plus an isolated DEBUG `CanvasExperiment/` |
-| `application/SophiaScriptura/SophiaScriptura/Core/` | `Scripture/` domain and selection mapping, `Annotations/` contracts, `Notes/` document values and contracts; other boundaries remain placeholders |
+| `application/SophiaScriptura/SophiaScriptura/Core/` | Scripture/reference/rights/narration, annotation, Notes, Companion/quiz, Activity, Music and Sophy values/contracts; `ModuleBoundaries.swift` retains unused scaffolding |
 | `application/SophiaScriptura/SophiaScriptura/Infrastructure/Notes/` | SP-013 validated Notes generations, recovery and Notes-only Files archives |
 | `application/SophiaScriptura/SophiaScriptura/Features/Collections/` | SP-015 persisted folders/subfolders, No Folder, bookmarks and gleanings: library/detail, cards/rows, folder chooser (save, move, assign), passage save and card sheets, editor, twelve-accent style and observable store |
 | `application/SophiaScriptura/SophiaScriptura/Infrastructure/Collections/` | SP-015 checksummed Collections generations with current/previous pointers and damaged-file preservation |
@@ -15,21 +17,39 @@ acceptance pending, 2026-09-29.
 | `application/SophiaScriptura/SophiaScriptura/Resources/Fonts/` | Nine bundled font families, OFL notices and source/checksum manifest |
 | `service/ingestion/` | Strict offline USFM importer, VPL comparison and importer tests; generated WEBP SQLite/manifest |
 | `shared/` | Book-code and prompt seed JSON; schema/guardrails still need review |
-| `application/SophiaScriptura/SophiaScripturaTests/`, `SophiaScripturaUITests/` | Executable native experiment tests |
-| `tests/` | Cross-cutting testing guidance; target fixtures/cases are planned |
+| `application/SophiaScriptura/SophiaScripturaTests/`, `SophiaScripturaUITests/` | Executable unit/integration and UI targets covering production features and isolated experiments |
+| `tests/` | Cross-cutting testing guidance; executable native tests live in the Xcode test targets |
 | `scripts/install-ipad.sh` | Personal iPad build/signature validation/install/launch automation; logs and derived data stay in ignored `build/ipad-install/` |
 | `docs/product-specification/` | Numbered requirements and confirmed owner context |
 | `docs/tdd/` | Canonical technical intent and evidence sources |
-| `docs/integrations/` | Dated Scripture-content feasibility, permissions and import acceptance plan; no implemented provider client |
-| `docs/data/` | Accepted reader identity, immutable content, reader-state and restoration contract; later feature data contracts remain open |
-| `docs/design/` | UX proposals and canvas comparison; two interactive concept reviews are recorded |
+| `docs/integrations/` | Dated Scripture-content permissions/feasibility evidence; implemented clients live under Infrastructure |
+| `docs/data/` | Maintained Scripture reader/annotation, Notes, Companion and music evidence contracts; feature stores retain independent schemas |
+| `docs/design/` | Current feature specifications, implementation guides and historical canvas design proposals |
 | `docs/development-plan/` | Milestones, dependencies, and documentation roadmap |
 | `docs/testing/`, `docs/deployment/` | Actual test, iPad walkthrough and setup guidance |
 | `docs/guidelines/ai-structure-guidelines.md` | Owner-directed ticket workflow and maintainability expectations |
 | `tickets/` | Bounded planning/design/research work, followed by implementation tickets |
 | `.agents/`, `.ai/`, generated adapters | Existing AI workflow sources and discovery tools |
 
-## Proposed application organization
+## Current production boundaries
+
+| Source directory (under the app) | Current responsibility |
+| --- | --- |
+| `Features/Scripture/`, `Infrastructure/Scripture/HelloAO/` | Reader, source-specific downloads, separate translation choice/download sheets, narration session and media playback/storage |
+| `Core/Companion/`, `Infrastructure/Companion/`, `Features/Companion/` | Provider-neutral requests, registry/adapters, Keychain credentials, preset/context composition, conversation generations and quiz bank/session flows |
+| `Core/Activity/`, `Infrastructure/Activity/`, `Features/Activity/` | Durable timer/records, analytics, reminders, meditation journey and committed system projection |
+| `Core/Music/`, `Infrastructure/Music/`, `Features/Music/` | Catalog/imported music, playback preferences, audio engine and Now Playing controls |
+| `Features/Protection/`, `Infrastructure/Security/ItemLockCredential.swift` | Independent Notes/Collections access grants and credential binding; access locks do not encrypt study files |
+| `Core/Sophy/`, `Infrastructure/Sophy/`, `Features/Sophy/` | Typed action validation, eligible local context, reviewed execution, History/journal and text enhancement |
+| `Infrastructure/Backup/StudyBackupService.swift` | Study archive composition and sequential restore through feature stores; excludes Keychain secrets, licensed content and user music |
+| `AppShell/`, `Features/SystemPlayer/`, `RootTabView.swift` | Mounted tabs, dock, shared audio/timer/character overlays, PiP, session composition and lifecycle routing |
+| `StudyActivityWidgetExtension/` (project sibling) | WidgetKit Live Activity extension using the safe committed Activity projection |
+
+The broad `Core/Domain`, `Core/Application` and `Infrastructure/Providers` layout below
+was a planning sketch. Current code groups these responsibilities by feature and uses
+shared sessions directly at the root; it has not been reorganized into that sketch.
+
+## Organization principles and historical additions
 
 v0.2.0 adds `Core/Notes/NoteTextFormatting.swift` for formatting spans and operations.
 The Notes editor adds `NoteFormatPopover.swift`, `NoteInkColorPalette.swift`,
@@ -60,14 +80,15 @@ or working implementations already exist. Update this map when new structures la
 
 ## Documentation boundaries
 
-Empty API/data/command/diagram templates were removed. The accepted reader contract is
-maintained in `docs/data/scripture-reader-contract.md`; other proposed data and provider
-contracts stay in the TDD until their selected tickets produce maintained contracts.
+Empty API/data/command/diagram templates were removed. Maintained contracts now live in
+`docs/data/` for reader, annotations, Notes and Companion, with access-lock boundaries in
+`docs/security/item-protection.md`. Source repositories define feature formats; the
+TDD retains clearly labeled historical sketches and future proposals.
 The root README and populated `.ai/maps/` are the entry points. Existing reusable
 `.agents/` assets, adapter folders and scripts remain available; no new package or
 application layer was added as part of documentation cleanup.
 
-## Broader target layout (create only as needed)
+## Historical target layout (illustrative, not the current tree)
 
 ```text
 SophiaScriptura/
@@ -100,7 +121,7 @@ Empty protocols in `Core/ModuleBoundaries.swift` are discovery scaffolding, not 
 interfaces; replace them with actual operation contracts as selected features arrive.
 The canonical dependency rules and stack recommendation are in TDD §5.1.
 
-## Folder use cases
+## Historical target-folder use cases (conceptual ownership)
 
 | Folder | Use cases it owns | Examples of code that belongs here |
 | --- | --- | --- |
@@ -130,8 +151,8 @@ translations are licensed. Cross-feature actions go through an application workf
 and shared identifiers. This keeps a future feature from becoming a second service
 locator or a grab-bag of unrelated helpers.
 
-We will create these folders incrementally as tickets select them. The first production
-ticket should create only `App/`, `DesignSystem/`, `Core/Domain/`, `Core/Contracts/`,
+We will create these folders incrementally as tickets select them. The original first production
+slice called for only `App/`, `DesignSystem/`, `Core/Domain/`, `Core/Contracts/`,
 and the Scripture feature slice it needs; it should not create empty folders for every
 future feature.
 
@@ -146,8 +167,9 @@ future feature.
   staged licensed-edition library; `Infrastructure/Persistence/EncryptedBibleStore.swift`
   contains ciphertext-only licensed payload records.
 - `Features/Scripture/`: session, composed reader/hub, ScripturePassagePicker navigation sheet, and one continuous native selection surface.
-- `Features/Scripture/ScriptureVersionsView.swift`: WEB/NIV11/NLT/NKJV choice, secure
-  credential entry, download progress, lease status and attribution.
+- `Features/Scripture/ScriptureTranslationPickerView.swift`: read-only installed edition choice.
+- `Features/Scripture/ScriptureTranslationDownloadsView.swift`: AO/API download management;
+  API credential/sync, lease status and attribution retain their source-specific controls.
 - `Features/Settings/`: immediate reader preference editing.
 - `Resources/Scripture/`: generated database and provenance manifest.
 
@@ -277,3 +299,9 @@ SP-047 extends `StudyMaterialSheets.swift` with the shared link editor, and
 CollectionsStore owns link updates and access-checked material moves. Folder tiles
 accept folder/material types declared in `AppInfoSupplement.plist`; existing
 Collections generation schemas remain unchanged.
+
+SP-048 retains QuizQuestionCachePolicy sizing, CompanionQuizCache orchestration and
+QuizQuestionCacheCoordinator per-bucket in-flight ownership. CompanionSession guards
+one successful initial load and owns bank/session persistence; RootTabView reconciles
+foreground demand. QuizMeView reports readiness and QuizSessionView sizes summary
+actions consistently. QuizBankLifecycleTests covers durable/event-driven bank behavior.

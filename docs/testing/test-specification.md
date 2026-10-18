@@ -1,5 +1,11 @@
 # Test specification — Sophia Scriptura
 
+Documentation source review: **2026-10-18**. The dated runs below are historical evidence,
+not tests rerun during documentation maintenance. The SP-048 record
+is at the end of this page; released v1.3.1 evidence is in its
+[release notes](../releases/v1.3.1.md). Device/provider/accessibility gaps remain open
+where recorded. Use an installed iPad simulator and the native commands below.
+
 ## Notes bulk-delete confirmation — 2026-10-05
 
 `NotesUITests.testBulkDeleteConfirmsCancelsAndPersistsOnlySelectedNotes` passed on
@@ -904,3 +910,31 @@ with relaunch and enhancement in `ui-final.xcresult`, all three selected Sophy U
 have passing final evidence. This does not imply the prior combined run passed or that
 all app UI tests were run. Only test synchronization and docs changed after 341-unit
 app-code verification and final signed iPad installation.
+
+## SP-048 Quiz Me lifecycle — 2026-10-18
+
+`build/sp048/all-unit-r3.xcresult`: all **414 unit tests passed**, zero failures.
+Provider-routing test teardown now drains its background refill before replacing
+the shared HTTP stub, fixing the cross-test interference found in the first full run.
+
+`build/sp048/final.xcresult`: 58 focused Companion/QuizBankLifecycle/QuizMeTimer tests
+passed. Tests gate provider replies to verify ready standard/Again/exam starts and
+refill while active, scope/capacity, serialized save before next batch, repeated load
+and restart preservation, exact cold-exam deficit and round/Activity compatibility.
+Hosted-view portrait/landscape summary screenshots were reviewed for matching actions.
+No live-provider latency, factual-quality or background-execution claim follows.
+See [SP-048](../../tickets/SP-048-quiz-bank-lifecycle-and-summary-actions.md) for
+full-unit/device evidence and remaining acceptance.
+
+## v1.3.2 release verification — 2026-10-18
+
+Final version 1.3.2/build 27 passed simulator build and **414 unit tests, zero failures,
+zero skipped** on iPad (A16) / iOS 27.0 using Xcode 27.0. Command used the SophiaScriptura
+scheme, `-only-testing:SophiaScripturaTests`, `-parallel-testing-enabled NO` and
+`CODE_SIGNING_ALLOWED=NO`. Result: `build/v132-release/verification.xcresult`;
+log: `build/v132-release/verification.log`; structured summary: `build/v132-release/summary.json`.
+The QuizBankLifecycleTests hosted-view summary attachments were exported to
+`build/v132-release/attachments/` and reviewed in portrait/landscape for matching actions.
+All local links in release-scope Markdown and `git diff --check` passed. No full XCUITest
+suite, live-provider checks or version 1.3.2 physical installation was performed;
+prior SP-048 installation remains version 1.3.1/build 26 evidence.

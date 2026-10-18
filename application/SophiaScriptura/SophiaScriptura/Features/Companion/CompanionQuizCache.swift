@@ -14,7 +14,8 @@ extension CompanionSession {
 
     func scheduleQuizCacheWarmup(
         prioritizedTypes: [QuizType] = [],
-        prioritizedDifficulty: QuizDifficulty? = nil
+        prioritizedDifficulty: QuizDifficulty? = nil,
+        editionID: String? = nil
     ) {
         let selectable = QuizType.quizMeSelectable
         let priority = prioritizedTypes.filter { selectable.contains($0) }
@@ -22,7 +23,13 @@ extension CompanionSession {
             var seen = Set<QuizType>()
             quizCachePriorityTypes = priority.filter { seen.insert($0).inserted }
         }
+        if !priority.isEmpty, quizCacheRetryTask != nil {
+            quizCacheRetryTask?.cancel()
+            quizCacheRetryTask = nil
+            quizCacheRetryAttempts = 0
+        }
         if let prioritizedDifficulty { quizCachePriorityDifficulty = prioritizedDifficulty }
+        if let editionID { quizCachePriorityEditionID = editionID }
         quizCacheReconcilePending = true
         if quizCacheWarmTask != nil || quizCacheRetryTask != nil { return }
         quizCacheWarmTask = Task { [weak self] in
@@ -32,7 +39,7 @@ extension CompanionSession {
                 let ordered = self.quizCachePriorityTypes + selectable.filter {
                     !self.quizCachePriorityTypes.contains($0)
                 }
-                let succeeded = await self.warmQuizCache(types: ordered, priorityDifficulty: self.quizCachePriorityDifficulty)
+                let succeeded = await self.warmQuizCache(types: ordered, editionID: self.quizCachePriorityEditionID, priorityDifficulty: self.quizCachePriorityDifficulty)
                 if !succeeded {
                     self.scheduleQuizCacheRetry()
                     break
@@ -60,22 +67,41 @@ extension CompanionSession {
         let difficulties = priorityDifficulty.map { priority in
             [priority] + QuizDifficulty.allCases.filter { $0 != priority }
         } ?? QuizDifficulty.allCases
-        for type in types where !Task.isCancelled {
-            for difficulty in difficulties where !Task.isCancelled {
-                let succeeded = await refillBucket(
-                    scope: scope,
-                    type: type,
-                    difficulty: difficulty,
-                    target: QuizQuestionCachePolicy.bucketTargetCount,
-                    adapter: adapter,
-                    apiKey: apiKey
-                )
-                if !succeeded { return false }
-                if quizCacheReconcilePending { return true }
+        // First make each bucket playable, then fill the low buckets in round-robin batches.
+        // A new reservation can reprioritize at the next provider-batch boundary.
+        let buckets = types.reduce(into: [QuizType]()) { if !$0.contains($1) { $0.append($1) } }.flatMap { type in difficulties.map { (type: type, difficulty: $0) } }
+        let targets = Dictionary(uniqueKeysWithValues: buckets.compactMap { bucket -> (QuizQuestionCacheCoordinator.BucketKey, Int)? in
+            let key = QuizQuestionCacheCoordinator.BucketKey(scope: scope, difficulty: bucket.difficulty, type: bucket.type)
+            let target = cacheCount(key) < QuizQuestionCachePolicy.bucketMinimumCount
+                ? QuizQuestionCachePolicy.bucketTargetCount : quizCacheRefillTargets[key]
+            return target.map { (key, $0) }
+        })
+        var failed = Set<QuizQuestionCacheCoordinator.BucketKey>()
+        for playableFirst in [true, false] {
+            var madeProgress = true
+            while madeProgress && !Task.isCancelled {
+                madeProgress = false
+                for bucket in buckets where !Task.isCancelled {
+                    let key = QuizQuestionCacheCoordinator.BucketKey(scope: scope, difficulty: bucket.difficulty, type: bucket.type)
+                    guard let target = targets[key], !failed.contains(key) else { continue }
+                    let desired = playableFirst ? min(target, bucket.difficulty.questionCount) : target
+                    guard cacheCount(key) < desired else { continue }
+                    let succeeded = await refillBucket(scope: scope, type: bucket.type, difficulty: bucket.difficulty,
+                        target: desired, adapter: adapter, apiKey: apiKey)
+                    if succeeded { madeProgress = true } else { failed.insert(key) }
+                    if quizCacheReconcilePending { return failed.isEmpty }
+                }
             }
         }
-        return true
+        for (key, target) in targets where cacheCount(key) >= target { quizCacheRefillTargets[key] = nil }
+        if Task.isCancelled { return true }
+        return failed.isEmpty
     }
+
+    private func cacheCount(_ key: QuizQuestionCacheCoordinator.BucketKey) -> Int {
+        cachedQuizQuestions.filter { $0.scope == key.scope && $0.type == key.type && $0.difficulty == key.difficulty }.count
+    }
+
 
     func hasExamCache(questionCount: Int, editionID: String) -> Bool {
         guard let configuration = resolvedQuizProviderConfiguration() else { return false }
@@ -138,8 +164,8 @@ extension CompanionSession {
         quizQuestions.append(contentsOf: generated)
         activeQuizSessionID = quiz.id
         scheduleSave()
+        scheduleQuizCacheWarmup(prioritizedTypes: allTypes, editionID: editionID)
         await flush()
-        scheduleQuizCacheWarmup(prioritizedTypes: allTypes)
         return quiz.id
     }
 
@@ -164,7 +190,8 @@ extension CompanionSession {
                 scope: scope,
                 type: bucket.type,
                 difficulty: bucket.difficulty,
-                target: QuizQuestionCachePolicy.bucketTargetCount,
+                target: cachedQuizQuestions.filter { $0.scope == scope && $0.type == bucket.type && $0.difficulty == bucket.difficulty }.count
+                    + min(QuizQuestionCachePolicy.refillBatchSize, questionCount - cachedQuizQuestions.filter { $0.scope == scope }.count),
                 adapter: adapter,
                 apiKey: apiKey
             )
@@ -203,6 +230,7 @@ extension CompanionSession {
         let picked = order.prefix(count).map { available[$0] }
         let usedIDs = Set(picked.map(\.id))
         cachedQuizQuestions.removeAll { usedIDs.contains($0.id) }
+        requestReplacement(for: picked)
         return picked
     }
 
@@ -226,30 +254,24 @@ extension CompanionSession {
         apiKey: String
     ) async throws -> [CachedQuizQuestion] {
         guard !missingPlan.isEmpty else { return [] }
-        let excluded = excludedQuizPrompts(types: Array(Set(missingPlan)), scope: scope)
-        let request = AIQuizQuestionGenerator.request(
-            modelID: scope.modelID,
-            types: missingPlan,
-            difficulty: difficulty,
-            count: missingPlan.count,
-            nonce: UUID()
-        )
-        var response = ""
-        for try await event in adapter.streamCompletion(apiKey: apiKey, request: request) {
-            switch event {
-            case .textDelta(let text): response += text
-            case .refused(let reason): throw LLMProviderError.refused(reason)
-            case .failed(let error): throw error
-            default: break
+        var generated: [CachedQuizQuestion] = []
+        for type in Array(Set(missingPlan)).sorted(by: { $0.rawValue < $1.rawValue }) {
+            var remaining = missingPlan.filter { $0 == type }.count
+            while remaining > 0 {
+                let batch = try await quizCacheCoordinator.generate(
+                    key: .init(scope: scope, difficulty: difficulty, type: type),
+                    count: min(remaining, QuizQuestionCachePolicy.refillBatchSize),
+                    excludedPrompts: excludedQuizPrompts(types: [type], scope: scope)[type, default: []],
+                    adapter: adapter, apiKey: apiKey)
+                guard !batch.isEmpty else { throw AIQuizQuestionGenerator.GenerationError.empty }
+                generated.append(contentsOf: batch)
+                mergeCachedQuestions(batch)
+                scheduleSave()
+                await flush()
+                remaining -= batch.count
             }
         }
-        return try AIQuizQuestionGenerator.decodeCached(
-            response,
-            scope: scope,
-            difficulty: difficulty,
-            plannedTypes: missingPlan,
-            excludedPrompts: excluded
-        )
+        return generated
     }
 
     func reserveCachedQuestions(
@@ -268,6 +290,7 @@ extension CompanionSession {
             reserved.append(item)
         }
         cachedQuizQuestions.removeAll { usedIDs.contains($0.id) }
+        requestReplacement(for: reserved)
         return reserved
     }
 
@@ -308,6 +331,19 @@ extension CompanionSession {
         }
     }
 
+    private func requestReplacement(for reserved: [CachedQuizQuestion]) {
+        let groups = Dictionary(grouping: reserved) {
+            QuizQuestionCacheCoordinator.BucketKey(scope: $0.scope, difficulty: $0.difficulty, type: $0.type)
+        }
+        for (key, used) in groups {
+            let current = cacheCount(key)
+            let desired = current < QuizQuestionCachePolicy.bucketMinimumCount
+                ? QuizQuestionCachePolicy.bucketTargetCount
+                : max(current + used.count, quizCacheRefillTargets[key] ?? 0)
+            quizCacheRefillTargets[key] = min(QuizQuestionCachePolicy.bucketTargetCount, desired)
+        }
+    }
+
     private func canReserve(
         plan: [QuizType],
         difficulty: QuizDifficulty,
@@ -340,25 +376,19 @@ extension CompanionSession {
         let current = cachedQuizQuestions.filter {
             $0.scope == scope && $0.difficulty == difficulty && $0.type == type
         }.count
-        var remaining = max(0, target - current)
+        let remaining = max(0, min(target, QuizQuestionCachePolicy.bucketTargetCount) - current)
         guard remaining > 0 else { return true }
         do {
-            while remaining > 0 && !Task.isCancelled {
-                let batch = min(remaining, QuizQuestionCachePolicy.refillBatchSize)
-                let excluded = excludedQuizPrompts(types: [type], scope: scope)[type, default: []]
-                let generated = try await quizCacheCoordinator.generate(
-                    key: key,
-                    count: batch,
-                    excludedPrompts: excluded,
-                    adapter: adapter,
-                    apiKey: apiKey
-                )
-                guard !generated.isEmpty else { return false }
-                mergeCachedQuestions(generated)
-                remaining -= generated.count
-                scheduleSave()
-            }
-            return true
+            let generated = try await quizCacheCoordinator.generate(key: key,
+                count: min(remaining, QuizQuestionCachePolicy.refillBatchSize),
+                excludedPrompts: excludedQuizPrompts(types: [type], scope: scope)[type, default: []],
+                adapter: adapter, apiKey: apiKey)
+            guard !generated.isEmpty else { return false }
+            let before = cacheCount(key)
+            mergeCachedQuestions(generated)
+            scheduleSave()
+            await flush()
+            return cacheCount(key) > before || cacheCount(key) >= target
         } catch {
             // A refill failure never removes usable cached questions or interrupts a quiz.
             return false

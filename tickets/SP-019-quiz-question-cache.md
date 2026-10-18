@@ -40,3 +40,10 @@ The follow-up targets two ready quizzes per bucket (20 Easy, 10 Average, 6 Diffi
   passed strict signature verification, installed in place on the paired physical iPad A16,
   and launched as `com.personal.SophiaScriptura`. No uninstall or data reset was performed;
   real-provider speed and quality remain owner acceptance checks.
+
+## Superseding sizing/lifecycle — SP-048, 2026-10-18
+
+The owner selected a minimum target of 100 and capacity of 200 per scoped type /
+difficulty bucket, with immediate ready starts and reservation-triggered replacement
+while a quiz/exam is running. Historical counts above remain past evidence; current
+behavior and verification belong to [SP-048](SP-048-quiz-bank-lifecycle-and-summary-actions.md).

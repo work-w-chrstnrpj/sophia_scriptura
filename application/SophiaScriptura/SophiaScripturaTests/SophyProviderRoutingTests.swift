@@ -39,9 +39,19 @@ private final class RoutingHTTPStub: URLProtocol {
 
 @MainActor
 final class SophyProviderRoutingTests: XCTestCase {
-    override func tearDown() {
+    private var sessions: [CompanionSession] = []
+
+    override func tearDown() async throws {
+        for session in sessions {
+            session.quizCacheRetryTask?.cancel()
+            let warmTask = session.quizCacheWarmTask
+            warmTask?.cancel()
+            await warmTask?.value
+            session.quizCacheRetryTask?.cancel()
+        }
+        sessions.removeAll()
         RoutingHTTPStub.handler = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testQwenDefaultsAndTrialModelsAreNotLabeledFree() {
@@ -348,6 +358,7 @@ final class SophyProviderRoutingTests: XCTestCase {
                 OpenAICompatibleProviderAdapter.huggingface(session: stubSession())
             ])
         )
+        sessions.append(session)
         return (session, credentials)
     }
 

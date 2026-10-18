@@ -619,3 +619,23 @@ signature/bundle-identity checks, in-place install and normal launch on `iPad ni
 Installed-app query confirms the new version. Existing data preserved without
 uninstall, reset or translation sync. Evidence: `build/v131-release/ipad-install.log`
 and `installed-app.log`. Physical acceptance remains separate from installation.
+
+### SP-048 quiz bank fixes — attempted 2026-10-18
+
+Installer dry-run passed. Signed build failed before installation with No Accounts
+and no development profile for `com.personal.SophiaScriptura.StudyActivityWidget`.
+Sign in under Xcode Settings → Accounts with the existing Personal Team and retry
+normal automatic provisioning. Do not change bundle IDs or remove the extension.
+The existing app/data remains intact; this attempt is not device delivery.
+Evidence: `build/sp048/ipad-install.log`.
+
+After owner-confirmed sign-in, the dry-run and live retry were repeated. Xcode still
+reported No Accounts and no widget profile, before installation. Both app and widget
+retain Automatic signing with existing team `LMHJKZ2N43`. Make that team available in
+Xcode and verify the widget target's Signing & Capabilities. Retry evidence:
+`build/sp048/ipad-install-retry.log`. No install or launch occurred.
+
+Final retry succeeded after signing was restored: signed Debug build, strict signature
+and bundle-identity checks, in-place install and normal launch on `iPad ni Paj`.
+Existing study data preserved; version remains 1.3.1/build 26. Evidence:
+`build/sp048/ipad-install-retry2.log`. Physical feature acceptance remains open.

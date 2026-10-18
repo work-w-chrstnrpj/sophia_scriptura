@@ -12,12 +12,22 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v1.3.2](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.3.2) | 2026-10-18 | Quiz Me ready-bank lifecycle/refill reliability, matching summary actions and expanded app documentation | [Release notes](v1.3.2.md) |
+| [v1.3.1](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.3.1) | 2026-10-16 | Link editing, study-material subfolder drops and compact Points to Ponder cards | [Release notes](v1.3.1.md) |
+| [v1.3.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.3.0) | 2026-10-15 | Points to Ponder, study conversions, record duplication and Journal types | [Release notes](v1.3.0.md) |
+| [v1.2.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.2.0) | 2026-10-14 | Collection Smart Order/actions, Sophy commands and Qwen adapters | [Release notes](v1.2.0.md) |
+| [v1.1.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.1.0) | 2026-10-13 | Folder moves, shared note cards/statuses and repeated quiz rounds | [Release notes](v1.1.0.md) |
+| [v1.0.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.0.0) | 2026-10-13 | Multi-source Scripture, Hello AO downloads and narration | [Release notes](v1.0.0.md) |
 | [v0.4.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.4.0) | 2026-10-10 | Sophy, Hugging Face BYOK, music/Activity system controls and configurable PiP | [Release notes](v0.4.0.md) |
 | [v0.3.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.3.0) | 2026-10-09 | Compound ink/stroke editing, Notes/Collections access locks, Journal fields and optional Activity workflows | [Release notes](v0.3.0.md) |
 | [v0.2.2](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.2) | 2026-10-07 | Collections material fixes and Canvas selection/performance improvements | [Release notes](v0.2.2.md) |
 | [v0.2.1](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.1) | 2026-10-05 | Notes bulk-delete confirmation and captured selection | [Release notes](v0.2.1.md) |
 | [v0.2.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.2.0) | 2026-10-05 | Notes formatting/media, fixed Page/Journal scale, Canvas controls, annotation refinements | [Release notes](v0.2.0.md) |
 | [v0.1.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v0.1.0) | 2026-10-04 | First tagged personal-use release: Scripture, study hubs, Notes, Collections, Companion and Activity | [Release notes](v0.1.0.md) |
+
+SP-048 changes are included in v1.3.2; they are not part of the v1.3.1 snapshot.
+This index uses the repository release notes and local Git history; it is not a live
+GitHub publication-status check.
 
 These are personal iPad source releases, not App Store distributions. See
 [deployment](../deployment/deployment.md) for signing and installation and

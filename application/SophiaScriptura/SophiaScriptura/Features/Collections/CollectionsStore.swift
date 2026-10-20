@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 
 @MainActor
 final class CollectionsStore: ObservableObject {
@@ -21,7 +22,20 @@ final class CollectionsStore: ObservableObject {
     private var sophyCommitInFlight = false
     private var linkedNoteIDs = Set<UUID>()
     private var linkedNoteBindings: [UUID: UUID] = [:]
-    private var writeChain: Task<Void, Never>?
+    private var linkedNoteAccess: [UUID: StudyAccessRequirements] = [:]
+    private var writeChain: Task<StudyCommitResult, Never>?
+    @Published private(set) var plans: [StudyPlan] = []
+    @Published private(set) var persistenceUncertain = false
+    private var planFormatActivated = false
+    private var planOperations: [PlanOperation] = []
+    private var commandReceipts: [StudyCommandReceipt] = []
+    private var retainedPlanAccess: [RetainedPlanAccess] = []
+    private var committedState: CollectionsSnapshot?
+    private var legacyBaseline: CollectionsSnapshot?
+    private var pendingLegacy: [(UUID, CollectionsLegacyPatch)] = []
+    weak var planNotes: NotesSession?
+    var validatePlanReference: ((PlanItemPayload, String) async throws -> Void)?
+    @Published var studyMutationBlocked = false
 
     init(
         collections: [StudyCollection],
@@ -49,6 +63,7 @@ final class CollectionsStore: ObservableObject {
             folders.insert(.unfiled(accent: .noFolder), at: 0)
             self.collections = folders
         }
+        committedState = exportSnapshot(); legacyBaseline = exportSnapshot()
     }
 
     convenience init(repository: any CollectionsRepository) {
@@ -134,6 +149,7 @@ final class CollectionsStore: ObservableObject {
     /// Notes filed in a locked collection, or in any folder nested under one, stay out of the Notes library.
     /// Depth does not matter. Membership in any locked folder is enough. The note's own lock is separate.
     func concealsNote(_ noteID: UUID) -> Bool {
+        if let requirements = linkedNoteAccess[noteID], !accessAllowed(requirements) { return true }
         let hidden = folderIDsHiddenFromNotes()
         return collectionIDs(containing: noteID).contains { hidden.contains($0) || isLocked($0) }
     }
@@ -162,11 +178,12 @@ final class CollectionsStore: ObservableObject {
     }
 
     func canRevealNoteMetadata(_ note: NoteDocument) -> Bool {
-        !protection.isLocked(note.protectionID, in: .notes) && !concealsNote(note.id)
+        !protection.isLocked(note.protectionID, in: .notes) && accessAllowed(note.access) && !concealsNote(note.id)
     }
 
     func searchableNoteText(_ note: NoteDocument) -> String {
-        canRevealNoteMetadata(note) ? note.searchableText : note.title
+        guard accessAllowed(note.access) else { return "" }
+        return canRevealNoteMetadata(note) ? note.searchableText : note.title
     }
 
     func visibleNoteTags(in notes: [NoteDocument]) -> [String] {
@@ -371,8 +388,8 @@ final class CollectionsStore: ObservableObject {
             value.memberships.append(contentsOf: edges.map { CollectionMembership(collectionID: mapping[$0.collectionID]!, artifactID: $0.artifactID) })
         }
         do {
-            if let repository { value = try await repository.save(value, expectedRevision: revision) }
-            apply(value)
+            let result = await commitLegacySnapshot(value)
+            guard result.receipt != nil else { notice = result.message; return nil }
             return mapping[id]
         } catch { notice = error.localizedDescription; return nil }
     }
@@ -655,6 +672,9 @@ final class CollectionsStore: ObservableObject {
             guard let trashedAt = collection.trashedAt else { return false }
             return TrashRetention.isExpired(trashedAt, now: now)
         }.map(\.id)
+        for plan in plans where plan.trashedAt.map({ TrashRetention.isExpired($0, now: now) }) == true && planAccessAllowed(plan) {
+            Task { _ = await submit(.init(expectedPlanRevision: plan.revision, intent: .purgePlan(plan.id))) }
+        }
         for point in pointsToPonder where point.trashedAt.map({ TrashRetention.isExpired($0, now: now) }) == true { permanentlyDeletePoint(point.id) }
         guard !expired.isEmpty else { return }
         for id in expired { permanentlyDeleteCollection(id: id) }
@@ -821,6 +841,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func link(notes: [NoteDocument]) {
+        linkedNoteAccess = Dictionary(uniqueKeysWithValues: notes.map { ($0.id, $0.access) })
         linkedNoteBindings = Dictionary(uniqueKeysWithValues: notes.compactMap { note in note.protectionID.map { (note.id, $0) } })
         linkedNoteIDs = Set(notes.filter(\.isActiveInLibrary).map(\.id))
     }
@@ -834,19 +855,20 @@ final class CollectionsStore: ObservableObject {
             purgeExpiredTrash()
             notice = result.recovered ? "Recovered the previous Collections revision." : nil
         } catch {
+            persistenceUncertain = true
             notice = error.localizedDescription
         }
     }
 
     func flush() async {
-        await writeChain?.value
+        _ = await writeChain?.value
     }
 
     func presentedArtifacts(notes: [NoteDocument], annotationSnapshot: AnnotationSnapshot? = nil) -> [CollectionArtifact] {
         let pointItems = pointsToPonder.filter { $0.trashedAt == nil }.map {
             CollectionArtifact(id: $0.id, title: $0.question, subtitle: "Point to Ponder", kind: .pointToPonder, modifiedAt: $0.createdAt)
         }
-        let noteItems = notes.filter(\.isActiveInLibrary).map { note in
+        let noteItems = notes.filter { $0.isActiveInLibrary && accessAllowed($0.access) }.map { note in
             CollectionArtifact(
                 id: note.id,
                 title: note.title,
@@ -855,7 +877,7 @@ final class CollectionsStore: ObservableObject {
                 modifiedAt: note.updatedAt
             )
         }
-        let linkItems = links.map { link in
+        let linkItems = links.filter { accessAllowed($0.access) && !collectionIDs(containing: $0.id).contains(where: isLocked) }.map { link in
             CollectionArtifact(
                 id: link.id,
                 title: link.title,
@@ -888,13 +910,16 @@ final class CollectionsStore: ObservableObject {
             if let annotationSnapshot, let layer = AnnotationCollectionCatalog.resolveLayer(layerID: saved.id, in: annotationSnapshot), layer.deleted { return nil }
             return AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
         }
+        let planItems = plans.filter { $0.isActive && planAccessAllowed($0) }.map {
+            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedCount)/\($0.items.count) complete", kind: .plan, modifiedAt: $0.modifiedAt)
+        }
         let covered = Set(noteItems.map(\.id))
             .union(pointsToPonder.map(\.id))
             .union(passageItems.map(\.id))
             .union(linkItems.map(\.id))
             .union(conversationItems.map(\.id))
             .union(savedAnnotations.map(\.id))
-        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems + pointItems
+        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems + pointItems + planItems
     }
 
     func pickableArtifacts(
@@ -928,7 +953,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func link(id: UUID) -> SavedLink? {
-        links.first { $0.id == id }
+        links.first { $0.id == id && accessAllowed($0.access) }
     }
 
     func conversation(id: UUID) -> StudyConversation? {
@@ -936,9 +961,9 @@ final class CollectionsStore: ObservableObject {
     }
 
     func upsertCompanionConversation(_ conversation: StudyConversation) {
-        if sophyCommitInFlight {
+        if sophyCommitInFlight || studyMutationBlocked {
             Task { @MainActor in
-                while self.sophyCommitInFlight { await Task.yield() }
+                while self.sophyCommitInFlight || self.studyMutationBlocked { try? await Task.sleep(for: .milliseconds(20)) }
                 self.upsertCompanionConversation(conversation)
             }
             return
@@ -954,9 +979,9 @@ final class CollectionsStore: ObservableObject {
     }
 
     func removeCompanionConversation(_ id: UUID) {
-        if sophyCommitInFlight {
+        if sophyCommitInFlight || studyMutationBlocked {
             Task { @MainActor in
-                while self.sophyCommitInFlight { await Task.yield() }
+                while self.sophyCommitInFlight || self.studyMutationBlocked { try? await Task.sleep(for: .milliseconds(20)) }
                 self.removeCompanionConversation(id)
             }
             return
@@ -992,7 +1017,8 @@ final class CollectionsStore: ObservableObject {
             guard let folder = collection(id: collectionID), folder.isUnfiled || folder.isActiveInLibrary,
                   allowChanges([collectionID]) else { return false }
         }
-        guard let index = links.firstIndex(where: { $0.id == id }) else { return false }
+        guard let index = links.firstIndex(where: { $0.id == id }), accessAllowed(links[index].access),
+              !collectionIDs(containing: id).contains(where: isLocked) else { return false }
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let parsed = URL(string: trimmed),
               let scheme = parsed.scheme?.lowercased(), ["http", "https"].contains(scheme),
@@ -1026,7 +1052,8 @@ final class CollectionsStore: ObservableObject {
     func deleteLink(_ id: UUID) {
         guard !rejectWhileSophyCommits() else { return }
 
-        guard links.contains(where: { $0.id == id }) else { return }
+        guard links.contains(where: { $0.id == id && accessAllowed($0.access) }),
+              !collectionIDs(containing: id).contains(where: isLocked) else { return }
         links.removeAll { $0.id == id }
         for edge in memberships.filter({ $0.artifactID == id }) {
             memberships.remove(edge)
@@ -1055,7 +1082,8 @@ final class CollectionsStore: ObservableObject {
 
     private func knownItem(_ id: UUID) -> Bool {
         guard noteAccessAllows(id) else { return false }
-        return artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation }
+        return plans.contains { $0.id == id && $0.isActive && planAccessAllowed($0) }
+            || artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation }
             || pointsToPonder.contains { $0.id == id && $0.trashedAt == nil }
             || passages.contains { $0.id == id }
             || savedAnnotations.contains { $0.id == id }
@@ -1070,6 +1098,16 @@ final class CollectionsStore: ObservableObject {
     }
 
     private func apply(_ snapshot: CollectionsSnapshot) {
+        committedState = snapshot
+        var projection = snapshot
+        for (_, patch) in pendingLegacy { projection = patch.applying(to: projection) }
+        applyProjection(projection)
+        legacyBaseline = exportSnapshot()
+    }
+    private func applyProjection(_ snapshot: CollectionsSnapshot) {
+        plans = snapshot.plans; planOperations = snapshot.planOperations
+        commandReceipts = snapshot.commandReceipts; retainedPlanAccess = snapshot.retainedPlanAccess
+        planFormatActivated = snapshot.planFormatActivated
         revision = snapshot.revision
         pointsToPonder = snapshot.pointsToPonder
         passages = snapshot.passages
@@ -1088,15 +1126,17 @@ final class CollectionsStore: ObservableObject {
 
     func exportBackupSnapshot() throws -> CollectionsSnapshot {
         try protection.require(collections.map(\.protectionID), in: .collections)
+        guard plans.allSatisfy(planAccessAllowed), links.allSatisfy({ accessAllowed($0.access) }),
+              retainedPlanAccess.allSatisfy({ accessAllowed($0.access) }) else { throw ItemLockError.locked }
         return exportSnapshot()
     }
 
-    func restoreBackupSnapshot(_ snapshot: CollectionsSnapshot) async {
-        guard !rejectWhileSophyCommits() else { return }
+    @discardableResult func restoreBackupSnapshot(_ snapshot: CollectionsSnapshot) async -> Bool {
+        guard !sophyCommitInFlight, !persistenceUncertain else { return false }
 
         do {
             try protection.require(collections.map(\.protectionID), in: .collections)
-            guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+            guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
             await flush()
             try protection.require(collections.map(\.protectionID), in: .collections)
             var restored = snapshot
@@ -1106,16 +1146,15 @@ final class CollectionsStore: ObservableObject {
             restored.revision = revision
             restored.schemaVersion = restored.requiredSchemaVersion
             protection.lock([.collections])
-            if let repository {
-                let saved = try await repository.save(restored, expectedRevision: revision)
-                apply(saved)
-            } else { apply(restored) }
-            notice = "Collections restored from backup."
-        } catch { notice = error.localizedDescription }
+            let bytes = try JSONEncoder().encode(restored)
+            let result = await submit(.init(intent: .restoreCollections(bytes)))
+            guard result.receipt != nil else { notice = result.message; return false }
+            notice = "Collections restored from backup."; return true
+        } catch { notice = error.localizedDescription; return false }
     }
 
     private func exportSnapshot() -> CollectionsSnapshot {
-        CollectionsSnapshot(
+        var result = CollectionsSnapshot(
             schemaVersion: !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1,
             revision: revision,
             collections: collections.filter { !$0.isUnfiled },
@@ -1127,6 +1166,10 @@ final class CollectionsStore: ObservableObject {
             memberships: Array(memberships),
             unfiledAccent: unfiledAccent
         )
+        result.planFormatActivated = planFormatActivated; result.plans = plans
+        result.planOperations = planOperations; result.commandReceipts = commandReceipts
+        result.retainedPlanAccess = retainedPlanAccess; result.schemaVersion = result.requiredSchemaVersion
+        return result
     }
 
     /// Creates every folder in one snapshot and publishes it only after the repository save succeeds.
@@ -1182,24 +1225,17 @@ final class CollectionsStore: ObservableObject {
                 modifiedAt: now
             ))
         }
-        if let repository {
-            do {
-                let saved = try await repository.save(snapshot, expectedRevision: revision)
-                apply(saved)
-                return .committed(resultIDs: nodes.map(\.id))
-            } catch CollectionsError.stale {
-                return .rejected(.stalePlan)
-            } catch {
-                return .uncertain(resultIDs: nodes.map(\.id))
-            }
+        let result = await commitLegacySnapshot(snapshot)
+        switch result {
+        case .committed: return .committed(resultIDs: nodes.map(\.id))
+        case .rejected(.stale): return .rejected(.stalePlan)
+        case .rejected: return .rejected(.accessDenied)
+        case .uncertain: return .uncertain(resultIDs: nodes.map(\.id))
         }
-        snapshot.revision = revision
-        apply(snapshot)
-        return .committed(resultIDs: nodes.map(\.id))
     }
 
     private func rejectWhileSophyCommits() -> Bool {
-        guard sophyCommitInFlight else { return false }
+        guard sophyCommitInFlight || studyMutationBlocked || persistenceUncertain else { return false }
         notice = SophySafeError.busy.message
         return true
     }
@@ -1226,23 +1262,221 @@ final class CollectionsStore: ObservableObject {
     }
 
     private func enqueueWrite() {
-        guard !sophyCommitInFlight else {
-            notice = SophySafeError.busy.message
-            return
-        }
-        guard repository != nil else { return }
-        let previous = writeChain
-        writeChain = Task { @MainActor in
-            await previous?.value
-            guard let repository = self.repository else { return }
-            let snapshot = self.exportSnapshot()
-            let expected = self.revision
-            do {
-                let saved = try await repository.save(snapshot, expectedRevision: expected)
-                self.revision = saved.revision
-            } catch {
-                self.notice = error.localizedDescription
+        guard !studyMutationBlocked, !persistenceUncertain else { notice = StudyMutationFailure.busy.localizedDescription; return }
+        let after = exportSnapshot(), before = legacyBaseline ?? committedState ?? after
+        let patch = CollectionsLegacyPatch(before: before, after: after)
+        legacyBaseline = after
+        let id = UUID()
+        pendingLegacy.append((id, patch))
+        do { _ = schedule(.init(commandID: id, intent: .legacyPatch(try JSONEncoder().encode(patch)))) }
+        catch { notice = error.localizedDescription }
+    }
+}
+
+extension CollectionsStore {
+    var hasCollectionsAccessRequirements: Bool {
+        collections.contains { !$0.isUnfiled && $0.protectionID != nil }
+            || plans.contains { !$0.access.collectionsCredentialIDs.isEmpty }
+            || links.contains { !$0.access.collectionsCredentialIDs.isEmpty }
+            || linkedNoteAccess.values.contains { !$0.collectionsCredentialIDs.isEmpty }
+            || retainedPlanAccess.contains { !$0.access.collectionsCredentialIDs.isEmpty }
+    }
+    func accessAllowed(_ value: StudyAccessRequirements) -> Bool {
+        !value.notesCredentialIDs.contains { protection.isLocked($0, in: .notes) }
+            && !value.collectionsCredentialIDs.contains { protection.isLocked($0, in: .collections) }
+    }
+    func planAccessAllowed(_ plan: StudyPlan) -> Bool {
+        accessAllowed(plan.access) && !collectionIDs(containing: plan.id).contains(where: isLocked)
+    }
+    func accessForPlan(_ id: UUID) -> StudyAccessRequirements {
+        var access = plans.first(where: { $0.id == id })?.access ?? .init()
+        for folder in collectionIDs(containing: id) {
+            var current: UUID? = folder; var seen = Set<UUID>()
+            while let next = current, seen.insert(next).inserted, let value = collection(id: next) {
+                if let binding = value.protectionID { access.collectionsCredentialIDs.insert(binding) }
+                current = value.parentID
             }
+        }
+        return access
+    }
+    func submit(_ request: StudyMutationRequest) async -> StudyCommitResult { await schedule(request).value }
+    private func schedule(_ request: StudyMutationRequest) -> Task<StudyCommitResult, Never> {
+        let previous = writeChain
+        let task = Task { @MainActor in
+            _ = await previous?.value
+            return await self.perform(request)
+        }
+        writeChain = task
+        return task
+    }
+    func receipt(for commandID: UUID) async -> StudyCommitResult {
+        if let value = committedState?.commandReceipts.first(where: { $0.commandID == commandID }) { return .committed(value) }
+        guard let repository else { return .rejected(.unavailable) }
+        do {
+            let current = try await repository.load().snapshot
+            guard let receipt = current.commandReceipts.first(where: { $0.commandID == commandID }) else { return .rejected(.persistence) }
+            persistenceUncertain = false; apply(current); return .committed(receipt)
+        } catch { return .uncertain(commandID: commandID) }
+    }
+    private func commitLegacySnapshot(_ after: CollectionsSnapshot) async -> StudyCommitResult {
+        do {
+            let patch = CollectionsLegacyPatch(before: exportSnapshot(), after: after)
+            return await submit(.init(intent: .legacyPatch(try JSONEncoder().encode(patch))))
+        } catch { return .rejected(.invalid) }
+    }
+    private func perform(_ request: StudyMutationRequest) async -> StudyCommitResult {
+        defer {
+            pendingLegacy.removeAll { $0.0 == request.commandID }
+            if let committedState { apply(committedState) }
+        }
+        if studyMutationBlocked {
+            guard case .restoreCollections = request.intent else { return .rejected(.busy) }
+        }
+        guard !persistenceUncertain else { return .rejected(.busy) }
+        var value = committedState ?? exportSnapshot()
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let hash: String
+        do { hash = SHA256.hash(data: try encoder.encode(request.intent)).map { String(format: "%02x", $0) }.joined() }
+        catch { return .rejected(.invalid) }
+        if let receipt = value.commandReceipts.first(where: { $0.commandID == request.commandID }) {
+            return receipt.intentHash == hash ? .committed(receipt) : .rejected(.invalid)
+        }
+        var planID: UUID?
+        do {
+            switch request.intent {
+            case .legacyPatch(let bytes):
+                let patch = try JSONDecoder().decode(CollectionsLegacyPatch.self, from: bytes)
+                let changedEdges = Set(patch.before.memberships).symmetricDifference(patch.after.memberships)
+                let affected = Set(patch.before.collections.filter { old in patch.after.collections.first(where: { $0.id == old.id }) != old }.map(\.id)).union(changedEdges.map(\.collectionID))
+                guard !affected.filter({ collection(id: $0) != nil }).contains(where: isLocked) else { return .rejected(.accessDenied) }
+                value = patch.applying(to: value)
+            case .restoreCollections(let bytes):
+                var restored = try JSONDecoder().decode(CollectionsSnapshot.self, from: bytes)
+                restored.preservePlanAccess(from: value)
+                restored.revision = value.revision; value = restored
+            case .savePlan(var plan, let destination):
+                guard accessAllowed(plan.access) else { return .rejected(.accessDenied) }
+                planID = plan.id
+                if let existing = value.plans.first(where: { $0.id == plan.id }) {
+                    guard planAccessAllowed(existing) else { return .rejected(.accessDenied) }
+                    guard request.expectedPlanRevision == existing.revision else { return .rejected(.stale) }
+                    // Replacing targets reopens only those assignments, regardless of a stale editor checkbox.
+                    let prior = Dictionary(uniqueKeysWithValues: existing.items.map { ($0.id, $0) })
+                    for s in plan.sections.indices { for i in plan.sections[s].items.indices {
+                        let item = plan.sections[s].items[i]
+                        if let old = prior[item.id], old.payload != item.payload { plan.sections[s].items[i].completedAt = nil }
+                    } }
+                    plan.access = plan.access.union(existing.access); plan.revision = existing.revision + 1
+                    plan.createdAt = existing.createdAt
+                    if let cursor = plan.cursor, cursor.kind != .planSummary, !plan.sections.contains(where: { $0.id == cursor.sectionID }) { plan.cursor = nil }
+                } else {
+                    guard request.expectedPlanRevision == nil, value.plans.count < 100 else { return .rejected(.capacity) }
+                    plan.revision = 0
+                }
+                if let destination, destination != StudyCollection.unfiledID {
+                    guard let folder = collection(id: destination), folder.isActiveInLibrary, !isLocked(destination) else { return .rejected(.accessDenied) }
+                    let edge = CollectionMembership(collectionID: destination, artifactID: plan.id)
+                    if !value.memberships.contains(edge) { value.memberships.append(edge) }
+                }
+                // Newly saved reading reflections inherit the Plan's folder memberships in
+                // the same Collections commit as their checked ordered item.
+                let existingItemIDs = Set(value.plans.first(where: { $0.id == plan.id })?.items.map(\.id) ?? [])
+                let planFolders = Set(value.memberships.filter { $0.artifactID == plan.id }.map(\.collectionID))
+                for item in plan.items where item.origin == .reflection && item.operationID != nil && !existingItemIDs.contains(item.id) {
+                    if let target = item.payload.targetID {
+                        for folderID in planFolders {
+                            let membership = CollectionMembership(collectionID: folderID, artifactID: target)
+                            if !value.memberships.contains(membership) { value.memberships.append(membership) }
+                        }
+                    }
+                }
+                plan.modifiedAt = Date(); try plan.validate()
+                let oldItems = Dictionary(uniqueKeysWithValues: value.plans.first(where: { $0.id == plan.id })?.items.map { ($0.id, $0.payload) } ?? [])
+                if let validatePlanReference {
+                    for item in plan.items where item.payload.kind == .scripture && (oldItems[item.id] != item.payload || value.plans.first(where: { $0.id == plan.id })?.preferredEditionID != plan.preferredEditionID) {
+                        try await validatePlanReference(item.payload, plan.preferredEditionID)
+                    }
+                }
+                guard accessAllowed(plan.access), !collectionIDs(containing: plan.id).contains(where: isLocked) else { return .rejected(.accessDenied) }
+                if let index = value.plans.firstIndex(where: { $0.id == plan.id }) { value.plans[index] = plan }
+                else { value.plans.append(plan) }
+                value.planFormatActivated = true
+            case .saveLink(let link, let destination):
+                guard accessAllowed(link.access), let url = URL(string: link.url),
+                      ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host?.isEmpty == false,
+                      !value.links.contains(where: { $0.id == link.id }) else { return .rejected(.invalid) }
+                if let destination, destination != StudyCollection.unfiledID {
+                    guard !isLocked(destination) else { return .rejected(.accessDenied) }
+                    value.memberships.append(.init(collectionID: destination, artifactID: link.id))
+                }
+                value.links.append(link)
+                if link.planOrigin != nil || !link.access.isEmpty { value.planFormatActivated = true }
+            case .purgePlan(let id):
+                guard let plan = value.plans.first(where: { $0.id == id }), plan.trashedAt != nil,
+                      planAccessAllowed(plan), request.expectedPlanRevision == plan.revision else { return .rejected(.accessDenied) }
+                guard !value.planOperations.contains(where: { $0.planID == id }) else { return .rejected(.busy) }
+                value.retainedPlanAccess.append(.init(planID: id, lastTitle: plan.title, access: plan.access, detachedAt: Date()))
+                value.plans.removeAll { $0.id == id }; value.memberships.removeAll { $0.artifactID == id }
+                planID = id
+            case .prepareOperation(let operation):
+                guard value.planOperations.count < 128, accessAllowed(operation.access),
+                      !value.planOperations.contains(where: { $0.id == operation.id }),
+                      operation.planID.map({ id in value.plans.contains { $0.id == id && planAccessAllowed($0) } }) ?? true else { return .rejected(.busy) }
+                value.planFormatActivated = true; value.planOperations.append(operation)
+            case .finishOperation(let id):
+                guard let operation = value.planOperations.first(where: { $0.id == id }), accessAllowed(operation.access) else { return .rejected(.accessDenied) }
+                value.planOperations.removeAll { $0.id == id }
+            }
+            // Sticky union on all filing/protection paths, not just the Plan editor.
+            for i in value.plans.indices {
+                var access = value.plans[i].access
+                for edge in value.memberships where edge.artifactID == value.plans[i].id {
+                    var next: UUID? = edge.collectionID; var seen = Set<UUID>()
+                    while let id = next, seen.insert(id).inserted, let folder = value.collections.first(where: { $0.id == id }) {
+                        if let binding = folder.protectionID { access.collectionsCredentialIDs.insert(binding) }; next = folder.parentID
+                    }
+                }
+                value.plans[i].access = access
+                let oldAccess = committedState?.plans.first(where: { $0.id == value.plans[i].id })?.access ?? .init()
+                if access != oldAccess, let planNotes {
+                    let result = await planNotes.applyPlanAccess(planID: value.plans[i].id, operationID: request.commandID, access: access)
+                    guard case .committed = result else { return .uncertain(commandID: request.commandID) }
+                }
+            }
+            let receipt = StudyCommandReceipt(commandID: request.commandID, intentHash: hash,
+                storeRevision: value.revision + 1, planID: planID,
+                planRevision: value.plans.first(where: { $0.id == planID })?.revision,
+                resultIDs: planID.map { [$0] } ?? [], committedAt: Date())
+            // Legacy-only stores keep their existing wire schema until the first Plan.
+            if value.planFormatActivated {
+                value.commandReceipts.append(receipt)
+                let pinned = Set(value.planOperations.map(\.id))
+                while value.commandReceipts.count > 256 {
+                    guard let index = value.commandReceipts.firstIndex(where: { !pinned.contains($0.commandID) }) else { throw StudyMutationFailure.capacity }
+                    value.commandReceipts.remove(at: index)
+                }
+            }
+            value.schemaVersion = value.requiredSchemaVersion; try value.validatePlans()
+            if let repository { value = try await repository.save(value, expectedRevision: value.revision) }
+            else { value.revision += 1 }
+            apply(value)
+            notice = nil
+            return .committed(receipt)
+        } catch let failure as StudyMutationFailure { notice = failure.localizedDescription; return .rejected(failure) }
+        catch CollectionsError.stale { notice = StudyMutationFailure.stale.localizedDescription; return .rejected(.stale) }
+        catch CollectionsError.unsupported { persistenceUncertain = true; notice = StudyMutationFailure.unsupported.localizedDescription; return .rejected(.unsupported) }
+        catch {
+            if let repository {
+                do {
+                    let observed = try await repository.load().snapshot
+                    if let receipt = observed.commandReceipts.first(where: { $0.commandID == request.commandID }) {
+                        apply(observed); return .committed(receipt)
+                    }
+                    if observed.revision != (committedState?.revision ?? 0) { persistenceUncertain = true; return .uncertain(commandID: request.commandID) }
+                } catch { persistenceUncertain = true; return .uncertain(commandID: request.commandID) }
+            }
+            notice = StudyMutationFailure.persistence.localizedDescription
+            return .rejected(.persistence)
         }
     }
 }

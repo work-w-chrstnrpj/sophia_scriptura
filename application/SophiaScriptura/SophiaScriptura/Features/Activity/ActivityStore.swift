@@ -16,6 +16,7 @@ import Combine
     private var loaded = false
     private var pendingSave: Task<Void, Never>?
     private var sophyCommitInFlight = false
+    @Published var backupLeaseHeld = false
     private var pendingReminderSync: Task<Void, Never>?
 
     private let syncReminderNotifications: ([ActivityReminder], Bool) async throws -> Bool
@@ -148,7 +149,7 @@ import Combine
     }
 
     private func rejectWhileSophyCommits() -> Bool {
-        guard sophyCommitInFlight else { return false }
+        guard sophyCommitInFlight || backupLeaseHeld else { return false }
         errorMessage = SophySafeError.busy.message
         return true
     }
@@ -190,8 +191,8 @@ import Combine
         catch { errorMessage = "Activity export failed: \(error.localizedDescription)"; return nil }
     }
 
-    func restoreArchive(_ data: Data) async {
-        guard !rejectWhileSophyCommits() else { return }
+    @discardableResult func restoreArchive(_ data: Data) async -> Bool {
+        guard !sophyCommitInFlight else { return false }
 
         await flush()
         do {
@@ -202,8 +203,9 @@ import Combine
             migrateReminderCleanupPreference()
             pruneExpiredReminders()
             syncReminders(requestPermission: false)
+            return true
         }
-        catch { errorMessage = "Activity restore failed. Existing data was kept: \(error.localizedDescription)" }
+        catch { errorMessage = "Activity restore failed. Existing data was kept: \(error.localizedDescription)"; return false }
     }
 
     func start(mode: ActivityMode, title: String, readingStart: VerseID? = nil, editionID: String? = nil,

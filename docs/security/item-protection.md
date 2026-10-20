@@ -54,3 +54,54 @@ regardless of protection. Schemas 1/2 still load with no points. Existing creden
 bindings, ancestor route guards and backup preflights are retained. Older versions
 reject schema 3 safely. Collection relocking dismisses the question/Explore/New note
 flow. Newly created material inherits only accessible source folder memberships.
+
+## Proposed Collection Plans access extension — not implemented
+
+SP-049–052 must preserve independent Collections/Notes grants. New Plan-owned annotation
+layers require access bindings checked through ordinary reader pickers, export, recovery
+and Plan routes, including orphan/deletion/membership transitions. Hiding the Plan alone
+cannot protect a layer exposed by another route. Retain restrictions on detach and fail
+closed for unknown bindings; do not imply encryption. See the
+[Plan access and backup proposal](../design/collection-plans.md#access-backups-and-compatibility)
+and [SP-051](../../tickets/SP-051-plan-annotations-and-study-tools.md). No current annotation
+protection guarantee is changed by this planning note.
+
+Plan review clarification (planning only): relock captures accepted buffers and conceals
+immediately, without waiting for a stroke continuation or disk retry. New reflections
+must retain source restrictions even when attachment fails; retained ink cannot depend
+solely on deletable folder IDs or downgrade to unprotected fallback generations. These
+are new implementation gates, not current guarantees. See the
+[review contracts](../design/collection-plans.md#linked-material-lifecycle-and-privacy).
+
+## Plan access decisions resolved — unimplemented, 2026-10-19
+
+[D3](../data/collection-plans-contract.md#d3--access-binding-and-propagation) selects
+StudyAccessRequirements with conjunctive Notes/Collections credential-UUID arrays. Derived
+Notes/links/layers persist these requirements before publication; unknown credentials fail
+closed and existing protectionID/grant semantics remain. Folder protection/reparent/filing
+uses a monotone propagation barrier; purge never drops retained access. Only explicit fresh
+authenticated scoped removal can relax requirements, including safe fallback generations.
+Relock conceals immediately after memory capture, independent of disk success. Actual
+protection implementation and physical acceptance remain separate from this ready design.
+
+## SP-049 access foundation source checkpoint — 2026-10-20
+
+Copied per-domain requirements are now part of Notes v5/Collections v4. New Plan-derived
+notes/links save source requirements before attachment; existing referenced material is
+not implicitly refiled. Filing/protection unions requirements, and Notes-library/Trash/search,
+clipboard and Sophy lookup honor them independently of the note's own Notes lock. Collections
+unlock controls remain available for retained requirements after a source folder disappears.
+Relock captures native buffers and conceals copied-access Notes immediately; disk writes do
+not extend grants. Existing ordinary item behavior remains subject to its original contracts.
+Managed Plan-ink protection, propagation/removal reconciliation and reader routes are still
+SP-051 work; no annotation v2 or physical privacy acceptance is claimed in SP-049.
+
+### Plan fullscreen Notes presentation — 2026-10-20
+
+Plan previews and reading assignments use the existing Notes session/editor and access
+guards. The transient planPresentationActive flag controls which host mounts its
+surface; it grants no access. Offscreen Notes/Collections hosts suppress duplicate
+editors while the Plan owns presentation. Notes flush before leaving their preview,
+Previous/Next or exit; revocation hides Plan content and subordinate creation/preview
+routes. Reflection targets copy existing Plan access requirements before attachment.
+This does not close the remaining managed-ink/access-removal or physical privacy gates.

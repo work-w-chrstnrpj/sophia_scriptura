@@ -588,7 +588,7 @@ final class SophySession: ObservableObject {
         let documents = notes.snapshot.notes.map { note in
             let typed = ([note.page?.body ?? ""] + note.objects.filter { $0.kind == .text }.map(\.text)).joined(separator: "\n")
             return SophyEligibleRecord(id: note.id, kind: .note, title: note.title, body: typed, tags: note.tags,
-                protectionID: note.protectionID, parentID: nil, membershipIDs: Array(collections.collectionIDs(containing: note.id)).sorted { $0.uuidString < $1.uuidString },
+                protectionID: note.protectionID ?? note.access.notesCredentialIDs.first ?? note.access.collectionsCredentialIDs.first, parentID: nil, membershipIDs: Array(collections.collectionIDs(containing: note.id)).sorted { $0.uuidString < $1.uuidString },
                 isArchived: note.isArchived, isTrashed: note.isTrashed, isVirtualUnfiled: false, modifiedAt: note.updatedAt)
         }
         return folders + documents

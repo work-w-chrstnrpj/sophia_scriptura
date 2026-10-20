@@ -70,3 +70,11 @@ Current additional storage boundaries (reviewed 2026-10-18):
   records carry credential bindings; this is access protection, not content encryption.
 - SP-048 changes bank lifecycle without a new Companion schema; unused cached questions
   and each validated merged refill batch persist through the existing snapshot repository.
+
+SP-049 (2026-10-20) extends the above conditionally: Plan stores activate Collections v4,
+Plan-derived notes activate Notes v5, both with v2 wrappers/pointers and sticky protected
+fallbacks. Earlier supported schemas remain readable; pre-Plan formats stay unchanged
+until activation. Core/Security/StudyAccessRequirements.swift carries per-domain credential
+requirements, never secrets. All-data backup v2 adds hashes/inert recovery references;
+Infrastructure/Backup/StudyRestoreJournal.swift owns local staged inputs/checkpoints.
+Managed annotation v2/Plan layers remain SP-051, not implemented by this authoring slice.

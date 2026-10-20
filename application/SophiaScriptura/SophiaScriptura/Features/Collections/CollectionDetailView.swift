@@ -23,6 +23,8 @@ struct CollectionDetailView: View {
     var exploreQuestion: (String) -> UUID? = { _ in nil }
     var trashConversation: (UUID) -> Void = { _ in }
     var books: [ScriptureBook] = []
+    var reader: ReaderSession? = nil
+    @State private var viewingPlanID: UUID?
 
     @AppStorage("collections.subfolder.arrange") private var arrangeStore = ""
 
@@ -128,12 +130,21 @@ struct CollectionDetailView: View {
                         store: store,
                         collectionID: collectionID,
                         notes: notes,
+                        reader: reader,
                         annotationSnapshot: annotationSnapshot,
                         bookTitleForCode: bookTitleForCode,
                         openNote: { openNote($0, collectionID) },
                         openCompanion: openCompanion,
                         createConversation: createConversation
                     )
+                }
+                .fullScreenCover(isPresented: Binding(get: { viewingPlanID != nil }, set: { if !$0 { viewingPlanID = nil } }), onDismiss: {
+                    notes.flushSurface?(); notes.selectedNoteID = nil; notes.planPresentationActive = false; notes.active = false
+                    Task { await notes.save() }
+                }) {
+                    if let viewingPlanID {
+                        PlanDetailView(store: store, notes: notes, reader: reader, collectionID: collectionID, planID: viewingPlanID, openNote: { openNote($0, collectionID) })
+                    }
                 }
                 .sheet(item: $duplicatingCollection) { folder in
                     CollectionDuplicateSheet(store: store, folderID: folder.id)
@@ -642,6 +653,7 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactTitle(_ item: CollectionArtifact) -> String {
         switch item.kind {
+        case .plan: return "Move this Plan to Trash?"
         case .pointToPonder: return "Move this question to Trash?"
         case .note: return "Move \"\(item.title)\" to Trash?"
         case .conversation: return "Delete \"\(item.title)\"?"
@@ -651,6 +663,7 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactMessage(_ item: CollectionArtifact) -> String {
         switch item.kind {
+        case .plan: return "Restore it from Settings → Trash → Plans. Notes, links and ink are kept."
         case .pointToPonder:
             return "Restore it from Settings → Trash → Points to Ponder."
         case .annotation:
@@ -666,6 +679,11 @@ struct CollectionDetailView: View {
 
     private func confirmDeleteArtifact(_ item: CollectionArtifact) {
         switch item.kind {
+        case .plan:
+            if var plan = store.plans.first(where: { $0.id == item.id }) {
+                plan.trashedAt = Date()
+                Task { _ = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(plan, collectionID: nil))) }
+            }
         case .pointToPonder: store.trashPoint(item.id)
         case .annotation: store.deleteAnnotationReference(item.id)
         case .link: store.deleteLink(item.id)
@@ -678,6 +696,8 @@ struct CollectionDetailView: View {
 
     private func open(_ artifact: CollectionArtifact) {
         switch artifact.kind {
+        case .plan:
+            if let plan = store.plans.first(where: { $0.id == artifact.id && store.planAccessAllowed($0) }) { viewingPlanID = plan.id }
         case .pointToPonder:
             pointCard = store.pointsToPonder.first { $0.id == artifact.id && $0.trashedAt == nil }
         case .note:

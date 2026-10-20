@@ -155,3 +155,30 @@ width equals text width + twice the inset; height includes the same top/bottom i
 Repository validation accepts both geometry contracts. The native palette minimizes on
 stroke begin, can be expanded from the compact affordance, and is not expanded by autosave completion.
 Drawing remains enabled while saves run; a newer edit stays dirty until its revision saves.
+
+## Proposed Plan-owned layers — SP-051, not implemented
+
+The [Plan proposal](../design/collection-plans.md#plan-named-pencil-layers) retains the
+source/layout/per-layer identity contract above. First Draw creates a Plan-named layer
+for the current source group; subsequent visits reuse a stable Plan/group/layer binding.
+Names do not identify layers; resets preserve drawings and translation changes never
+copy ink. Recoverable binding/rename/detach operations and protected-layer route/export
+checks are required new work. Existing annotation data does not currently guarantee
+Plan-bound access protection. Exact schemas and backward compatibility are implementation
+gates in [SP-051](../../tickets/SP-051-plan-annotations-and-study-tools.md).
+
+Plan review clarification (planning only): Plan titles/managed names use the current
+80-Character limit; current group/layer/drawing ceilings stay unchanged with explicit
+Draw-capacity failure. Required access metadata must version snapshots/archives/recovery
+so older builds cannot ignore protection; source revision mismatch retains old ink as
+unavailable. See [review refinements](../design/collection-plans.md#limits-source-revisions-and-protected-generations).
+
+## Selected Plan layer schema — unimplemented, 2026-10-19
+
+[D1–D5](collection-plans-contract.md) now chooses annotation snapshot/archive/pointer v2.
+Layer ownership (Plan UUID, creation operation, managed/title revision) and copied per-domain
+access live with the layer; no separate Plan binding database is authoritative. Exact-source
+lookup, sticky activation, safe fallback copies and typed owner commit APIs preserve access
+through orphan/rename/detach/recovery. Legacy v1 is read and migrated by the future reader;
+new required metadata cannot be exported as v1. Existing drawing/layout/size limits remain.
+These are ready implementation requirements, not changes already made to the native app.

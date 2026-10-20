@@ -397,6 +397,8 @@ enum NoteContent: Equatable, Sendable, Codable {
 
 struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
     var protectionID: UUID? = nil
+    var access = StudyAccessRequirements()
+    var planOrigin: PlanOrigin? = nil
     static let objectLimit = 1000
     enum Paper: String, Codable, CaseIterable, Sendable { case plain, ruled, grid, dotted }
     static let extent: CGFloat = 12_000
@@ -478,11 +480,13 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         }
     }
     private enum CodingKeys: String, CodingKey {
-        case id, title, tags, createdAt, updatedAt, deletedAt, archivedAt, trashedAt, paper, color, content, objects, page, protectionID
+        case id, title, tags, createdAt, updatedAt, deletedAt, archivedAt, trashedAt, paper, color, content, objects, page, protectionID, access, planOrigin
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         protectionID = try c.decodeIfPresent(UUID.self, forKey: .protectionID)
+        access = try c.decodeIfPresent(StudyAccessRequirements.self, forKey: .access) ?? .init()
+        planOrigin = try c.decodeIfPresent(PlanOrigin.self, forKey: .planOrigin)
         id = try c.decode(UUID.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
         tags = try c.decode([String].self, forKey: .tags); createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decode(Date.self, forKey: .updatedAt)
@@ -518,6 +522,8 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
         try c.encode(color, forKey: .color)
         try c.encode(content, forKey: .content)
         try c.encodeIfPresent(protectionID, forKey: .protectionID)
+        try c.encode(access, forKey: .access)
+        try c.encodeIfPresent(planOrigin, forKey: .planOrigin)
     }
     var contentSize: CGSize {
         if let page { return CGSize(width: page.width, height: page.height) }
@@ -661,13 +667,40 @@ struct NoteDocument: Codable, Equatable, Identifiable, Sendable {
 struct NotesSnapshot: Codable, Equatable, Sendable {
     var schemaVersion = 3
     var revision = 0
+    var planFormatActivated = false
     var notes: [NoteDocument] = []
+    private enum CodingKeys: String, CodingKey { case schemaVersion, revision, notes, planFormatActivated }
+    private enum PlanAccessKey: String, CodingKey { case access }
+    init(schemaVersion: Int = 3, revision: Int = 0, notes: [NoteDocument] = []) {
+        self.schemaVersion = schemaVersion; self.revision = revision; self.notes = notes
+        planFormatActivated = schemaVersion == 5 || notes.contains { $0.planOrigin != nil || !$0.access.isEmpty }
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+        revision = try c.decode(Int.self, forKey: .revision)
+        var records = try c.nestedUnkeyedContainer(forKey: .notes)
+        notes = []
+        while !records.isAtEnd {
+            let decoder = try records.superDecoder()
+            if schemaVersion == 5 {
+                let fields = try decoder.container(keyedBy: PlanAccessKey.self)
+                _ = try fields.decode(StudyAccessRequirements.self, forKey: .access)
+            }
+            notes.append(try NoteDocument(from: decoder))
+        }
+        planFormatActivated = schemaVersion == 5 ? try c.decode(Bool.self, forKey: .planFormatActivated) : false
+    }
+    var requiredSchemaVersion: Int { planFormatActivated || notes.contains { $0.planOrigin != nil || !$0.access.isEmpty } ? 5 : notes.contains { $0.protectionID != nil } ? 4 : 3 }
     mutating func sanitize() {
         for index in notes.indices { notes[index].sanitize() }
     }
     func validate() throws {
-        guard (1...4).contains(schemaVersion) else { throw NotesError.unsupported }
+        guard (1...5).contains(schemaVersion) else { throw NotesError.unsupported }
         guard revision >= 0, notes.count <= 200, Set(notes.map(\.id)).count == notes.count else { throw NotesError.invalid }
+        if schemaVersion == 5 {
+            guard planFormatActivated else { throw NotesError.invalid }
+        }
         for note in notes { try note.validate() }
     }
 }

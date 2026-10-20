@@ -52,6 +52,7 @@ actor CollectionsFileRepository: CollectionsRepository {
         let (current, currentPointer, recovered) = try resolved()
         guard current.revision == expectedRevision else { throw CollectionsError.stale }
         var next = snapshot
+        next.preservePlanAccess(from: current)
         next.revision = current.revision + 1
         next.schemaVersion = next.requiredSchemaVersion
         try commit(next, previous: currentPointer, recovered: recovered)
@@ -93,7 +94,23 @@ actor CollectionsFileRepository: CollectionsRepository {
             }
         }
         var fallback = previous
-        if let previous {
+        if snapshot.planFormatActivated {
+            if let previous {
+                let original = try read(url(previous))
+                let backup = directory.appendingPathComponent("before-plans.collections")
+                if !fm.fileExists(atPath: backup.path) { try original.write(to: backup, options: .atomic) }
+                var safe = try decode(original)
+                safe.preservePlanAccess(from: snapshot)
+                let pointer = Pointer(schemaVersion: 2, id: UUID())
+                try encode(safe).write(to: url(pointer), options: .atomic)
+                fallback = pointer
+            } else {
+                var safe = CollectionsSnapshot(); safe.planFormatActivated = true; safe.schemaVersion = 4
+                let pointer = Pointer(schemaVersion: 2, id: UUID())
+                try encode(safe).write(to: url(pointer), options: .atomic); fallback = pointer
+            }
+        }
+        if !snapshot.planFormatActivated, let previous {
             let oldBytes = try read(url(previous))
             var protectedFallback = try decode(oldBytes)
             let bindings = Dictionary(uniqueKeysWithValues: snapshot.collections.compactMap { folder in folder.protectionID.map { (folder.id, $0) } })
@@ -110,7 +127,7 @@ actor CollectionsFileRepository: CollectionsRepository {
                 fallback = securePrevious
             }
         }
-        let pointer = Pointer(id: UUID())
+        let pointer = Pointer(schemaVersion: snapshot.planFormatActivated ? 2 : 1, id: UUID())
         try data.write(to: url(pointer), options: .atomic)
         if let fallback {
             try JSONEncoder().encode(fallback).write(to: directory.appendingPathComponent("previous.json"), options: .atomic)
@@ -119,24 +136,28 @@ actor CollectionsFileRepository: CollectionsRepository {
     }
 
     private func encode(_ snapshot: CollectionsSnapshot) throws -> Data {
-        guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        try snapshot.validatePlans()
         let payload = try JSONEncoder().encode(snapshot)
-        let data = try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
+        let data = try JSONEncoder().encode(Envelope(schemaVersion: snapshot.planFormatActivated ? 2 : 1, payload: payload, checksum: digest(payload)))
+        guard data.count <= 8 * 1024 * 1024 else { throw CollectionsError.invalid }
         return data
     }
 
     private func decode(_ data: Data) throws -> CollectionsSnapshot {
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-        guard envelope.schemaVersion == 1 else { throw CollectionsError.unsupported }
+        guard (1...2).contains(envelope.schemaVersion) else { throw CollectionsError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw CollectionsError.invalid }
         let snapshot = try JSONDecoder().decode(CollectionsSnapshot.self, from: envelope.payload)
-        guard (1...3).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (snapshot.schemaVersion == 4) == (envelope.schemaVersion == 2) else { throw CollectionsError.invalid }
+        try snapshot.validatePlans()
         return snapshot
     }
 
     private func pointer(_ name: String) throws -> Pointer {
         let value = try JSONDecoder().decode(Pointer.self, from: read(directory.appendingPathComponent(name), limit: 4096))
-        guard value.schemaVersion == 1 else { throw CollectionsError.unsupported }
+        guard (1...2).contains(value.schemaVersion) else { throw CollectionsError.unsupported }
         return value
     }
 

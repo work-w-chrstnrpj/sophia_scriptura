@@ -29,6 +29,7 @@ struct CollectionArtifactRow: View {
 
     private var deleteTitle: String {
         switch artifact.kind {
+        case .plan: return "Move Plan to Trash"
         case .pointToPonder: return "Delete Point to Ponder"
         case .gleaning: return "Delete Gleaning"
         case .link: return "Delete Link"
@@ -41,7 +42,7 @@ struct CollectionArtifactRow: View {
 
     private var canDeleteArtifact: Bool {
         switch artifact.kind {
-        case .pointToPonder, .bookmark, .gleaning, .link, .conversation, .annotation:
+        case .plan, .pointToPonder, .bookmark, .gleaning, .link, .conversation, .annotation:
             return true
         case .note:
             guard let notes,

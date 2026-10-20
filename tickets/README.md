@@ -8,6 +8,10 @@ Milestone ordering and closure evidence live in the
 
 | Ticket | Current status | Work |
 | --- | --- | --- |
+| [SP-049](SP-049-plan-model-and-authoring.md) | implemented; 434 unit tests + authoring UI passed; physical acceptance open | Domain, durable Plans, authoring and lifecycle |
+| [SP-050](SP-050-plan-reading-and-progress.md) | basic entry/progress implemented; full workspace acceptance open | Fullscreen focused reading, progress and section summaries |
+| [SP-051](SP-051-plan-annotations-and-study-tools.md) | note/link/music slice selected; ink/full acceptance open | Plan-named Pencil layers, checked reflections and embedded tools |
+| [SP-052](SP-052-plan-integrated-acceptance.md) | ready for implementation; implementation unselected | Integrated durability, privacy, physical Pencil and accessibility acceptance |
 | [SP-048](SP-048-quiz-bank-lifecycle-and-summary-actions.md) | implemented and installed; physical acceptance open | Persistent Quiz Me bank replenishment and equal summary actions |
 | [SP-047](SP-047-link-editing-and-study-material-drag.md) | simulator verified; installed/launched; physical acceptance open | Saved-link editing and study-material drag into subfolders |
 | [SP-046](SP-046-points-to-ponder-and-study-conversions.md) | implemented; simulator verified; installed/launched; physical acceptance open | v1.3.0 Points to Ponder and study material conversions |
@@ -63,6 +67,18 @@ See [How we develop Sophia](../docs/guidelines/ai-structure-guidelines.md).
 The M0–M9 baseline is closed. SP-023 is the owner-selected post-baseline follow-up.
 SP-041–043 are owner-requested planning tickets, not selected implementation. Recommended order: SP-042 Canvas transcription → SP-043 Canvas enhancement → SP-041 MCP read-only bridge; later surfaces/write/remote stages have explicit gates. Other new work requires owner selection.
 
+Collection Plans SP-049 is now owner-selected for implementation; SP-050–052 remain
+ready and unselected. Recommended
+sequence: SP-049 → SP-050 → SP-051 → SP-052. Each requires separate owner selection;
+SP-049 is now owner-selected for implementation; later tickets, release and installation
+remain unselected. See the
+[shared proposal](../docs/design/collection-plans.md).
+The [2026-10-19 source review](../docs/design/collection-plans-review.md) records twelve
+planning findings and expanded acceptance criteria. The subsequent
+[D1–D5 contract resolution](../docs/data/collection-plans-contract.md) settles versions, APIs,
+access and lifecycle; the four designs are ready with ordered implementation prerequisites.
+SP-049 selection came from the subsequent owner implementation request, not its ready label.
+
 ## Readiness and completion
 
 Statuses: draft, ready, in_progress, blocked, done. A ready ticket has enough confirmed
@@ -74,3 +90,7 @@ Use stable numbered IDs and descriptive filenames. Each ticket includes purpose/
 owner, requirement IDs, exact design links, dependencies, scope, acceptance criteria,
 verification, documentation impact, and evidence. Add implementation files/modules when
 known. Do not invent module paths or mark draft schemas as finalized to make work ready.
+
+2026-10-20 owner correction: Plans open content-first with explicit Edit; basic Start/Resume
+uses the existing reader without a new mode. SP-049/basic SP-050 correction is selected;
+full D4 lifecycle/focus and SP-051/052 acceptance remain open. See SP-049 evidence.

@@ -9,6 +9,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
     case bookmark
     case gleaning
     case pointToPonder
+    case plan
 
     var id: Self { self }
 
@@ -22,6 +23,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
         case .bookmark: return "Bookmarks"
         case .gleaning: return "Gleanings"
         case .pointToPonder: return "Points to Ponder"
+        case .plan: return "Plans"
         }
     }
 
@@ -35,6 +37,7 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
         case .bookmark: return "bookmark.fill"
         case .gleaning: return "laurel.leading"
         case .pointToPonder: return "questionmark.bubble"
+        case .plan: return "list.bullet.rectangle"
         }
     }
 }
@@ -447,6 +450,8 @@ struct SavedPassage: Codable, Identifiable, Hashable {
 }
 
 struct SavedLink: Codable, Identifiable, Hashable {
+    var access = StudyAccessRequirements()
+    var planOrigin: PlanOrigin? = nil
     let id: UUID
     var title: String
     var url: String
@@ -485,7 +490,12 @@ struct PointToPonder: Codable, Identifiable, Hashable {
 
 struct CollectionsSnapshot: Codable, Equatable {
     var pointsToPonder: [PointToPonder] = []
-    var requiredSchemaVersion: Int { !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1 }
+    var planFormatActivated = false
+    var plans: [StudyPlan] = []
+    var planOperations: [PlanOperation] = []
+    var commandReceipts: [StudyCommandReceipt] = []
+    var retainedPlanAccess: [RetainedPlanAccess] = []
+    var requiredSchemaVersion: Int { planFormatActivated || !plans.isEmpty || !planOperations.isEmpty || !retainedPlanAccess.isEmpty || links.contains(where: { !$0.access.isEmpty || $0.planOrigin != nil }) ? 4 : !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1 }
     var schemaVersion = 1
     var revision = 0
     var collections: [StudyCollection] = []
@@ -498,7 +508,10 @@ struct CollectionsSnapshot: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case pointsToPonder, schemaVersion, revision, collections, passages, savedAnnotations, links, conversations, memberships, unfiledAccent
+        case planFormatActivated, plans, planOperations, commandReceipts, retainedPlanAccess
     }
+
+    private enum RequiredLinkAccess: String, CodingKey { case access }
 
     init(
         schemaVersion: Int = 1,
@@ -528,11 +541,27 @@ struct CollectionsSnapshot: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 0
+        if schemaVersion >= 4 {
+            planFormatActivated = try container.decode(Bool.self, forKey: .planFormatActivated)
+            plans = try container.decode([StudyPlan].self, forKey: .plans)
+            planOperations = try container.decode([PlanOperation].self, forKey: .planOperations)
+            commandReceipts = try container.decode([StudyCommandReceipt].self, forKey: .commandReceipts)
+            retainedPlanAccess = try container.decode([RetainedPlanAccess].self, forKey: .retainedPlanAccess)
+            guard planFormatActivated else { throw CollectionsError.invalid }
+        }
         collections = try container.decodeIfPresent([StudyCollection].self, forKey: .collections) ?? []
         pointsToPonder = try container.decodeIfPresent([PointToPonder].self, forKey: .pointsToPonder) ?? []
         passages = try container.decodeIfPresent([SavedPassage].self, forKey: .passages) ?? []
         savedAnnotations = try container.decodeIfPresent([SavedAnnotation].self, forKey: .savedAnnotations) ?? []
         links = try container.decodeIfPresent([SavedLink].self, forKey: .links) ?? []
+        if schemaVersion == 4 {
+            var records = try container.nestedUnkeyedContainer(forKey: .links)
+            while !records.isAtEnd {
+                let decoder = try records.superDecoder()
+                let fields = try decoder.container(keyedBy: RequiredLinkAccess.self)
+                _ = try fields.decode(StudyAccessRequirements.self, forKey: .access)
+            }
+        }
         conversations = try container.decodeIfPresent([StudyConversation].self, forKey: .conversations) ?? []
         memberships = try container.decodeIfPresent([CollectionMembership].self, forKey: .memberships) ?? []
         unfiledAccent = try container.decodeIfPresent(CollectionAccent.self, forKey: .unfiledAccent) ?? .stone
@@ -563,6 +592,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
     case bookmark
     case gleaning
     case pointToPonder
+    case plan
     case conversation
     case link
 
@@ -577,6 +607,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         case .bookmark: return "Bookmarks"
         case .gleaning: return "Gleanings"
         case .pointToPonder: return "Points to Ponder"
+        case .plan: return "Plans"
         case .conversation: return "Conversations"
         case .link: return "Links"
         }
@@ -593,6 +624,7 @@ enum CollectionArtifactFilter: String, CaseIterable, Identifiable {
         case .bookmark: return .bookmark
         case .gleaning: return .gleaning
         case .pointToPonder: return .pointToPonder
+        case .plan: return .plan
         }
     }
 }
@@ -608,5 +640,49 @@ enum CollectionArtifactSort: String, CaseIterable, Identifiable {
         case .modified: return "Recently modified"
         case .title: return "Title"
         }
+    }
+}
+
+extension SavedLink {
+    private enum CodingKeys: String, CodingKey { case id, title, url, createdAt, verse, editionID, access, planOrigin }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id); title = try c.decode(String.self, forKey: .title)
+        url = try c.decode(String.self, forKey: .url); createdAt = try c.decode(Date.self, forKey: .createdAt)
+        verse = try c.decodeIfPresent(VerseID.self, forKey: .verse)
+        editionID = try c.decodeIfPresent(String.self, forKey: .editionID)
+        access = try c.decodeIfPresent(StudyAccessRequirements.self, forKey: .access) ?? .init()
+        planOrigin = try c.decodeIfPresent(PlanOrigin.self, forKey: .planOrigin)
+    }
+}
+
+extension CollectionsSnapshot {
+    func validatePlans() throws {
+        guard (1...4).contains(schemaVersion), revision >= 0 else { throw CollectionsError.unsupported }
+        guard plans.count <= 100, planOperations.count <= 128, commandReceipts.count <= 256,
+              Set(commandReceipts.map(\.commandID)).count == commandReceipts.count,
+              Set(planOperations.map(\.id)).count == planOperations.count else { throw CollectionsError.invalid }
+        var ids = Set(collections.map(\.id) + passages.map(\.id) + links.map(\.id) + savedAnnotations.map(\.id) + conversations.map(\.id) + pointsToPonder.map(\.id))
+        for plan in plans {
+            try plan.validate()
+            for id in [plan.id] + plan.sections.map(\.id) + plan.items.map(\.id) {
+                guard ids.insert(id).inserted else { throw CollectionsError.invalid }
+            }
+        }
+    }
+    mutating func preservePlanAccess(from previous: Self) {
+        planFormatActivated = planFormatActivated || previous.planFormatActivated || !plans.isEmpty
+        for i in plans.indices {
+            if let old = previous.plans.first(where: { $0.id == plans[i].id }) { plans[i].access = plans[i].access.union(old.access) }
+        }
+        for record in previous.retainedPlanAccess {
+            if let index = retainedPlanAccess.firstIndex(where: { $0.planID == record.planID }) {
+                retainedPlanAccess[index].access = retainedPlanAccess[index].access.union(record.access)
+            } else { retainedPlanAccess.append(record) }
+        }
+        for i in links.indices {
+            if let old = previous.links.first(where: { $0.id == links[i].id }) { links[i].access = links[i].access.union(old.access) }
+        }
+        schemaVersion = requiredSchemaVersion
     }
 }

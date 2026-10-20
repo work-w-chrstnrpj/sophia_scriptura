@@ -33,6 +33,7 @@ struct SettingsView: View {
                     LibraryHeaderTitle(title: "Settings")
                         .accessibilityIdentifier("settings.title")
 
+                    if !collections.studyMutationBlocked {
                     profileSection
                     ladyWisdomSection
                     appearanceSection
@@ -48,6 +49,10 @@ struct SettingsView: View {
                     archiveSection
                     trashSection
                     deleteDataSection
+                    } else {
+                        Text("Complete study recovery below before changing study data.")
+                            .font(.footnote)
+                    }
                     backupSection
                     aboutSection
                     if let notice = reader.notice {
@@ -153,8 +158,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeading("Protection")
                 ProtectionSettingsSection(
-                    notesProtected: notes.snapshot.notes.contains { $0.protectionID != nil },
-                    collectionsProtected: collections.collections.contains { $0.protectionID != nil && !$0.isUnfiled }
+                    notesProtected: notes.snapshot.notes.contains { $0.protectionID != nil || !$0.access.notesCredentialIDs.isEmpty },
+                    collectionsProtected: collections.hasCollectionsAccessRequirements
                 )
             }
         }

@@ -42,6 +42,7 @@ struct NotesView: View {
         return session.snapshot.notes.filter { note in
             let visibility = deleted ? note.isArchived : note.isActiveInLibrary
             return visibility
+                && collections.accessAllowed(note.access)
                 && !collections.concealsNote(note.id)
                 && (search.isEmpty || (session.isLocked(note) ? note.title : note.searchableText).localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || (!session.isLocked(note) && note.tags.contains(tag)))
@@ -80,7 +81,7 @@ struct NotesView: View {
             .accessibilityIdentifier("notes.content")
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: Binding(get: { session.selectedNoteID != nil && session.openingCollectionID == nil }, set: { if !$0 { session.flushSurface?(); session.selectedNoteID = nil } })) {
+            .navigationDestination(isPresented: Binding(get: { !session.planPresentationActive && session.selectedNoteID != nil && session.openingCollectionID == nil }, set: { if !$0 { session.flushSurface?(); session.selectedNoteID = nil } })) {
                 NoteEditorView(session: session, reader: reader, collections: collections)
                     .toolbar(.visible, for: .navigationBar)
             }
@@ -144,7 +145,7 @@ struct NotesView: View {
                 clearSelection()
             }
         }
-        .disabled(session.restoring)
+        .disabled(session.restoring || session.backupLeaseHeld)
         .task { await session.load() }
         .onChange(of: scenePhase) { _, value in if value != .active { session.flushSurface?(); Task { await session.save() } } }
         .alert("Notes", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.notice = nil } })) { Button("OK") { session.notice = nil } } message: { Text(session.notice ?? "") }
@@ -193,7 +194,7 @@ struct NotesView: View {
 
             Spacer(minLength: 12)
 
-            ProtectionControls(domains: [.notes], available: session.snapshot.notes.contains { $0.protectionID != nil }).labelStyle(.iconOnly)
+            ProtectionControls(domains: [.notes], available: session.snapshot.notes.contains { $0.protectionID != nil || !$0.access.notesCredentialIDs.isEmpty }).labelStyle(.iconOnly)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {

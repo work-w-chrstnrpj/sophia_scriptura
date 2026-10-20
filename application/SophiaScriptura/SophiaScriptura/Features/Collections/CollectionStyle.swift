@@ -71,7 +71,7 @@ extension CollectionArtifactKind {
         case .annotation: return CollectionAccent.plum.color
         case .note: return CollectionAccent.sage.color
         case .conversation: return CollectionAccent.slate.color
-        case .pointToPonder: return CollectionAccent.plum.color
+        case .pointToPonder, .plan: return CollectionAccent.plum.color
         case .link, .gleaning: return CollectionAccent.gold.color
         }
     }

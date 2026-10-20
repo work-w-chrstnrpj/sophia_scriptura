@@ -305,3 +305,54 @@ QuizQuestionCacheCoordinator per-bucket in-flight ownership. CompanionSession gu
 one successful initial load and owns bank/session persistence; RootTabView reconciles
 foreground demand. QuizMeView reports readiness and QuizSessionView sizes summary
 actions consistently. QuizBankLifecycleTests covers durable/event-driven bank behavior.
+
+## Proposed Plan ownership — SP-049–052, not created
+
+[Collection Plans](../design/collection-plans.md) proposes Core/Plans/ domain values and
+Features/Plans/ authoring/playback/commands. These directories are proposals, not current
+runtime modules. Collections retains memberships and checked generation persistence;
+Notes/Annotations/Companion/Music retain their existing feature data and commands.
+RootTabView composes the workspace but must not own Plan business logic. No runtime
+repository-map or generated adapter change is needed for ticket authoring.
+
+## Plan future file ownership resolved — no runtime files created
+
+The [selected file/interface map](../data/collection-plans-contract.md#selected-module-interfaces-and-file-ownership)
+now assigns future Core/Plans/, shared Core/Security/StudyAccessRequirements.swift,
+Features/Plans/ command/playback/views/adapters, Features/Protection/StudyAccessCoordinator.swift
+and Infrastructure/Backup/StudyRestoreJournal.swift. Existing feature stores remain owners;
+CollectionsStore is the sole Collections writer. SP-049–052 are design-ready and unselected;
+the actual repository map is updated when implementation creates these modules.
+
+## SP-049 actual authoring/foundation modules — 2026-10-20
+
+Core/Plans/ now contains StudyPlan.swift and PlanCommands.swift; Core/Security/ contains
+StudyAccessRequirements.swift (including PlanOrigin). Features/Plans/ contains the command
+service, owner-retained editor draft, editor/assignment picker and archive/Trash library.
+CollectionsStore persists through a single queued writer, with a separate committed state
+and compatibility projection for existing sync UI commands. Existing folder/Sophy/restore
+paths no longer call the repository independently. Collections schema 4 and Notes schema 5
+have sticky activation and version-2 wrappers/pointers with protected fallbacks.
+
+Infrastructure/Backup/StudyRestoreJournal.swift owns local staged recovery inputs and phase
+markers/hashes; StudyBackupService writes v2 all-data archives with inert Plan recovery data.
+SettingsStudyBackupView offers explicit recovery actions. These files exist; the earlier
+proposed ownership sections are planning history. Reader workspace/playback and Plan-owned
+Pencil layers remain future SP-050/051 work. Source evidence lives in SP-049.
+
+SP-049 owner correction (2026-10-20): Features/Plans/PlanDetailView.swift owns
+content-first opening, explicit editing and basic Start/Resume using the existing
+ReaderSession/ReaderTextSurface. CollectionsStore persists Next completion/cursor;
+full D4 lifecycle and SP-051 ink/tools remain separate.
+
+SP-050/051 owner presentation correction: PlanDetailView is fullscreen and theme-aware;
+PlanStudyTools.swift owns checked reflection drafts/link creation. NoteCreatorSheet
+allows awaited feature-specific creation while retaining its shared UI. NotesSession's
+transient Plan presentation flag prevents second editor hosts in hidden tabs. Root
+exposes the existing MusicSession to Plan controls; ReaderTextSurface's optional focus
+changes only Plan verse colors, preserving default reader rendering.
+
+SP-049 stability correction: `Features/Plans/PlanEditorDraft.swift` owns stable-ID
+draft mutations, safe title bindings and stale-callback guards. PlanEditorView renders
+value snapshots; PlanAssignmentPicker clamps dependent chapter bounds before book changes.
+No persistence schema changes are involved.

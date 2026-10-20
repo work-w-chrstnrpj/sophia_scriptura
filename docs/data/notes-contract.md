@@ -153,7 +153,9 @@ Mental state, from thriving through Neutral, then Challenged, then toward distre
 
 ## v0.3.0 whole-note protection
 
-`NoteDocument.protectionID: UUID?` is additive, defaults to nil, and binds an app access lock to a device-only credential. It is separate from Canvas position locks and stroke IDs. Protected libraries persist schema 4 (accepted schemas 1–4); plain libraries retain schema 3. Existing atomic generations and paths are retained. Notes-only export and restoration require access to protected current records; pre-restore exports inspect their own bindings. A legacy restore retains current bindings for matching IDs. Restored foreign/missing credentials fail closed. Content remains unencrypted under the owner-selected v0.3.0 policy.
+`NoteDocument.protectionID: UUID?` is additive, defaults to nil, and binds an app access lock to a device-only credential. It is separate from Canvas position locks and stroke IDs. Original protected libraries persist schema 4; plain libraries retain schema 3. SP-049
+Plan-derived access/origin activates sticky schema 5 and v2 wrappers/pointers; current
+readers accept schemas 1–5. Existing atomic generations and paths are retained. Notes-only export and restoration require access to protected current records; pre-restore exports inspect their own bindings. A legacy restore retains current bindings for matching IDs. Restored foreign/missing credentials fail closed. Content remains unencrypted under the owner-selected v0.3.0 policy.
 
 The complete access, privacy, lifecycle, backup and recovery contract is [item protection](../security/item-protection.md). A note whose collection is locked, including a note filed only in a nested subfolder at any depth, is omitted from the Notes library. Body undo does not change protection. Save/flush-before-conceal preserves accepted edits; locked metadata/body commands are denied while archive/delete continue working.
 
@@ -187,3 +189,30 @@ uses its question as title. Gleanings use `Gleaning from "Book Chapter:Verse
 (Translation)"` and copy reference, passage text and insight into the selected note
 kind. Existing note capacity/title limits apply. Source records remain independent;
 no cross-store destructive conversion or new Notes schema is introduced.
+
+## Selected Plan-derived Notes contract — unimplemented, 2026-10-19
+
+[D1–D5](collection-plans-contract.md) selects NotesSnapshot v5 and activated v2 pointer/
+envelope/archive wrappers for required per-domain StudyAccessRequirements and an optional
+PlanOrigin (source Plan UUID, managed state and creation-operation ID). Existing protectionID remains an independent Notes-domain lock;
+a copied Collections requirement does not implicitly grant or require Notes unlock. Typed
+creation/edit/access commit results, protected fallback generations and orphan-note recovery
+are SP-049 foundations used by SP-051. No Note body-format or current runtime schema change
+is made by this design resolution. Legacy 1–4 archives remain supported by the future reader.
+
+## SP-049 Notes v5 source checkpoint — 2026-10-20
+
+Notes v5 is implemented for Plan-derived documents. Required per-domain access metadata,
+PlanOrigin and sticky activation use v2 envelopes/pointers; legacy 1–4 remain readable.
+Legacy restore unions retained access/origin for matching IDs and cannot silently make a
+protected orphan public. Typed Plan note creation/edit/save acknowledgements use feature
+revision readback, not the creation-sheet callback. Notes, search/Trash metadata, clipboard,
+Sophy eligibility and grant controls honor copied requirements. Ink/layout and the existing
+content tag remain unchanged. Plan reading reflection insertion remains SP-051 scope.
+
+Plan presentation correction (2026-10-20): the shared New Note sheet can await an
+optional feature creation callback, retaining its standard type/color/title UI. The
+Plan callback uses createPlanNote and typed Collections attachment; Notes validation
+and generation ownership are unchanged. A transient Plan presentation flag prevents
+parallel editor hosts. Existing note content is previewed/edited by the same editor,
+with accepted edits flushed before returning. No new Notes wire fields or version bump.

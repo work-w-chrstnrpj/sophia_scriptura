@@ -5,6 +5,8 @@ struct CollectionArtifactPicker: View {
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
     var notes: NotesSession
+    var reader: ReaderSession? = nil
+    @State private var creatingPlan: PlanEditorDraft?
     var annotationSnapshot: AnnotationSnapshot?
     var bookTitleForCode: (String) -> String = { $0 }
     var openNote: (UUID) -> Void = { _ in }
@@ -45,6 +47,11 @@ struct CollectionArtifactPicker: View {
         NavigationStack {
             List {
                 Section {
+                    Button("New Plan", systemImage: "list.bullet.rectangle") {
+                        creatingPlan = PlanEditorDraft(plan: StudyPlan(title: "", preferredEditionID: reader?.edition?.id ?? ScriptureReferenceIdentity.bundledEditionID,
+                            referenceSystemID: reader?.edition?.referenceSystemID ?? "org.sophia.web.engwebp", sections: [.init()]))
+                    }
+                        .accessibilityIdentifier("collections.newPlan")
                     Button("New Point to Ponder", systemImage: "questionmark.bubble") { creatingPoint = true }
                         .accessibilityIdentifier("collections.newPoint")
                     Button("New Note", systemImage: "square.and.pencil") { creatingNote = true }
@@ -118,6 +125,9 @@ struct CollectionArtifactPicker: View {
                 .accessibilityIdentifier("collections.pick.\(artifact.title)")
                 .accessibilityValue(included ? "Included" : "Not included")
                 }
+            }
+            .sheet(item: $creatingPlan) { model in
+                PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID, model: model)
             }
             .sheet(isPresented: $creatingPoint) {
                 PointToPonderCreatorSheet(store: store, collectionID: collectionID)

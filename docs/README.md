@@ -20,6 +20,9 @@ Start with the [development plan](development-plan/development-plan.md) and
 | [Scripture screen specification](design/scripture-screen-specification.md) | Premium Scripture reader layout, states and acceptance scenarios |
 | [Scripture rendering decision](design/scripture-rendering-decision.md) | SP-003 page geometry, selection and native validation gates |
 | [Notes screen specification](design/notes-screen-specification.md) | Notes library, expandable canvas, objects, grouping, recovery and acceptance scenarios |
+| [Collection Plans proposal](design/collection-plans.md) | SP-049–052 planning only: authoring, focused reading, progress, Pencil layers and acceptance |
+| [Collection Plans implementation contract](data/collection-plans-contract.md) | Selected D1–D5 schemas, APIs, access bindings and reader lifecycle; ready, unimplemented |
+| [Collection Plans review](design/collection-plans-review.md) | Source-grounded gaps, conflicts, recommendations and implementation readiness gates |
 | [Collections screen specification](design/collections-screen-specification.md) | Nested topic folders, shared memberships, mixed artifacts, removal and recovery |
 | [Companion screen specification](design/companion-screen-specification.md) | M6 multi-provider chat, selected context, sources, Quiz Me and Reviewing linkage |
 | [Companion data contract](data/companion-contract.md) | Provider adapters, local conversation/quiz identity, privacy, recovery and export boundaries |
@@ -39,3 +42,5 @@ Keep diagrams beside the relevant design.
 
 - [Notes document/recovery contract](data/notes-contract.md), [SP-013](../tickets/SP-013-freeform-notes.md)
   and [M4 iPad acceptance](testing/sp013-ipad-guide.md): production Notes and remaining device evidence.
+
+Plan stability evidence: [SP-049 section-deletion investigation](testing/sp049-plan-stability-investigation.md).

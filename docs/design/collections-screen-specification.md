@@ -412,3 +412,11 @@ Include Subfolders require opening their owning folder before dragging.
 Owner header polish (2026-10-16): collection-detail Arrange, New Subfolder, Study
 Material View and Add controls show icons only, with descriptive accessibility
 labels retained and 44-point targets. Menu actions and creation behavior are unchanged.
+
+## Collection Plans — planning only (2026-10-19)
+
+[Collection Plans](collection-plans.md) proposes a new material, editor, focused reading
+workspace and per-item progress. Owner-confirmed reflections, section pauses and Plan-named
+Pencil layers are recorded separately from recommended defaults. Existing Collections
+membership ownership remains; no Plan UI or storage is implemented by this documentation.
+See SP-049–052 in the [ticket index](../../tickets/README.md).

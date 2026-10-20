@@ -75,9 +75,13 @@ struct NoteCreatorSheet: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     let notes: NotesSession
+    private let createOverride: ((NoteKind, CollectionAccent, String) async -> UUID?)?
+    @State private var creating = false
+    @State private var createError: String?
     var onCreated: (UUID) -> Void = { _ in }
 
-    init(notes: NotesSession, initialTitle: String = "", initialContent: StudyNoteSaveContent? = nil, onCreated: @escaping (UUID) -> Void = { _ in }) {
+    init(notes: NotesSession, initialTitle: String = "", initialContent: StudyNoteSaveContent? = nil, createOverride: ((NoteKind, CollectionAccent, String) async -> UUID?)? = nil, onCreated: @escaping (UUID) -> Void = { _ in }) {
+        self.createOverride = createOverride
         self.notes = notes
         self.initialContent = initialContent
         self.onCreated = onCreated
@@ -120,6 +124,7 @@ struct NoteCreatorSheet: View {
                 }
                 .listRowBackground(Color(theme.palette.soft))
 
+                if let createError { Text(createError).foregroundStyle(.red) }
                 Section("Title") {
                     TextField("Note title", text: $title)
                         .focused($titleFocused)
@@ -153,13 +158,14 @@ struct NoteCreatorSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create", action: create)
+                    Button("Create") { Task { await create() } }
                         .fontWeight(.semibold)
                         .accessibilityIdentifier("notes.new.create")
                 }
             }
         }
-        .accessibilityIdentifier("notes.new.sheet")
+        .disabled(creating)
+        .interactiveDismissDisabled(creating)
     }
 
     @ViewBuilder
@@ -180,8 +186,12 @@ struct NoteCreatorSheet: View {
         .accessibilityAddTraits(kind == value ? .isSelected : [])
     }
 
-    private func create() {
-        guard let id = notes.create(kind: kind, color: color, title: title) else { return }
+    private func create() async {
+        creating = true; defer { creating = false }
+        let id: UUID?
+        if let createOverride { id = await createOverride(kind, color, title) }
+        else { id = notes.create(kind: kind, color: color, title: title) }
+        guard let id else { createError = "The note workflow could not be confirmed. Keep this sheet open to retry, or check Notes and the Plan before starting again."; return }
         if let initialContent { notes.append(saveContent: initialContent) }
         onCreated(id)
         dismiss()

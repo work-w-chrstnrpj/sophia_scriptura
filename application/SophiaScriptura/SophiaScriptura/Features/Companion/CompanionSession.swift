@@ -9,6 +9,7 @@ final class CompanionSession: ObservableObject {
     @Published var selectedConversationID: UUID?
     @Published var notice: String?
     @Published var isSending = false
+    @Published var backupLeaseHeld = false
     @Published var composerText = ""
     @Published var selectedPresetID: String
     @Published var attachments: [CompanionAttachment] = []
@@ -418,6 +419,7 @@ final class CompanionSession: ObservableObject {
 
     @discardableResult
     func createConversation() -> UUID? {
+        guard !backupLeaseHeld else { notice = StudyMutationFailure.busy.localizedDescription; return nil }
         guard let route = resolvedSharedRoute(),
               let adapter = registry.adapter(id: route.adapterID),
               let preset = presetCatalog.snapshot(for: selectedPresetID) else {
@@ -510,6 +512,7 @@ final class CompanionSession: ObservableObject {
     }
 
     func sendMessage(displayContent: String? = nil, providerContent: String? = nil) async {
+        guard !backupLeaseHeld else { notice = StudyMutationFailure.busy.localizedDescription; return }
         guard !isSending else { return }
         let providerText = (providerContent ?? composerText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !providerText.isEmpty else { return }
@@ -879,13 +882,18 @@ final class CompanionSession: ObservableObject {
         )
     }
 
-    func restoreBackupSnapshot(_ snapshot: CompanionSnapshot) async {
-        apply(snapshot)
-        await persist()
-        notice = "Companion data restored from backup."
+    @discardableResult func restoreBackupSnapshot(_ snapshot: CompanionSnapshot) async -> Bool {
+        guard (1...3).contains(snapshot.schemaVersion), !isSending else { return false }
+        if !backupLeaseHeld { await writeChain?.value }
+        var value = snapshot; value.revision = revision
+        do {
+            if let repository { value = try await repository.save(value, expectedRevision: revision) }
+            apply(value); notice = "Companion data restored from backup."; return true
+        } catch { notice = error.localizedDescription; return false }
     }
 
     func persist() async {
+        while backupLeaseHeld { try? await Task.sleep(for: .milliseconds(20)) }
         guard let repository else { return }
         var ui = CompanionUIState()
         ui.selectedConversationID = selectedConversationID

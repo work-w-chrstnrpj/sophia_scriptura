@@ -301,8 +301,10 @@ The records below include historical conceptual sketches. Current types live in
 `Core/Notes/NoteDocument.swift`, `Core/Companion/CompanionModels.swift`,
 `Features/Collections/CollectionModels.swift` and `Core/Activity/ActivityModels.swift`.
 These use feature-owned checked file stores, not a shared SwiftData study model.
-Notes writes schema v3 normally/v4 with protection; Companion writes v3; Collections
-writes its required schema through v3. Reader state alone uses SwiftData.
+Notes writes schema v3 normally/v4 for original item protection, or sticky v5 after
+SP-049 Plan-derived access/origin activation; Companion writes v3. Collections writes
+its required schema through v4 for Plans. Reader state alone uses SwiftData. Notes/
+Collections activated Plan stores use v2 envelopes/pointers; legacy supported data remains readable.
 
 - Implemented `NoteDocument` (SP-013, 2026-10-01): shared identity/title/tags and deletion,
   with exactly one tagged `NoteContent` payload. Canvas owns positioned objects, including
@@ -311,7 +313,8 @@ writes its required schema through v3. Reader state alone uses SwiftData.
   Page floating items remain in `legacyObjects` at their original coordinates; new Pages
   do not create floating shapes or text boxes. Page width/column coordinates remain fixed
   through rotation, viewport resizing and zoom. See [Notes contract](../data/notes-contract.md).
-  Notes use validated file generations (v1/v2 readable, v3 saves), not SwiftData. The exact
+  Notes use validated file generations (v1–v5 readable; schema depends on protection/Plan
+  activation), not SwiftData. The exact
   pre-upgrade generation is retained as `before-note-types.notes`; existing earlier backups
   remain untouched. Object-only notes stay Canvas and page-backed notes stay Page.
   Pencil input is routed through the common paper ancestor with Scribble suppressed. The
@@ -1270,3 +1273,134 @@ small batches across buckets and saves each validated merge before the next requ
 Lifecycle/settings events reconcile demand with bounded in-app retries; iPadOS
 background execution is not guaranteed. No storage migration or bank reset applies.
 See [SP-048](../../tickets/SP-048-quiz-bank-lifecycle-and-summary-actions.md).
+
+## Collection Plans — planning baseline (SP-049–052)
+
+Owner requested detailed planning on 2026-10-19 and explicitly deferred implementation.
+This section is technical intent, not a description of current runtime behavior.
+A Plan is a Collections material with stable Plan/section/item identity, ordered canonical
+Scripture references or note/link references, completion and durable playback position.
+Configurable Day/Section/custom labels do not become identity. Selected storage is a focused Plan domain/command service submitting to the existing
+CollectionsStore writer. Exact versions and contracts are resolved in the
+[implementation contract](../data/collection-plans-contract.md).
+
+Owner confirmed: notes/links added successfully during reading are inserted checked;
+Next completes the active assignment; section boundaries pause at a summary; Pencil is
+allowed on new layers named after the Plan. A dedicated fullscreen workspace hides the
+tab dock and embeds Notes, Companion and existing music commands. Focus colors must
+preserve chapter/ink geometry, content rights and ordinary reader behavior outside Plans.
+
+Annotation groups remain edition/revision/reference-system/chapter scoped. Bind by stable
+Plan/group/layer IDs, never layer name; lazily create per-source layers on Draw, reuse on
+revisit, preserve ink on progress reset and keep same-named Plans isolated. Managed labels
+follow Plan rename with recoverable reconciliation. Protected Plan metadata/ink needs
+explicit access enforcement in all annotation routes; this is new scope, not an existing
+annotation guarantee. Deleted Plans must not cascade-delete drawings or drop protection.
+
+Existing feature owners retain documents, drawings, provider context and audio ownership.
+Cross-store attachment, layer creation and restore need idempotent pending operations,
+preflight, preserved source data and partial-failure recovery; existing sequential restore
+must not be represented as atomic. Include backups and safe legacy-schema handling from
+the first data-bearing ticket. No Scripture text or secrets belong in Plan payloads.
+
+Detailed recommended defaults, state transitions, exclusions and access/recovery rules:
+[Collection Plans design](../design/collection-plans.md). Delivery:
+[SP-049](../../tickets/SP-049-plan-model-and-authoring.md) →
+[SP-050](../../tickets/SP-050-plan-reading-and-progress.md) →
+[SP-051](../../tickets/SP-051-plan-annotations-and-study-tools.md) →
+[SP-052](../../tickets/SP-052-plan-integrated-acceptance.md).
+Each is design-ready with ordered implementation dependencies and requires owner selection. No calendar/reminders/public Plan library,
+AI generation, automatic narration advancement, Activity metrics or release/install is selected.
+
+### Plan review refinements — 2026-10-19
+
+[Source-grounded review](../design/collection-plans-review.md) identified twelve planning
+risks/conflicts and added acceptance coverage in SP-049–052. Recommended execution
+contracts now require one CollectionsStore writer (Plan commands submit typed intents),
+scoped Plan reader-position persistence with one native surface owner, explicit shell/
+narration/Companion route ownership, and immediate privacy concealment independent of disk
+success. Reflection creation callbacks/queue flush are not durable commit receipts.
+
+Plan titles are recommended at 80 Characters to match exact managed annotation layer
+names. Existing annotation group/layer/drawing limits remain; capacity failure disables
+new Draw creation while reading remains available. Changed source/layout revisions retain
+old ink unavailable and require an explicit new-source layer. Required ownership/access
+metadata needs version gates across annotation snapshots, archives and fallback readers;
+optional schema-1 fields alone cannot protect downgrade paths. Retained ink and orphaned
+reflections must keep protection across missing owners and partial attachment/deletion.
+
+Backups require a coherent revision cut, typed phase results and recoverable sequential
+restore checkpoints. Export inert reconciliation information, never executable pending
+retry journals; restore cannot automatically create/send/rename/detach from imported intents.
+Missing linked material is an unavailable assignment, not necessarily a corrupt archive.
+A committed completion survives next-target load failure; failed completion commit does not
+publish a check. Owner correction (2026-10-20): basic Start/Resume uses the existing reader without a new app mode; Plan-specific ink/tools remain separate. The subsequent contract resolution below closes the API/version/access/recovery design
+gates; implementation is still unselected.
+
+### Plan implementation contract resolved — 2026-10-19
+
+Owner requested resolution of remaining decisions and ready tickets, explicitly without
+implementation. The [D1–D5 contract](../data/collection-plans-contract.md) is selected future
+technical intent, superseding open recommendations in the earlier planning/review text.
+
+- D1: Collections snapshot 4/pointer+envelope 2; Notes snapshot 5/pointer+envelope 2;
+  annotation snapshot/archive/pointer 2; full backup envelope 2. Legacy supported versions
+  migrate additively; sticky activation and protected fallback copies prevent downgrade.
+- D2: CollectionsStore.submit(StudyMutationRequest) is the sole serialized writer. Immutable
+  typed intents, expected Plan revisions, fixed command IDs and saved receipts provide
+  committed/rejected/uncertain outcomes. Target sessions return durable typed results.
+- D3: StudyAccessRequirements copies credential UUID requirements by Notes/Collections
+  domain onto derived objects; independent grants remain. Monotone propagation barriers
+  preserve access across moves, orphaned saves and purge. Fresh authenticated scoped
+  removal is the only relaxation path, with protected fallback handling.
+- D4: One ReaderSession acquires a PlanReaderLease with transient working state; ordinary
+  ReaderSnapshot location/preferences are unchanged. Workspace route, native owner/tool
+  tokens, narration pause, scene/relock/exit and origin restoration have explicit transitions.
+- D5: A mutation lease captures a coherent backup cut. Typed sequential restore phases,
+  normalized-target hashes and a local recovery checkpoint make interruptions explicit;
+  imported pending work is inert. No claim of atomic all-feature restoration is made.
+
+SP-049–052 are **ready for implementation; implementation unselected**. Prerequisite tickets
+still execute in sequence; readiness is neither implemented behavior nor verification.
+No runtime source, data, credential, signing, installation or release changes accompany this
+resolution. Exact keys, version matrix, APIs, bounds, ownership and acceptance are in D1–D5.
+
+### SP-049 local implementation — 2026-10-19
+
+Owner selected the first Collection Plans implementation slice. Core/Plans/ defines Plan
+identity/reference/progress/validation and command receipts; Core/Security/ defines copied
+per-domain access requirements. Features/Plans/ owns authoring and delegates persistence to
+CollectionsStore's single FIFO writer. Existing sync UI commands submit private value
+patches while retaining optimistic legacy view behavior; Plan success uses the committed
+snapshot/typed receipt. Legacy read/write behavior is regression-tested alongside new data.
+Collections v4 / Notes v5 and version-2 wrappers/pointers are implemented with sticky
+activation and access-preserving fallback. New derived Notes persist origin/access before
+attachment; private metadata, clipboard and Sophy eligibility honor copied requirements.
+
+All-data backup v2 adds feature hashes/revisions and inert recovery records. Local recovery
+checkpoints/staged input plus typed feature restore results and semantic comparisons support
+resuming or restoring the previous study state from Settings. This is sequential recovery,
+not an all-store atomic transaction. SP-049 tests/evidence remain ticket-specific.
+SP-050/051 playback, reader lease and Plan-owned Pencil layers are not implemented; Start
+is unavailable. The D1–D5 document remains the target for those later slices. No release,
+physical install or owner acceptance is implied by this local source checkpoint.
+
+SP-049 final simulator checkpoint (2026-10-20): 434 unit tests passed, including Plan
+round-trip and injected partial-restore/resume cases; one authoring/save/relaunch UI journey
+passed and its screenshot was reviewed. See SP-049 for exact bundles, earlier failures and
+remaining device/large-fixture/fault-permutation limits. Reader/Pencil/tool delivery and
+full Plan acceptance remain separate; no physical install or release was performed.
+
+### Plan reader presentation correction — 2026-10-20
+
+Owner-selected SP-050/051 presentation/tool slice uses a fullscreen Plan page with
+AppTheme surfaces, full book titles and a Previous / Add Note / Add Link / Music /
+Next icon bar. ReaderTextSurface's optional Plan focus colors non-assignment verses
+with muted gray and retains selected ink without changing normal-reader defaults.
+The existing Notes editor provides full note previews and editing inside the Plan.
+A transient Notes presentation flag prevents duplicate offscreen editor hosts.
+Shared New Note creation can await a Plan-specific target+attachment callback; typed
+Notes/Collections owners still perform all writes. Checked reflections preserve creation
+order after the current assignment and inherit Plan memberships in its save. Music
+uses the existing root MusicSession. Plan ink, Companion embedding and the complete
+reader lease/restoration contract remain separate acceptance work.

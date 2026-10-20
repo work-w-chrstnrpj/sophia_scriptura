@@ -1,9 +1,105 @@
 # Development Plan — Sophia Scriptura
 
-Revision: 2026-10-18. This is the main phase/progress tracker. Owner-requested roadmap
+Revision: 2026-10-19. This is the main phase/progress tracker. Owner-requested roadmap
 revision under SP-001; phase outcomes are ready for review, not authorization to code.
 Technical intent: [TDD](../tdd/tdd.md). Full scope:
 [product specification](../product-specification/product-specification.md).
+
+## Collection Plans — proposed post-baseline milestone, 2026-10-19
+
+Owner requested detailed tickets and explicitly deferred implementation. No new release
+number, runtime change, migration, device installation or milestone closure is selected.
+Visible target: create a Plan in Collections, read ordered section assignments in a
+focused Scripture workspace, retain checked progress and Plan-specific Pencil ink.
+Owner confirmed checked notes/links created during reading, an explicit section-summary
+pause, and new annotation layers named after the Plan. The subsequent D1–D5 resolution selects
+remaining implementation defaults under the owner's design-resolution request.
+
+| Ticket | Status | Planned outcome |
+| --- | --- | --- |
+| [SP-049](../../tickets/SP-049-plan-model-and-authoring.md) | implemented; simulator verified; physical acceptance open | Domain, durable Plans, authoring and lifecycle |
+| [SP-050](../../tickets/SP-050-plan-reading-and-progress.md) | ready for implementation; implementation unselected | Fullscreen focused reading, progress and section summaries |
+| [SP-051](../../tickets/SP-051-plan-annotations-and-study-tools.md) | ready for implementation; implementation unselected | Plan-named Pencil layers, checked reflections and embedded tools |
+| [SP-052](../../tickets/SP-052-plan-integrated-acceptance.md) | ready for implementation; implementation unselected | Integrated durability, privacy, physical Pencil and accessibility acceptance |
+
+Recommended dependency order: SP-049 → SP-050 → SP-051 → SP-052. SP-049 includes
+compatibility and backup support from the first data-bearing slice; SP-051 completes
+cross-feature/ink recovery; SP-052 verifies the connected journey. No implementation
+ticket is considered accepted merely because planning is complete. Owner chooses each
+next ticket. Physical Pencil/privacy/accessibility and real-provider acceptance remain
+separate from simulator/build evidence. See [shared design](../design/collection-plans.md)
+and [TDD baseline](../tdd/tdd.md#collection-plans--planning-baseline-sp-049052).
+Documentation-only validation: local links/anchors and whitespace; native tests not run.
+
+### Collection Plans planning review — 2026-10-19
+
+[Review](../design/collection-plans-review.md) records twelve gaps/conflicts and their
+recommended contract resolutions, with expanded PA/PR/PT/PI acceptance criteria. Principal
+changes: single Collections writer; 80-character title/layer-name compatibility; annotation
+capacity handling; scoped reader/shell ownership; typed durability/restore results;
+protected orphan reflection handling; version-safe ink access and inert restored retries.
+At review time the tickets remained draft pending the writer/reader/access/recovery design.
+The resolution below closes those design gates. No native build/tests/device/provider work
+occurred; Start stays gated until SP-051 safety criteria.
+
+### Collection Plans contracts resolved; tickets ready — 2026-10-19
+
+Owner authorized resolving schema, transaction API, access bindings and reader lifecycle,
+while explicitly withholding implementation. The selected
+[D1–D5 contract](../data/collection-plans-contract.md) specifies Collections 4, Notes 5,
+annotation 2, full-backup 2 and gated wrappers/pointers; typed single-writer commands and
+receipts; durable per-domain access capsules and propagation; a scoped reader lease; and
+checkpointed sequential backup recovery. Exact keys, API shapes and future file ownership
+are recorded. No remaining schema/API/access/lifecycle design blocker is carried forward.
+
+SP-049–052 are **ready for implementation; implementation unselected**. SP-050 still needs
+SP-049 code; SP-051 needs SP-049/050; SP-052 needs all three implementations/evidence.
+This is dependency sequencing, not an unresolved design decision. Implementation tests,
+physical/provider acceptance and milestone completion remain unproduced. Documentation-only
+links/anchors/schema/API consistency and whitespace are the checks for this resolution.
+
+### SP-049 implementation selected — 2026-10-19
+
+Owner requested implementation and continuation. Execution began with SP-049 (authoring,
+validation, Collections/Notes schema+access and single-writer/backup foundations). Focused
+r4: 153 tests passed; later final-source full/native UI evidence is recorded in the ticket.
+SP-050/051 reading/Pencil/tools and SP-052 acceptance remain unselected; Start is unavailable.
+No release/version, signing/install, user-store migration/reset or feature acceptance is
+selected by this source implementation checkpoint.
+
+### SP-049 verification complete — 2026-10-20
+
+Plan authoring/data foundations are implemented locally. Final simulator build and **434
+unit tests passed**, zero failures/skips (build/sp-049/final-regression.xcresult). The
+focused create/assign/save/relaunch UI journey passed (ui-r4.xcresult); its screenshot was
+reviewed. Two injected/round-trip backup integration cases passed separately and in the
+full suite. Ticket evidence records earlier failures/fixes and exact scope limitations.
+SP-050–052 remain ready and unselected; Start stays unavailable. Physical authoring,
+accessibility/owner-data upgrade and integrated acceptance remain open. No physical install,
+source publication, release/version bump or user-data reset occurred.
+
+### Plan opening/playback correction — 2026-10-20
+
+Owner superseded the earlier Start gating decision: a Plan opens its contents, Edit is
+explicit, and basic Start/Resume uses the existing reader without a new app mode.
+Next saves checks/cursor and pauses at section summaries. This SP-049 correction/basic
+SP-050 entry slice does not close the full reader-lease, focus-contrast or SP-051 tools/ink
+requirements. The owner also requested signed in-place installation. See SP-049 for
+final-source evidence: 21 focused unit tests and the complete playback/relaunch UI journey
+passed; signed in-place iPad install and unlocked launch succeeded at 1.3.2/build 27.
+Earlier unavailable-Start statements above
+record the previous implementation checkpoint and no longer describe current behavior.
+
+### Plan fullscreen/preview/control correction — 2026-10-20
+
+Owner selected SP-050 presentation and SP-051 note/link/music controls after rejecting
+the floating Plan UI. Fullscreen theme-aware content/reading, full book titles, gray
+non-assignment verses, actual Notes previews and the requested icon bar are implemented.
+Checked reflections retain creation order and target-first durability; notes reuse the
+shared New Note/editor workflow, and music uses the existing root session. Plan-owned
+Pencil, Companion integration, full reader lease and physical acceptance remain open.
+Add assignment now separates Scripture, Notes and Links into dedicated tabs with retained
+input drafts. Final test/visual/install evidence is recorded in SP-049.
 
 ## v1.3.2 — owner-selected publication, 2026-10-18
 
@@ -596,3 +692,22 @@ Owner authorized v0.2.2 release after these checks; physical acceptance remains 
 ## v1.0.0 audio planning expansion — 2026-10-10
 
 [SP-039](../../tickets/SP-039-v100-scripture-audio-and-verse-highlighting.md) adds a Scripture player, transport controls and verified verse-synchronized highlighting. BSB is the initial candidate, not a claim of complete audio coverage. Recording-specific rights, exact text/audio/timing binding, shared music/system ownership and AU-01–09 are required. A1–A3 approved: ±15-second/chapter controls, Continuous/Follow initially off, streaming and optional manual chapter/book downloads. Prior AO-audio exclusions are superseded for this bounded feature; word-level highlighting and unverified edition audio are excluded. Implementation remains unselected.
+
+### SP-049 stability correction selected — 2026-10-20
+
+Owner reported app termination on removing a day/section and requested broader tests.
+The original code was reproduced with a confirmed Swift exclusivity abort. The editor
+now renders value snapshots and uses stable-ID draft commands with stale-callback
+checks. Additional regression coverage includes structural edits, reset/replacement,
+chapter bounds and repository reopening. See [investigation](../testing/sp049-plan-stability-investigation.md)
+and SP-049 for final suite/device evidence. No new feature ticket or schema is selected.
+
+Stability result: final simulator bundle `build/sp-049/plan-stability-final.xcresult`
+passed 455 tests (453 unit + 2 Plan UI), no failures/skips. Signed build and in-place
+physical install passed after retrying a device connection error. SP-049 remains
+implemented/simulator verified with physical feature acceptance open.
+
+SP-049 action presentation follow-up: assignment removal is available in the item's
+ellipsis menu with a trash icon. Plan reset/duplicate/archive/trash rows have icons;
+Move Plan to Trash explicitly uses red. Command ownership and schemas are unchanged.
+Verification evidence is recorded in SP-049.

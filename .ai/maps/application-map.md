@@ -119,3 +119,14 @@ Current additional routes:
 - SP-048 (v1.3.2): `QuizQuestionCachePolicy` sets 100 minimum/200 capacity per scoped
   bucket; CompanionQuizCache replaces reserved questions and persists batches, while
   RootTabView reconciles foreground demand. See the ticket for remaining acceptance.
+
+SP-049 (2026-10-20): Core/Plans/ owns Plan values/commands and Core/Security/ owns copied
+access requirements. Features/Plans/ has PlanDetailView content/basic playback plus authoring/editor-draft/assignment/lifecycle UI;
+CollectionsStore remains the single persistence writer. Fullscreen Plan pages reuse AppTheme and the shared reader/Notes editor;
+PlanStudyTools.swift coordinates checked note/link creation and shared music controls.
+Plan-owned Pencil layers are not present yet (SP-051). Basic Start/Resume uses the existing reader; full workspace lifecycle remains open. See the SP-049 ticket.
+
+SP-049 stability correction: `Features/Plans/PlanEditorDraft.swift` owns stable-ID
+draft mutations, safe title bindings and stale-callback guards. PlanEditorView renders
+value snapshots; PlanAssignmentPicker clamps dependent chapter bounds before book changes.
+No persistence schema changes are involved.

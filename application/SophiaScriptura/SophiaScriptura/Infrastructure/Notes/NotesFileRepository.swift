@@ -89,31 +89,33 @@ actor NotesFileRepository: NotesRepository {
     private func encode(_ snapshot: NotesSnapshot) throws -> Data {
         try validate(snapshot)
         let payload = try JSONEncoder().encode(snapshot)
-        let data = try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
+        let data = try JSONEncoder().encode(Envelope(schemaVersion: snapshot.schemaVersion == 5 ? 2 : 1, payload: payload, checksum: digest(payload)))
         guard data.count <= Self.archiveLimit else { throw NotesError.limit }
         return data
     }
     nonisolated static func inspectArchive(_ data: Data) throws -> NotesSnapshot {
         guard data.count <= archiveLimit else { throw NotesError.limit }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-        guard envelope.schemaVersion == 1 else { throw NotesError.unsupported }
+        guard (1...2).contains(envelope.schemaVersion) else { throw NotesError.unsupported }
         guard SHA256.hash(data: envelope.payload).map({ String(format: "%02x", $0) }).joined() == envelope.checksum else { throw NotesError.invalid }
         let snapshot = try JSONDecoder().decode(NotesSnapshot.self, from: envelope.payload)
+        guard (snapshot.schemaVersion == 5) == (envelope.schemaVersion == 2) else { throw NotesError.invalid }
         try snapshot.validate(); return snapshot
     }
     private func decode(_ data: Data) throws -> NotesSnapshot {
         guard data.count <= Self.archiveLimit else { throw NotesError.limit }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)
-        guard envelope.schemaVersion == 1 else { throw NotesError.unsupported }
+        guard (1...2).contains(envelope.schemaVersion) else { throw NotesError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw NotesError.invalid }
         var snapshot = try JSONDecoder().decode(NotesSnapshot.self, from: envelope.payload)
+        guard (snapshot.schemaVersion == 5) == (envelope.schemaVersion == 2) else { throw NotesError.invalid }
         snapshot.sanitize()
         try validate(snapshot)
         return snapshot
     }
     private func pointer(_ name: String) throws -> Pointer {
         let value = try JSONDecoder().decode(Pointer.self, from: read(directory.appendingPathComponent(name), limit: 4096))
-        guard value.schemaVersion == 1 else { throw NotesError.unsupported }
+        guard (1...2).contains(value.schemaVersion) else { throw NotesError.unsupported }
         return value
     }
     private func url(_ pointer: Pointer) -> URL { directory.appendingPathComponent(pointer.id.uuidString + ".notes") }
@@ -143,7 +145,17 @@ actor NotesFileRepository: NotesRepository {
         return try commit(snapshot, revision: old.revision + 1, previous: previous, recovered: recovered)
     }
     private func commit(_ snapshot: NotesSnapshot, revision: Int, previous: Pointer?, recovered: Bool) throws -> NotesSnapshot {
-        var next = snapshot; next.revision = revision; next.schemaVersion = next.notes.contains(where: { $0.protectionID != nil }) ? 4 : 3
+        var next = snapshot; next.revision = revision
+        if let previous, let old = try? decode(read(url(previous))) {
+            next.planFormatActivated = next.planFormatActivated || old.planFormatActivated
+            for i in next.notes.indices {
+                if let source = old.notes.first(where: { $0.id == next.notes[i].id }) {
+                    next.notes[i].access = next.notes[i].access.union(source.access)
+                    next.notes[i].planOrigin = next.notes[i].planOrigin ?? source.planOrigin
+                }
+            }
+        }
+        next.schemaVersion = next.requiredSchemaVersion
         let data = try encode(next), fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
         if let previous, try decode(read(url(previous))).schemaVersion < 3 {
@@ -157,7 +169,24 @@ actor NotesFileRepository: NotesRepository {
             }
         }
         var fallback = previous
-        if let previous {
+        if next.schemaVersion == 5 {
+            let backup = directory.appendingPathComponent("before-plans.notes")
+            var safe = NotesSnapshot(schemaVersion: 5)
+            if let previous {
+                let original = try read(url(previous))
+                if !fm.fileExists(atPath: backup.path) { try original.write(to: backup, options: .atomic) }
+                safe = try decode(original); safe.planFormatActivated = true; safe.schemaVersion = 5
+                for i in safe.notes.indices {
+                    if let current = next.notes.first(where: { $0.id == safe.notes[i].id }) {
+                        safe.notes[i].access = safe.notes[i].access.union(current.access)
+                        safe.notes[i].protectionID = current.protectionID ?? safe.notes[i].protectionID
+                    }
+                }
+            }
+            let pointer = Pointer(schemaVersion: 2, id: UUID())
+            try encode(safe).write(to: url(pointer), options: .atomic); fallback = pointer
+        }
+        if next.schemaVersion != 5, let previous {
             let oldBytes = try read(url(previous))
             var protectedFallback = try decode(oldBytes)
             let bindings = Dictionary(uniqueKeysWithValues: next.notes.compactMap { note in note.protectionID.map { (note.id, $0) } })
@@ -176,7 +205,7 @@ actor NotesFileRepository: NotesRepository {
                 fallback = securePrevious
             }
         }
-        let p = Pointer(id: UUID())
+        let p = Pointer(schemaVersion: next.schemaVersion == 5 ? 2 : 1, id: UUID())
         try data.write(to: url(p), options: .atomic)
         try interrupt?(.staged)
         _ = try decode(read(url(p)))
@@ -197,7 +226,7 @@ actor NotesFileRepository: NotesRepository {
         }
     }
     func exportArchive() throws -> Data {
-        var value = try resolved().0; value.schemaVersion = value.notes.contains(where: { $0.protectionID != nil }) ? 4 : 3
+        var value = try resolved().0; value.schemaVersion = value.requiredSchemaVersion
         return try encode(value)
     }
     func preRestoreArchive() throws -> Data { try read(url(pointer("pre-restore.json"))) }

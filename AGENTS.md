@@ -373,3 +373,25 @@ capacity per scoped type/difficulty bucket with 10-question refill batches.
 `CompanionQuizCache` owns reservation-triggered refill; `CompanionSession` guards initial
 load and persistence; RootTabView reconciles foreground demand. Physical/provider-quality
 and suspension acceptance remain separate from recorded simulator/build/install evidence.
+
+## SP-049 structure update — authoring slice
+
+`Core/Plans/` owns Plan/section/item identity, canonical assignments, validation and typed
+commands/receipts. `Core/Security/StudyAccessRequirements.swift` owns copied Notes/Collections
+credential requirements. `Features/Plans/` owns content-first PlanDetailView, editor/assignment picker/lifecycle UI and
+PlanCommandService; CollectionsStore remains the sole Collections persistence writer.
+Collections schema 4 and Notes schema 5 activate v2 wrappers/pointers; legacy supported
+formats remain readable. `Infrastructure/Backup/StudyRestoreJournal.swift` owns local staged
+restore input/phase checkpoints; Settings backup exposes explicit recovery. Basic Start/Resume uses the existing ReaderSession/ReaderTextSurface with durable Next
+progress and section summaries; a separate app mode is not required. Plan pages are fullscreen and use shared theme surfaces/full book names. Optional
+ReaderTextSurface Plan focus dims unassigned verses. PlanStudyTools.swift coordinates
+checked note/link reflection creation; the shared Notes editor previews content inside
+the Plan, and the icon bar reuses the root MusicSession. NotesSession tracks transient
+Plan presentation ownership to prevent duplicate offscreen editors. Full reader lease,
+Plan Pencil and remaining tools remain SP-050/051 acceptance scope. No Plan runtime
+backend is introduced. See the SP-049 ticket for verification limits.
+
+SP-049 stability correction: `Features/Plans/PlanEditorDraft.swift` owns stable-ID
+draft mutations, safe title bindings and stale-callback guards. PlanEditorView renders
+value snapshots; PlanAssignmentPicker clamps dependent chapter bounds before book changes.
+No persistence schema changes are involved.

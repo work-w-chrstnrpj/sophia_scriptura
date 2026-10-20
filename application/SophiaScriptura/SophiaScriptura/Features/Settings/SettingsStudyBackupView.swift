@@ -17,6 +17,8 @@ struct SettingsStudyBackupSection: View {
     @State private var pendingImport: Data?
     @State private var archive = StudyBackupDocument(data: Data())
     @State private var notice: String?
+    @State private var recoveryDirectories: [URL] = []
+    @State private var resolvingDirectory: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -47,11 +49,29 @@ struct SettingsStudyBackupSection: View {
             .foregroundStyle(Color(theme.palette.accent))
             .accessibilityIdentifier("settings.backup.export")
 
+            ForEach(recoveryDirectories, id: \.path) { directory in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("A study restore needs recovery.").font(.footnote)
+                    Button("Resume recovery") {
+                        do {
+                            pendingImport = try StudyRestoreJournal.recoveryData(directory: directory, previous: false)
+                            resolvingDirectory = directory; confirmImport = true
+                        } catch { notice = error.localizedDescription }
+                    }
+                    Button("Restore previous study state") {
+                        do {
+                            pendingImport = try StudyRestoreJournal.recoveryData(directory: directory, previous: true)
+                            resolvingDirectory = directory; confirmImport = true
+                        } catch { notice = error.localizedDescription }
+                    }
+                }
+            }
             Button("Import a backup…") { importing = true }
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color(theme.palette.accent))
                 .accessibilityIdentifier("settings.backup.import")
         }
+        .onAppear { recoveryDirectories = StudyRestoreJournal.pending() }
         .fileExporter(isPresented: $exporting, document: archive, contentType: .json, defaultFilename: "Sophia-Study-Backup") { result in
             if case .failure(let error) = result { notice = error.localizedDescription }
         }
@@ -92,11 +112,14 @@ struct SettingsStudyBackupSection: View {
                             sophyRepository: sophy.repository
                         )
                         await sophy.load(collections: collections, activity: activity, recoveredOlderGeneration: true)
+                        if let resolvingDirectory { try StudyRestoreJournal.resolve(directory: resolvingDirectory) }
+                        recoveryDirectories = StudyRestoreJournal.pending()
                         notice = "Backup imported successfully."
                     } catch {
                         notice = error.localizedDescription
                     }
-                    pendingImport = nil
+                    pendingImport = nil; resolvingDirectory = nil
+                    recoveryDirectories = StudyRestoreJournal.pending()
                 }
             }
         } message: {

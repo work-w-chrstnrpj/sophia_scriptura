@@ -4,8 +4,10 @@ import ImageIO
 
 /// Owns one library and serializes autosave; surfaces never write files.
 @MainActor @Observable final class NotesSession {
+    var backupLeaseHeld = false
     var protection = ItemProtectionSession.shared
     private var flushingForLock = false
+    private var clipboardAccess = StudyAccessRequirements()
     weak var collections: CollectionsStore?
     private(set) var openingCollectionID: UUID?
     func canAccessEditor(_ id: UUID) -> Bool {
@@ -19,7 +21,11 @@ import ImageIO
         rejectedInk = nil; toolsVisible = false; surfaceGeneration = UUID(); inkRecoveryGeneration = UUID()
         Task { await save() }
     }
-    func isLocked(_ note: NoteDocument) -> Bool { !flushingForLock && protection.isLocked(note.protectionID, in: .notes) }
+    func isLocked(_ note: NoteDocument) -> Bool {
+        !flushingForLock && (protection.isLocked(note.protectionID, in: .notes)
+            || note.access.notesCredentialIDs.contains { protection.isLocked($0, in: .notes) }
+            || note.access.collectionsCredentialIDs.contains { protection.isLocked($0, in: .collections) })
+    }
     func setProtected(_ id: UUID, enabled: Bool) async {
         guard let original = snapshot.notes.first(where: { $0.id == id }), original.protectionID != nil || enabled else { return }
         do {
@@ -37,9 +43,9 @@ import ImageIO
         } catch { if case ItemLockError.cancelled = error {} else { report(error) } }
     }
     func concealProtectedNote() {
-        if clipboardProtectionID != nil { canvasClipboard = []; clipboardProtectionID = nil }
+        if clipboardProtectionID != nil || !clipboardAccess.isEmpty || snapshot.notes.contains(where: { $0.id == selectedNoteID && !$0.access.isEmpty }) { canvasClipboard = []; clipboardProtectionID = nil }
         flushingForLock = true; flushSurface?(); flushingForLock = false
-        if let selected = snapshot.notes.first(where: { $0.id == selectedNoteID }), selected.protectionID != nil {
+        if let selected = snapshot.notes.first(where: { $0.id == selectedNoteID }), selected.protectionID != nil || !selected.access.isEmpty {
             selectedNoteID = nil; selection = []; strokeSelection = []; undoStack = []; redoStack = []; rejectedInk = nil; canvasClipboard = []
             toolsVisible = false; surfaceGeneration = UUID(); inkRecoveryGeneration = UUID()
         }
@@ -64,6 +70,8 @@ import ImageIO
         mode = .draw; toolsVisible = true; toolsRequest = UUID()
     }
     var mode = Mode.select
+    /// A fullscreen Plan owns the shared Notes surface while previewing/editing.
+    var planPresentationActive = false
     var active = false
     var surfaceGeneration = UUID()
     var focusRequest = UUID()
@@ -209,7 +217,7 @@ import ImageIO
         guard let target = snapshot.notes.first(where: { $0.id == id }) else { return }
         if isLocked(target) {
             Task {
-                do { try await protection.request(binding: target.protectionID, in: .notes)
+                do { try await protection.authorize([.notes: [target.protectionID] + target.access.notesCredentialIDs.map(Optional.some), .collections: target.access.collectionsCredentialIDs.map(Optional.some)])
                     guard snapshot.notes.contains(where: { $0.id == id && $0.protectionID == target.protectionID }) else { return }; open(id, from: collectionID)
                 } catch { if case ItemLockError.cancelled = error {} else { report(error) } }
             }; return
@@ -222,13 +230,14 @@ import ImageIO
     }
     /// Copies local value payloads, preserving protection while giving the note a new identity.
     @discardableResult func duplicate(_ id: UUID) -> UUID? {
-        guard loaded, !restoring else { return nil }
+        guard !backupLeaseHeld, loaded, !restoring else { return nil }
         guard snapshot.notes.count < 200 else { notice = "Notes has reached its 200-note safety limit."; return nil }
         guard let source = snapshot.notes.first(where: { $0.id == id }), source.isActiveInLibrary,
               !isLocked(source), collections?.concealsNote(id) != true else { return nil }
         if selectedNoteID == id { flushSurface?() }
         guard let original = snapshot.notes.first(where: { $0.id == id }) else { return nil }
         var copy = original
+        copy.planOrigin?.creationOperationID = nil
         copy.id = UUID(); copy.title = String(original.title.prefix(193)) + " (Copy)"
         copy.createdAt = Date(); copy.updatedAt = copy.createdAt
         copy.deletedAt = nil; copy.archivedAt = nil; copy.trashedAt = nil
@@ -252,7 +261,7 @@ import ImageIO
         color: CollectionAccent = .preset,
         title: String = ""
     ) -> UUID? {
-        guard !restoring, loaded, snapshot.notes.count < 200 else { notice = "Notes is unavailable or its 200-note safety limit has been reached."; return nil }
+        guard !backupLeaseHeld, !restoring, loaded, snapshot.notes.count < 200 else { notice = "Notes is unavailable or its 200-note safety limit has been reached."; return nil }
         var note = NoteDocument(kind: kind)
         note.color = color
         if kind == .prayer { note.title = "Untitled Prayer" }
@@ -293,7 +302,7 @@ import ImageIO
     }
 
     func updateNote(id: UUID, title: String, tags: String, paper: NoteDocument.Paper, color: CollectionAccent) {
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         guard !isLocked(snapshot.notes[i]) else { notice = ItemLockError.locked.localizedDescription; return }
         protection.activity(in: .notes)
         let trimmed = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
@@ -318,7 +327,7 @@ import ImageIO
     }
 
     func setColor(_ color: CollectionAccent, for id: UUID) {
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         guard !isLocked(snapshot.notes[i]) else { notice = ItemLockError.locked.localizedDescription; return }
         protection.activity(in: .notes)
         snapshot.notes[i].color = color
@@ -328,7 +337,7 @@ import ImageIO
     /// Hides the note in the library; unarchive from Settings or Notes archive.
     func archive(_ id: UUID) {
         protection.cancel(affecting: [.notes])
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes[i].archivedAt = Date()
         snapshot.notes[i].trashedAt = nil
         snapshot.notes[i].deletedAt = snapshot.notes[i].archivedAt
@@ -338,7 +347,7 @@ import ImageIO
     }
 
     func unarchive(_ id: UUID) {
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes[i].archivedAt = nil
         snapshot.notes[i].deletedAt = nil
         snapshot.notes[i].updatedAt = Date()
@@ -349,7 +358,7 @@ import ImageIO
 
     func moveToTrash(_ id: UUID) {
         protection.cancel(affecting: [.notes])
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         let now = Date()
         snapshot.notes[i].trashedAt = now
         snapshot.notes[i].archivedAt = nil
@@ -360,7 +369,7 @@ import ImageIO
     }
 
     func restoreFromTrash(_ id: UUID) {
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes[i].trashedAt = nil
         snapshot.notes[i].deletedAt = nil
         snapshot.notes[i].updatedAt = Date()
@@ -389,7 +398,7 @@ import ImageIO
 
     /// Permanently removes every note, including archived notes, and closes the editor.
     func removeAllNotes() {
-        guard !restoring, loaded else { return }
+        guard !backupLeaseHeld, !restoring, loaded else { return }
         protection.lock([.notes])
         snapshot.notes.removeAll()
         selectedNoteID = nil
@@ -404,7 +413,7 @@ import ImageIO
     /// Removes the note from the library entirely. Prefer archiving for reversible removal.
     func permanentlyDelete(_ id: UUID) {
         protection.cancel(affecting: [.notes])
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == id }) else { return }
         snapshot.notes.remove(at: i)
         changed()
         if id == selectedNoteID { selectedNoteID = nil; surfaceGeneration = UUID() }
@@ -416,7 +425,7 @@ import ImageIO
     }
     private var index: Int? { snapshot.notes.firstIndex { $0.id == selectedNoteID && canAccessEditor($0.id) } }
     func edit(_ operation: (inout NoteDocument) -> Void, record: Bool = true) {
-        guard !restoring, let i = index else { return }
+        guard !backupLeaseHeld, !restoring, let i = index else { return }
         if record { protection.activity(in: .notes) }
         let before = snapshot.notes[i]
         var next = before; operation(&next)
@@ -620,14 +629,16 @@ import ImageIO
     func copySelection() {
         guard let note else { return }
         if !strokeSelection.isEmpty, let scene = try? NoteCanvasInk(objects: note.objects) {
-            canvasClipboard = scene.copying(strokeSelection); clipboardProtectionID = note.protectionID; return
+            canvasClipboard = scene.copying(strokeSelection); clipboardProtectionID = note.protectionID; clipboardAccess = note.access; return
         }
         let ids = note.members(selection)
-        canvasClipboard = note.objects.filter { ids.contains($0.id) }; clipboardProtectionID = note.protectionID
+        canvasClipboard = note.objects.filter { ids.contains($0.id) }; clipboardProtectionID = note.protectionID; clipboardAccess = note.access
     }
 
     func pasteCanvasClipboard() {
-        guard let note, note.kind == .canvas, !canvasClipboard.isEmpty, !protection.isLocked(clipboardProtectionID, in: .notes) else { return }
+        guard let note, note.kind == .canvas, !canvasClipboard.isEmpty, !protection.isLocked(clipboardProtectionID, in: .notes),
+              !clipboardAccess.notesCredentialIDs.contains(where: { protection.isLocked($0, in: .notes) }),
+              !clipboardAccess.collectionsCredentialIDs.contains(where: { protection.isLocked($0, in: .collections) }) else { return }
         var copies = canvasClipboard
         let groups = Dictionary(uniqueKeysWithValues: Set(copies.compactMap(\.group)).map { ($0, UUID()) })
         for index in copies.indices {
@@ -893,43 +904,53 @@ import ImageIO
             let version = change, value = snapshot
             do {
                 let saved = try await repository.save(value, expectedRevision: value.revision)
-                snapshot.revision = saved.revision; snapshot.schemaVersion = saved.schemaVersion
+                snapshot.revision = saved.revision; snapshot.schemaVersion = saved.schemaVersion; snapshot.planFormatActivated = saved.planFormatActivated
                 if version == change { dirty = false; notice = nil }
-            } catch { report(error); return }
+            } catch {
+                // A publish can succeed before the filesystem reports an interruption.
+                // Read back this owner's generation rather than duplicate a Plan note.
+                if let observed = try? await repository.load().snapshot, observed.notes == value.notes,
+                   observed.revision > value.revision {
+                    snapshot.revision = observed.revision; snapshot.schemaVersion = observed.schemaVersion
+                    snapshot.planFormatActivated = observed.planFormatActivated
+                    if version == change { dirty = false; notice = nil }
+                } else { report(error); return }
+            }
         }
     }
     func export() async throws -> Data {
-        try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)])
-        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+        try await protection.authorize(noteAccessRequirements(snapshot.notes))
+        try requireNoteAccess(snapshot.notes)
         flushSurface?(); await save()
         guard !dirty, !saving else { throw NotesError.stale }
         let data = try await repository.exportArchive()
-        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+        try requireNoteAccess(snapshot.notes)
         return data
     }
     func preRestore() async throws -> Data {
-        try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)])
-        try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+        try await protection.authorize(noteAccessRequirements(snapshot.notes))
+        try requireNoteAccess(snapshot.notes)
         let data = try await repository.preRestoreArchive()
         let backup = try NotesFileRepository.inspectArchive(data)
-        try await protection.authorize([.notes: backup.notes.map(\.protectionID)])
-        try protection.require(backup.notes.map(\.protectionID), in: .notes)
+        try await protection.authorize(noteAccessRequirements(backup.notes))
+        try requireNoteAccess(backup.notes)
         return data
     }
-    func restore(_ data: Data) async {
-        guard !restoring else { return }
-        do { try await protection.authorize([.notes: snapshot.notes.map(\.protectionID)]) } catch { report(error); return }
+    @discardableResult func restore(_ data: Data) async -> Bool {
+        guard !restoring else { return false }
+        do { try await protection.authorize(noteAccessRequirements(snapshot.notes)) } catch { report(error); return false }
         flushSurface?(); await save()
-        guard !saving, !dirty else { notice = "Save current edits before restoring."; return }
+        guard !saving, !dirty else { notice = "Save current edits before restoring."; return false }
         restoring = true
         defer { restoring = false }
         do {
-            try protection.require(snapshot.notes.map(\.protectionID), in: .notes)
+            try requireNoteAccess(snapshot.notes)
             let next = try await repository.restore(data, expectedRevision: snapshot.revision)
             protection.lock([.notes])
             surfaceGeneration = UUID(); flushSurface = nil; snapshot = next; loaded = true
             selectedNoteID = nil; selection = []; undoStack = []; redoStack = []; notice = "Notes backup restored. The pre-restore copy is available in Backups."
-        } catch { report(error) }
+            return true
+        } catch { report(error); return false }
     }
 
     static func prayerDayKey(for date: Date = Date()) -> String {
@@ -969,7 +990,7 @@ import ImageIO
 
     /// Updates a library item without selecting it or changing the editor route.
     func setLibraryStatus(_ change: LibraryStatusChange, noteID: UUID) {
-        guard !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == noteID }),
+        guard !backupLeaseHeld, !restoring, let i = snapshot.notes.firstIndex(where: { $0.id == noteID }),
               snapshot.notes[i].isActiveInLibrary,
               !isLocked(snapshot.notes[i]), collections?.concealsNote(noteID) != true else { return }
         var next = snapshot.notes[i]
@@ -1140,7 +1161,7 @@ import ImageIO
         } ?? false
         return SophyNoteSelection(noteID: current.id, objectID: objectID, range: range, text: text,
             digest: SophyContextBuilder.digest(text), revision: current.updatedAt,
-            editorRoute: openingCollectionID, requiresConsent: current.protectionID != nil || protectedFolder)
+            editorRoute: openingCollectionID, requiresConsent: current.protectionID != nil || !current.access.isEmpty || protectedFolder)
     }
 
     func sophySelectionIsCurrent(_ selection: SophyNoteSelection) -> Bool {
@@ -1148,5 +1169,49 @@ import ImageIO
               canAccessEditor(selection.noteID), note?.updatedAt == selection.revision,
               let fresh = sophySelection(range: selection.range, objectID: selection.objectID) else { return false }
         return fresh == selection
+    }
+}
+
+extension NotesSession {
+    func noteAccessRequirements(_ notes: [NoteDocument]) -> [ItemProtectionSession.Domain: [UUID?]] {
+        [.notes: notes.flatMap { [$0.protectionID] + $0.access.notesCredentialIDs.map(Optional.some) },
+         .collections: notes.flatMap { $0.access.collectionsCredentialIDs.map(Optional.some) }]
+    }
+    func requireNoteAccess(_ notes: [NoteDocument]) throws {
+        for (domain, ids) in noteAccessRequirements(notes) { try protection.require(ids, in: domain) }
+    }
+    func createPlanNote(planID: UUID, operationID: UUID, noteID: UUID, title: String,
+                        kind: NoteKind, access: StudyAccessRequirements, color: CollectionAccent = .preset) async -> StudyTargetCommitResult {
+        if let existing = snapshot.notes.first(where: { $0.planOrigin?.creationOperationID == operationID }) {
+            guard !isLocked(existing), existing.id == noteID else { return .rejected(.accessDenied) }
+            await save(); return dirty ? .uncertain(operationID: operationID) : .committed(ids: [existing.id], revision: snapshot.revision)
+        }
+        guard !backupLeaseHeld, !restoring, !saving, access.notesCredentialIDs.allSatisfy({ !protection.isLocked($0, in: .notes) }),
+              access.collectionsCredentialIDs.allSatisfy({ !protection.isLocked($0, in: .collections) }),
+              !snapshot.notes.contains(where: { $0.id == noteID }) else { return .rejected(.accessDenied) }
+        guard let generatedID = create(kind: kind, color: color, title: title),
+              let index = snapshot.notes.firstIndex(where: { $0.id == generatedID }) else { return .rejected(.capacity) }
+        snapshot.notes[index].id = noteID; snapshot.notes[index].access = access
+        snapshot.notes[index].planOrigin = .init(planID: planID, creationOperationID: operationID)
+        snapshot.planFormatActivated = true; selectedNoteID = noteID
+        changed(); await save()
+        return dirty ? .uncertain(operationID: operationID) : .committed(ids: [noteID], revision: snapshot.revision)
+    }
+    func commitPlanEdits(noteID: UUID, operationID: UUID) async -> StudyTargetCommitResult {
+        guard let note = snapshot.notes.first(where: { $0.id == noteID }), !isLocked(note) else { return .rejected(.accessDenied) }
+        flushSurface?(); while saving { await Task.yield() }; await save()
+        return dirty ? .uncertain(operationID: operationID) : .committed(ids: [noteID], revision: snapshot.revision)
+    }
+}
+
+extension NotesSession {
+    func applyPlanAccess(planID: UUID, operationID: UUID, access: StudyAccessRequirements) async -> StudyTargetCommitResult {
+        guard !restoring else { return .rejected(.busy) }
+        for i in snapshot.notes.indices where snapshot.notes[i].planOrigin?.planID == planID {
+            snapshot.notes[i].access = snapshot.notes[i].access.union(access)
+        }
+        snapshot.planFormatActivated = snapshot.planFormatActivated || snapshot.notes.contains { $0.planOrigin != nil }
+        changed(); while saving { await Task.yield() }; await save()
+        return dirty ? .uncertain(operationID: operationID) : .committed(ids: snapshot.notes.filter { $0.planOrigin?.planID == planID }.map(\.id), revision: snapshot.revision)
     }
 }

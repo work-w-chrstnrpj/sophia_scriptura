@@ -115,6 +115,7 @@ struct RootTabView: View {
                     NotesView(session: notes, reader: reader, collections: collections, isTabActive: selection == .notes)
                         .tabPresentation(.notes, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     CompanionView(session: companion, openNote: { id in notes.open(id); selection = .notes; chrome.reveal() })
+                        .disabled(companion.backupLeaseHeld)
                         .tabPresentation(.companion, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     ActivityView(store: activity, sophy: sophy, companion: companion, liveActivityStatus: activityLiveActivity.status, books: reader.books, editionID: reader.edition?.id,
                                  referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp", startReading: { verse in
@@ -137,7 +138,7 @@ struct RootTabView: View {
                     }, currentReaderLocation: {
                         guard let document = reader.document else { return nil }
                         return (document.book, document.chapter)
-                    }).tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
+                    }).disabled(activity.backupLeaseHeld).tabPresentation(.activity, selection:selection, width:geometry.size.width, reduceMotion:reduceMotion)
                     SettingsView(
                         reader: reader,
                         narration: scriptureNarration,
@@ -242,13 +243,24 @@ struct RootTabView: View {
         .environment(\.studySwipeCoordinator, swipeActions)
         .environment(notes)
         .environmentObject(userProfile)
+        .environmentObject(music)
     }
 
     private var studyLifecycleContent: some View {
         shellContent
         .onAppear {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
-            notes.collections = collections
+            notes.collections = collections; collections.planNotes = notes
+            collections.validatePlanReference = { payload, editionID in
+                let repository = try await reader.contentRepository(editionID: editionID)
+                let edition = try await repository.edition()
+                guard payload.referenceSystemID == edition.referenceSystemID, let book = payload.book, let chapter = payload.chapter else { throw StudyMutationFailure.invalid }
+                let document = try await repository.chapter(book: book, number: chapter)
+                if payload.selection == .verseRange {
+                    guard let start = payload.startVerse, let end = payload.endVerse,
+                          (start...end).allSatisfy(document.verseNumbers.contains) else { throw StudyMutationFailure.invalid }
+                }
+            }
             notes.onSophyEnhance = { selection in
                 sophy.syncRoute(companion)
                 sophy.stageEnhancement(selection)
@@ -279,7 +291,7 @@ struct RootTabView: View {
                 chrome.reveal()
             }
             protection.willLock = { domains in
-                if domains.contains(.notes) { notes.concealProtectedNote() }
+                if domains.contains(.notes) || domains.contains(.collections) { notes.concealProtectedNote() }
                 else { notes.flushSurface?(); Task { await notes.save() } }
                 collections.objectWillChange.send()
                 sophy.concealSensitive()
@@ -292,10 +304,14 @@ struct RootTabView: View {
             music.attachStudyAudio(studyAudio)
             scriptureNarration.bind(music: music, reader: reader)
         }
-        .task { await notes.load(); await collections.load(); await companion.load();
+        .task { await notes.load(); await collections.load(); collections.link(notes: notes.snapshot.notes); await companion.load();
             let activeIDs = Set(companion.activeConversations.map(\.id))
             for conversation in collections.conversations where !activeIDs.contains(conversation.id) { collections.removeCompanionConversation(conversation.id) }
             await activity.load(); activity.importQuizStudyLinks(companion.reviewingLinks)
+            if !StudyRestoreJournal.pending().isEmpty {
+                collections.studyMutationBlocked = true; notes.backupLeaseHeld = true
+                activity.backupLeaseHeld = true; companion.backupLeaseHeld = true
+            }
             activityLiveActivity.reconcile(projection: activity.committedProjection, sceneActive: scenePhase == .active)
             await sophy.load(collections: collections, activity: activity, recoveredOlderGeneration: collections.recoveredOlderGeneration || activity.recoveredOlderGeneration) }
         .onChange(of: activity.committedProjection) { _, projection in
@@ -333,7 +349,7 @@ struct RootTabView: View {
     var body: some View {
         studyLifecycleContent
         .onChange(of: companion.resolvedSharedRoute()) { _, _ in sophy.syncRoute(companion) }
-        .onChange(of: notes.snapshot.notes) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
+        .onChange(of: notes.snapshot.notes) { _, _ in collections.link(notes: notes.snapshot.notes); sophy.privacyChanged(collections: collections, notes: notes) }
         .onChange(of: collections.collections) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
         .onChange(of: collections.memberships) { _, _ in sophy.privacyChanged(collections: collections, notes: notes) }
         .onChange(of: companion.reviewingLinks) { _, links in activity.importQuizStudyLinks(links) }
@@ -352,7 +368,7 @@ struct RootTabView: View {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
         .onChange(of: notes.selectedNoteID) { _, _ in
-            notes.active = selection == .notes || (selection == .collections && notes.openingCollectionID != nil)
+            notes.active = selection == .notes || (selection == .collections && notes.openingCollectionID != nil) || (notes.planPresentationActive && notes.selectedNoteID != nil)
             sophy.noteUserActivity()
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
@@ -361,7 +377,7 @@ struct RootTabView: View {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
         }
         .onChange(of: selection) { _, tab in
-            notes.active = tab == .notes || (tab == .collections && notes.openingCollectionID != nil)
+            notes.active = tab == .notes || (tab == .collections && notes.openingCollectionID != nil) || (notes.planPresentationActive && notes.selectedNoteID != nil)
             if tab != .notes {
                 notes.toolsVisible = false
                 notes.toolsRequest = UUID()
@@ -374,7 +390,7 @@ struct RootTabView: View {
         .onChange(of:scenePhase) { _, phase in
             protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
-            notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil))
+            notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil) || (notes.planPresentationActive && notes.selectedNoteID != nil))
             if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); companion.scheduleQuizCacheWarmup() }
             else { chrome.stop(); Task { await collections.flush(); await companion.flush(); await activity.flush() } }
         }

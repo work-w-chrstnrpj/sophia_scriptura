@@ -7,6 +7,7 @@ struct NoteEditorView: View {
     @Bindable var session: NotesSession
     var reader: ReaderSession
     @ObservedObject var collections: CollectionsStore
+    var includesScripturePane = true
     @AppStorage("notes.scriptureVisible") private var scriptureVisible = true
     @AppStorage("notes.editor.toolsExpanded") private var toolsExpanded = true
     @State private var rename = false
@@ -94,7 +95,8 @@ struct NoteEditorView: View {
     }
 
     private var showsScripturePane: Bool {
-        switch session.note?.kind {
+        guard includesScripturePane else { return false }
+        return switch session.note?.kind {
         case .journal: session.note?.journalScriptureVisible ?? true
         case .page: scriptureVisible
         default: false
@@ -285,7 +287,7 @@ struct NoteEditorView: View {
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("notes.recording")
             }
-            if session.note?.kind == .page || session.note?.kind == .journal {
+            if includesScripturePane && (session.note?.kind == .page || session.note?.kind == .journal) {
                 Button(showsScripturePane ? "Hide Scripture" : "Show Scripture", systemImage: "sidebar.left") { toggleScripturePane() }
                     .labelStyle(.iconOnly)
                     .accessibilityIdentifier("notes.scripture.toggle")

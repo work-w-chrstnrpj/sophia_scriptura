@@ -138,6 +138,16 @@ manual arrangement, drag/reparent and a full-tree move chooser.
 - Duplicate a folder tree with its memberships. Folder copies reuse the existing study
   items; standalone note duplication creates an independent note.
 
+Local SP-049 work adds **Plans** under Add Study Material: named Day/Section groups of
+Scripture assignments, notes and links, with checkboxes, editing, reset, duplication and
+archive/Trash. Assignment entry has separate Scripture, Notes and Links tabs. Opening a Plan shows its contents, with an explicit Edit action. Start/Resume reads
+assignments in the existing Scripture reader and Next saves progress, pausing at section
+summaries. The fullscreen reader uses full book names, dims unassigned verses and previews
+notes in the existing editor. Its icon bar restores Previous, Add Note, Add Link, Background
+Music and Next; new reflections are checked automatically. Plan-named Pencil layers and
+complete reader/Companion integration remain SP-050/051 acceptance scope. See the
+[Plan ticket](tickets/SP-049-plan-model-and-authoring.md) for current verification limits.
+
 Shared swipe actions and long-press menus expose record commands. Archive, Trash and
 restoration flows help manage material over time, with behavior appropriate to each type.
 
@@ -280,6 +290,13 @@ provide source rather than an installable IPA. Full commands and signing recover
 the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
+
+Unreleased SP-049 changes (2026-10-20): Plan foundations, authoring and basic reading
+passed 453 unit tests and two native Plan UI journeys (455 total). The later action-icon
+update passed the expanded Plan journey and visual review. The signed build was installed
+in place and launched on the owner's iPad. Complete reader lifecycle, Plan Pencil layers
+and embedded Companion integration remain SP-050/051 acceptance scope; no release was published.
+
 
 The current release is **[v1.3.2](docs/releases/v1.3.2.md), build 27**, dated
 **2026-10-18**. It includes SP-048 Quiz Me reliability: ready-bank starts,

@@ -639,3 +639,32 @@ Final retry succeeded after signing was restored: signed Debug build, strict sig
 and bundle-identity checks, in-place install and normal launch on `iPad ni Paj`.
 Existing study data preserved; version remains 1.3.1/build 26. Evidence:
 `build/sp048/ipad-install-retry2.log`. Physical feature acceptance remains open.
+
+### SP-049 authoring deployment — 2026-10-20
+
+Installer dry-run, signed Debug build, strict signature/bundle identity checks,
+in-place installation and normal launch passed on `iPad ni Paj`, version 1.3.2/build 27
+(`com.personal.SophiaScriptura`). No uninstall/reset was used. Evidence is retained in
+`build/sp-049/ipad-install.log` and timestamped `build/ipad-install/logs/`.
+This deploys Plan authoring; Plan reading mode and Pencil tools remain SP-050/051.
+Physical feature acceptance remains open in SP-049.
+
+### Plan content/playback correction — 2026-10-20
+
+Final corrected source passed signed Debug build, strict signature/bundle-identity
+checks and in-place install on `iPad ni Paj` (1.3.2/build 27). Initial launch was blocked
+by the locked device; after the owner unlocked it, normal launch succeeded. No uninstall
+or reset was used. Evidence: `build/sp-049/plan-detail-install-final.log` and
+`build/sp-049/plan-detail-launch-retry.log`; installer preview is
+`build/sp-049/plan-detail-install-preview.log`. Feature/device acceptance remains separate.
+
+### Fullscreen Plan and assignment tabs — 2026-10-20
+
+The repository installer passed signed Debug build, strict signature/bundle identity
+checks and in-place installation on iPad ni Paj, version 1.3.2/build 27. No uninstall
+or reset was used. `build/sp-049/plan-fullscreen-install.log` retains evidence; preview
+is in plan-fullscreen-install-preview.log beside it. Initial launch was blocked by iPadOS while the device was locked. After the owner
+unlocked it, normal launch succeeded; evidence: `build/sp-049/plan-fullscreen-launch-unlocked.log`.
+Installation and launch are complete; physical feature/design acceptance remains separate. This build
+contains fullscreen themed Plans, actual Notes previews, full book labels, dimmed
+unassigned verses, the five requested reading controls and three assignment tabs.

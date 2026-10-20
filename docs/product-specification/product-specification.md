@@ -252,3 +252,15 @@ online provider access is explicit and optional to local study.
 App Store distribution, collaboration, Android/web clients, and cloud sync are not
 planned. Content-provider accounts may still be needed for online editions. Core local
 study must remain usable when an optional online feature is unavailable.
+
+## Collection Plans — proposed extension, 2026-10-19
+
+Planning only; no implementation selected. Add Plan as a Collections material with ordered,
+configurably named sections of Scripture assignments, notes and links, editable checkboxes
+and scoped resets. A fullscreen focused reader supports Prev/Next, Notes, links, Companion,
+background music and Pencil while normal tabs are unavailable. Owner confirmed checked
+reflections added while reading, explicit section-summary pauses, and new annotation layers
+named after the Plan. Scheduling and public/shared Plans remain outside the first version.
+See [design and recommended defaults](../design/collection-plans.md),
+[TDD](../tdd/tdd.md#collection-plans--planning-baseline-sp-049052) and
+[proposed milestone](../development-plan/development-plan.md#collection-plans--proposed-post-baseline-milestone-2026-10-19).

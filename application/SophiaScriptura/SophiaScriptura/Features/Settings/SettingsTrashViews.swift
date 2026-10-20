@@ -8,6 +8,7 @@ struct SettingsTrashHubView: View {
 
     var body: some View {
         List {
+            NavigationLink("Plans") { PlanLifecycleLibrary(store: collections, notes: notes, archived: false) }
             NavigationLink("Points to Ponder") {
                 StudyTrashedPointsView(store: collections)
             }
@@ -71,7 +72,7 @@ struct StudyTrashedNotesView: View {
 
     private var notes: [NoteDocument] {
         session.snapshot.notes.filter {
-            $0.isTrashed
+            $0.isTrashed && collections.accessAllowed($0.access)
                 && (search.isEmpty || collections.searchableNoteText($0).localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || (collections.canRevealNoteMetadata($0) && $0.tags.contains(tag)))
         }.sorted {

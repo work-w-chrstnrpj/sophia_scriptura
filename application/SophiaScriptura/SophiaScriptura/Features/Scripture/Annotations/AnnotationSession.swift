@@ -287,17 +287,18 @@ import PencilKit
         await save(); guard canTransition else { throw AnnotationError.interrupted }
         return try await repository.exportArchive()
     }
-    func restore(_ data: Data, document: ChapterDocument?) async {
-        await save(); guard !usingTool, !saving, (!loaded || canTransition) else { return }
+    @discardableResult func restore(_ data: Data, document: ChapterDocument?) async -> Bool {
+        await save(); guard !usingTool, !saving, (!loaded || canTransition) else { return false }
         saving = true
+        var succeeded = false
         do {
             let restored = try await repository.restoreArchive(data, expectedRevision: snapshot.revision)
             reopenGeneration += 1
             snapshot = restored
             notice = "Annotation backup restored. Previous annotations retained for recovery."
-            failed = false; loaded = true
+            failed = false; loaded = true; succeeded = true
         } catch { notice = error.localizedDescription }
-        saving = false; await open(document)
+        saving = false; await open(document); return succeeded
     }
     func preRestoreArchive() async throws -> Data {
         await save(); guard canTransition else { throw AnnotationError.interrupted }

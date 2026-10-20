@@ -190,6 +190,13 @@ actor AnnotationFileRepository: AnnotationRepository {
             try? fm.removeItem(at: url)
         }
     }
+    func inspectArchive(_ data: Data) throws -> AnnotationSnapshot {
+        guard data.count <= Self.archiveLimit else { throw AnnotationError.tooLarge }
+        let archive = try JSONDecoder().decode(Archive.self, from: data)
+        guard archive.schemaVersion == 1 else { throw AnnotationError.unsupported }
+        try check(archive.snapshot, entries: archive.entries)
+        return archive.snapshot
+    }
     func exportArchive() throws -> Data {
         let snapshot = try load().snapshot
         let data = try JSONEncoder().encode(Archive(snapshot: snapshot, entries: entries(snapshot)))

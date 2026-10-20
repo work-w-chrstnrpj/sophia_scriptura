@@ -18,6 +18,8 @@ struct ReaderTextSurface: UIViewRepresentable {
     var saveGleaning: ((NSRange) -> Void)? = nil
     var askCompanion: ((ChapterTextMap.Selection) -> Void)? = nil
     var analyzeOriginalLanguage: ((ChapterTextMap.Selection) -> Void)? = nil
+    /// Non-nil only for a bounded Plan assignment; normal reader styling is unchanged.
+    var planFocusVerses: [Int]? = nil
     var emphasisVerses: [Int] = []
     var emphasisSpans: [PassageSpan] = []
     /// Scrolls the active narration verse into view when emphasis updates during playback.
@@ -55,8 +57,9 @@ struct ReaderTextSurface: UIViewRepresentable {
         view.tintColor = palette.accent
         view.focusColor = palette.accent.withAlphaComponent(0.18)
         let key = "\(document.editionID).\(document.book).\(document.chapter).\(document.contentRevision).\(preferences.appearancePreset ?? "legacy").\(preferences.typeface).\(preferences.sizeStep).\(view.traitCollection.preferredContentSizeCategory.rawValue).\(view.traitCollection.userInterfaceStyle.rawValue)"
-        if coordinator.renderKey != key {
-            coordinator.renderKey = key
+        let focusedKey = key + "|plan:" + (planFocusVerses.map { $0.sorted().map(String.init).joined(separator: ",") } ?? "none")
+        if coordinator.renderKey != focusedKey {
+            coordinator.renderKey = focusedKey
             let map = ChapterTextMap(document: document)
             coordinator.map = map; view.map = map
             let family = preferences.appearancePreset == nil ? preferences.typeface : appearance.readingFamily
@@ -87,6 +90,7 @@ struct ReaderTextSurface: UIViewRepresentable {
             }
             view.linkTextAttributes = [.foregroundColor:palette.accent]
             view.clearFocus()
+            if let planFocusVerses { PlanVerseFocus.apply(to: result, map: map, verses: planFocusVerses, ink: palette.ink) }
             view.attributedText = result
             coordinator.pendingVerse = targetVerse
         }
@@ -316,4 +320,16 @@ final class ContinuousReaderTextView: UITextView, UIGestureRecognizerDelegate {
 
 private extension UIViewController {
     var presentedViewControllerOrSelf: UIViewController { presentedViewController?.presentedViewControllerOrSelf ?? self }
+}
+
+/// Uses canonical verse ranges so labels, continuations and poetry retain their geometry.
+enum PlanVerseFocus {
+    static func apply(to text: NSMutableAttributedString, map: ChapterTextMap, verses: [Int], ink: UIColor) {
+        text.addAttribute(.foregroundColor, value: UIColor.systemGray.withAlphaComponent(0.30), range: NSRange(location: 0, length: text.length))
+        for verse in Set(verses) {
+            for range in map.focusRanges(for: verse) where NSMaxRange(range) <= text.length {
+                text.addAttribute(.foregroundColor, value: ink, range: range)
+            }
+        }
+    }
 }

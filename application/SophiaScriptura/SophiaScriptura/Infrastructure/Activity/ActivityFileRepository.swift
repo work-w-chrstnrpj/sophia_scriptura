@@ -73,6 +73,14 @@ actor ActivityFileRepository {
         return try JSONEncoder().encode(Envelope(payload: payload, checksum: digest(payload)))
     }
 
+    func inspectArchive(_ data: Data) throws -> ActivitySnapshot {
+        guard data.count <= 8 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
+        let envelope = try JSONDecoder().decode(Envelope.self, from: data)
+        guard envelope.schemaVersion == 1, envelope.checksum == digest(envelope.payload) else { throw CocoaError(.coderInvalidValue) }
+        var value = try JSONDecoder().decode(ActivitySnapshot.self, from: envelope.payload)
+        try validate(value); value.migrateBuiltInModes(); return value
+    }
+
     func restoreArchive(_ data: Data) throws -> ActivitySnapshot {
         guard data.count <= 8 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
         let envelope = try JSONDecoder().decode(Envelope.self, from: data)

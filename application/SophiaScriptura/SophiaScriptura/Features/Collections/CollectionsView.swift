@@ -27,6 +27,7 @@ struct CollectionsView: View {
     @State private var movingCollection: StudyCollection?
     @State private var deletingCollection: StudyCollection?
     @State private var showArchivedCollections = false
+    @State private var showArchivedPlans = false
 
     private var unfiled: StudyCollection? { store.collection(id: StudyCollection.unfiledID) }
 
@@ -133,7 +134,7 @@ struct CollectionsView: View {
             }
             .animation(.easeOut(duration: 0.18), value: deletingCollection != nil)
             .fullScreenCover(isPresented: Binding(
-                get: { reader != nil && notes.selectedNoteID != nil && notes.openingCollectionID != nil },
+                get: { !notes.planPresentationActive && reader != nil && notes.selectedNoteID != nil && notes.openingCollectionID != nil },
                 set: { if !$0 { notes.flushSurface?(); notes.selectedNoteID = nil } }
             )) {
                 if let reader {
@@ -162,18 +163,22 @@ struct CollectionsView: View {
                     createConversation: createConversation,
                                 exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
-                    books: reader?.books ?? []
+                    books: reader?.books ?? [], reader: reader
                 )
             }
             .onChange(of: store.sophyOpenCollectionID) { _, id in
                 guard let id, !store.sophyFolderIsProtected(id), let folder = store.collection(id: id), folder.isActiveInLibrary else { return }
                 sophyFolder = folder; store.sophyOpenCollectionID = nil
             }
+            .navigationDestination(isPresented: $showArchivedPlans) {
+                PlanLifecycleLibrary(store: store, notes: notes, archived: true)
+            }
             .navigationDestination(isPresented: $showArchivedCollections) {
                 StudyArchivedCollectionsView(store: store)
                     .toolbar(.visible, for: .navigationBar)
             }
         }
+        .disabled(store.studyMutationBlocked)
         .onChange(of: protection.unlocked) { _, _ in
             if let collection = editingCollection, store.isLocked(collection.id) { editingCollection = nil }
         }
@@ -194,7 +199,7 @@ struct CollectionsView: View {
                 createConversation: createConversation,
                                 exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
-                books: reader?.books ?? []
+                books: reader?.books ?? [], reader: reader
             )
             .toolbar(.visible, for: .navigationBar)
         } label: {
@@ -257,8 +262,10 @@ struct CollectionsView: View {
 
             Spacer(minLength: 12)
 
-            ProtectionControls(domains: [.collections], available: store.collections.contains { $0.protectionID != nil && !$0.isUnfiled }).labelStyle(.iconOnly)
+            ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
 
+            Button { showArchivedPlans = true } label: { Image(systemName: "list.bullet.rectangle") }
+                .accessibilityLabel("Archived Plans")
             Button { showArchivedCollections = true } label: {
                 LibraryHeaderIcon(systemImage: "archivebox")
             }

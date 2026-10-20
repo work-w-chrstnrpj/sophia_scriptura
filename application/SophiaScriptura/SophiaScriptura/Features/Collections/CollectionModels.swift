@@ -362,6 +362,7 @@ struct CollectionArtifact: Identifiable, Hashable {
     var modifiedAt: Date
     var passageText: String = ""
     var insight: String = ""
+    var isPlanComplete = false
 }
 
 struct StudyCollection: Codable, Identifiable, Hashable {

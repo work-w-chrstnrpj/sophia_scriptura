@@ -79,6 +79,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
         XCTAssertTrue(app.staticTexts["Genesis 1:1"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["3 of 3 completed"].exists)
+        XCTAssertFalse(app.images["plans.completedStamp"].exists, "The stamp belongs only on the outside Collection record")
         let noteRow = app.buttons.containing(.staticText, identifier: "Reading reflection").firstMatch
         XCTAssertTrue(noteRow.waitForExistence(timeout: 5)); noteRow.tap()
         XCTAssertTrue(body.waitForExistence(timeout: 10))
@@ -113,6 +114,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Reset progress"].waitForExistence(timeout: 5)); app.buttons["Reset progress"].tap()
         app.buttons["plans.save"].tap()
         XCTAssertTrue(app.staticTexts["0 of 3 completed"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.images["plans.completedStamp"].exists)
         let retainedNote = app.buttons.containing(.staticText, identifier: "Reading reflection").firstMatch
         retainedNote.tap()
         XCTAssertTrue(body.waitForExistence(timeout: 10))

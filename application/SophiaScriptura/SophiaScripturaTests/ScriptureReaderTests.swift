@@ -168,6 +168,42 @@ final class ScriptureReaderTests: XCTestCase {
         XCTAssertEqual(store.saves,saves)
     }
 
+    @MainActor func testSaveBeforeStartupPreservesLastBookAndChapter() async throws {
+        let store = MemoryReaderState()
+        store.snapshot.location = ReadingLocation(editionID: "web.engwebp", contentRevision: "old", verse: VerseID(book: "ROM", chapter: 8, verse: 28))
+        let session = ReaderSession(content: repository(), state: store)
+        session.save() // Shell/lifecycle callbacks can run before the reader task starts.
+        await session.start()
+        XCTAssertEqual(session.document?.book, "ROM")
+        XCTAssertEqual(session.document?.chapter, 8)
+        XCTAssertEqual(store.snapshot.location?.verse.book, "ROM")
+    }
+
+    @MainActor func testEarlyPreferenceChangeKeepsReadingLocationAndIsNotReloaded() async {
+        let store = MemoryReaderState()
+        store.snapshot.location = ReadingLocation(editionID: "web.engwebp", contentRevision: "old", verse: VerseID(book: "ROM", chapter: 8, verse: 28))
+        let session = ReaderSession(content: repository(), state: store)
+        var preferences = ReaderPreferences(); preferences.sizeStep = 1
+        session.updatePreferences(preferences)
+        await session.start()
+        XCTAssertEqual(session.document?.book, "ROM")
+        XCTAssertEqual(session.document?.chapter, 8)
+        XCTAssertEqual(session.preferences.sizeStep, 1)
+    }
+    @MainActor func testPersistentReaderStoreReopensLastChapterAfterEarlySave() async throws {
+        let name = "Reader-position-regression-" + UUID().uuidString
+        let store = try ReaderStateStore(storageName: name)
+        let session = ReaderSession(content: repository(), state: store)
+        await session.start()
+        await session.navigate(book: "ROM", chapter: 8, verse: 28)
+        let reopened = ReaderSession(content: repository(), state: try ReaderStateStore(storageName: name))
+        reopened.save()
+        await reopened.start()
+        XCTAssertEqual(reopened.document?.book, "ROM")
+        XCTAssertEqual(reopened.document?.chapter, 8)
+        XCTAssertEqual(reopened.targetVerse, 28)
+    }
+
     @MainActor func testSwiftDataRoundTripAndPreferenceFallback() throws {
         let store = try ReaderStateStore(inMemory:true)
         var snapshot = ReaderSnapshot()

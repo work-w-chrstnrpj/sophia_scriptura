@@ -9,6 +9,7 @@ struct CollectionArtifactRow: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.noteCardsActive) private var noteCardsActive
+    @State private var visible = false
     let artifact: CollectionArtifact
     let accent: CollectionAccent
     let placement: Placement
@@ -155,6 +156,14 @@ struct CollectionArtifactRow: View {
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
+        .overlay {
+            if artifact.kind == .plan, artifact.isPlanComplete {
+                PlanCompletedStamp(planID: artifact.id, isActive: noteCardsActive && visible)
+                    .scaleEffect(cards ? 1 : 0.65)
+            }
+        }
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 
     @ViewBuilder

@@ -395,3 +395,12 @@ private struct PlanControlStyle: ButtonStyle {
             .opacity(enabled ? (configuration.isPressed ? 0.65 : 1) : 0.3)
     }
 }
+
+/// A presentation-only mark derived from checked assignments, never a separate saved status.
+struct PlanCompletedStamp: View {
+    let planID: UUID
+    var isActive = true
+    var body: some View {
+        NoteCardStatusStamp(mark: .completed, noteID: planID, isActive: isActive)
+    }
+}

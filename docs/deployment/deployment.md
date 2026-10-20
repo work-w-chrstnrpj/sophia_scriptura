@@ -668,3 +668,12 @@ unlocked it, normal launch succeeded; evidence: `build/sp-049/plan-fullscreen-la
 Installation and launch are complete; physical feature/design acceptance remains separate. This build
 contains fullscreen themed Plans, actual Notes previews, full book labels, dimmed
 unassigned verses, the five requested reading controls and three assignment tabs.
+
+### v1.4.0 / build 28 — 2026-10-20
+
+Owner requested commit/push/merge/release and remote branch cleanup except development
+and main. Versioned signed build, signature/identity checks and in-place installation
+passed (`build/v140-release/ipad-install.log`). Device app query confirms 1.4.0/build 28
+(`installed-apps.json`). Initial launch was blocked by iPadOS Locked; unlock requested.
+No uninstall/reset or user-data cleanup was performed. Feature acceptance remains open
+where tracked in SP-050–052. Bravado files remain excluded from this release.

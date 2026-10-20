@@ -405,3 +405,69 @@ hit a connection error, then in-place install using paired UDID succeeded
 (`plan-action-icons-launch.log`). Version remains 1.3.2/build 27, data preserved.
 `git diff --check` passed. Status: implemented, native UI/visual verified, installed
 and launched; owner physical appearance acceptance remains separate.
+
+Owner wording follow-up (2026-10-20): Collections now uses “Items” for its section
+heading and “Add Items” for actions/picker title. Accessibility and search labels use
+the same terminology; existing identifiers and behavior remain unchanged.
+Verification for wording: Debug simulator build passed
+(`build/sp-049/items-labels-build.log`); `git diff --check` passed and source search
+found no remaining Study Material labels in Collections. No behavior tests were
+added/rerun for this copy-only update. Not committed or installed in this follow-up.
+
+### Completed Plan stamp — 2026-10-20
+
+Owner selected a COMPLETED stamp for finished Plans. A shared passive green outlined
+stamp appears in Collection list/card records and the Plan contents page. It follows
+StudyPlan.isComplete (nonempty/all checked), including reset and new unfinished items;
+there is no separate persisted status or schema change. CollectionArtifact carries
+only a derived display flag. Existing Items wording changes remain in this worktree.
+Verification: `build/sp-049/plan-completed-stamp.xcresult` passed 19 Plan unit tests and
+the expanded native UI journey (20 tests, zero failures). The UI asserts the stamp
+exists after completed Plan relaunch and is absent after reset; deletion and retained
+note checks also pass. `git diff --check` passed. List/card placement is source-verified;
+physical appearance and accessibility acceptance remain open. No commit or device
+installation was performed for this follow-up.
+
+Owner-requested deployment of Items wording and completed stamp: signed build,
+strict signature/identity checks, in-place install and normal launch succeeded on
+iPad ni Paj (`build/sp-049/plan-completed-stamp-install.log`). Version remains
+1.3.2/build 27; existing data preserved. Physical feature acceptance remains separate.
+
+### Owner stamp consistency correction — 2026-10-20
+
+The first COMPLETED badge did not match Notes' lettering, scale or treatment. It is
+replaced with a COMPLETED vector wordmark generated from the same locally licensed
+Rubber Stamp font and exact existing glyph generator. PlanCompletedStamp delegates
+to NoteCardStatusStamp's new completed mark: same 210×55 face, 12-point padding,
+3-point outline, green tint, stable identity tilt, impression animation and Reduce
+Motion behavior. Collection cards use Notes' centered overlay placement; compact
+80-point list rows scale the same component to 65% to fit. The contents page uses
+full size. Visibility activation follows the existing note-card environment.
+No new completion state or schema changes. Font provenance/generator now include
+COMPLETED; original Notes assets are preserved.
+
+Verification: final `build/sp-049/plan-notes-stamp-final.xcresult` passed the expanded
+native Plan journey (completion after relaunch, reset removes image, deletion and
+retained note content). The first run retained the previous StaticText selector and
+failed there; the final test correctly queries the shared image stamp. Screenshot
+`plan-notes-stamp-final-review/4A76D140-15DA-4900-850E-481FCAFEA616.png` was visually
+reviewed: matching distressed lettering, full-size frame, tilt and green Notes treatment.
+No app runtime edits followed the installed build. The installer initially rejected
+an incrementally generated Assets.car signature mismatch and installed nothing;
+cleaning only generated device build products resolved it. Fresh signed build,
+strict signature checks, in-place install and normal launch all passed
+(`build/sp-049/plan-notes-stamp-install-retry.log`). Owner data preserved; version
+1.3.2/build 27. `git diff --check` passed. Not committed; physical owner review remains open.
+
+Owner placement correction: COMPLETED appears only on the outside Collection
+list/card record. The Plan contents page does not display a stamp.
+
+Placement follow-up verification is being run with the reader relaunch regression;
+Plan UI now requires no stamp inside the contents page. Outside card/list rendering
+continues using the shared Notes component without completion-state changes.
+
+Outside-only verification: `build/sp-049/reader-restore-and-stamp.xcresult` passed both
+the Plan contents/no-stamp journey and ordinary Scripture navigation/relaunch journey.
+Signed build, signature/identity, in-place install and launch succeeded
+(`build/sp-049/reader-position-outside-stamp-install.log`); this build also contains
+the SP-009 startup hydration guard. Existing owner data preserved, version 1.3.2/build 27.

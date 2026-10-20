@@ -911,7 +911,7 @@ final class CollectionsStore: ObservableObject {
             return AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
         }
         let planItems = plans.filter { $0.isActive && planAccessAllowed($0) }.map {
-            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedCount)/\($0.items.count) complete", kind: .plan, modifiedAt: $0.modifiedAt)
+            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedCount)/\($0.items.count) complete", kind: .plan, modifiedAt: $0.modifiedAt, isPlanComplete: $0.isComplete)
         }
         let covered = Set(noteItems.map(\.id))
             .union(pointsToPonder.map(\.id))

@@ -248,3 +248,12 @@ identifier and applies its paired fonts. Unknown identifiers display OldPaper wi
 invalidating or overwriting the rest of the saved state. No content-store migration is
 required. Typography reflow uses the last observed verse/block offset; later annotated
 layout changes remain subject to the M3 geometry-preservation contract.
+
+### Reading position startup ordering — owner correction, 2026-10-20
+
+ReaderSession hydrates its existing ReaderSnapshot once before any save, navigation
+or preference update. Shell and lifecycle callbacks may save before the asynchronous
+reader startup; those saves must preserve the saved book/chapter rather than publish
+an initial empty snapshot. Successful navigation still commits immediately, and viewport
+updates retain the existing debounce. Failed state decoding remains session-only and
+does not overwrite the original store. The persisted format is unchanged.

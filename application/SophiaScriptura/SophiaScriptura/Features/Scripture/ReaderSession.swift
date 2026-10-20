@@ -12,6 +12,7 @@ import Observation
     private var saveTask: Task<Void, Never>?
     private var requestID = UUID()
     private var stateWritable = true
+    private var stateLoaded = false
     private(set) var books: [ScriptureBook] = []
     private(set) var edition: ScriptureEdition?
     private(set) var document: ChapterDocument?
@@ -77,10 +78,11 @@ import Observation
         }
     }
 
-    func start() async {
-        guard (document == nil || error != nil), !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
+    /// Shell/lifecycle saves can precede the reader's asynchronous startup task.
+    /// Hydrate once before any write so a fresh session cannot erase its saved location.
+    private func loadStateIfNeeded() {
+        guard !stateLoaded else { return }
+        stateLoaded = true
         do {
             if let saved = try state?.load() { snapshot = saved }
             preferences = snapshot.preferences.validated
@@ -88,6 +90,13 @@ import Observation
             stateWritable = false
             notice = "Saved reader data could not be opened. Reading is session-only; the original store is untouched."
         }
+    }
+
+    func start() async {
+        guard (document == nil || error != nil), !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        loadStateIfNeeded()
         do {
             let desired = snapshot.location?.editionID ?? preferences.preferredEdition
             content = try await contentRepository(forEditionID: desired)
@@ -104,6 +113,7 @@ import Observation
     }
 
     func navigate(book: String, chapter: Int, verse: Int = 1, restoring: ReadingLocation? = nil, emphasis: [Int] = [], spans: [PassageSpan] = []) async {
+        loadStateIfNeeded()
         if let beforeNavigation, !(await beforeNavigation()) { return }
         let request = UUID(); requestID = request
         let repository = content
@@ -278,6 +288,7 @@ import Observation
         catch { syncMessage = error.localizedDescription }
     }
     func selectEdition(_ id: String) async {
+        loadStateIfNeeded()
         if let beforeNavigation, !(await beforeNavigation()) { return }
         let token = UUID(); requestID = token
         do {
@@ -353,6 +364,7 @@ import Observation
     }
 
     func updatePreferences(_ value: ReaderPreferences) {
+        loadStateIfNeeded()
         // Reflow from the last observed source anchor, never the chapter's initial jump.
         if let location = snapshot.location {
             targetVerse = location.verse.verse
@@ -382,6 +394,7 @@ import Observation
     }
 
     func save() {
+        loadStateIfNeeded()
         guard stateWritable else { return }
         snapshot.updatedAt = Date()
         do { try state?.save(snapshot) }

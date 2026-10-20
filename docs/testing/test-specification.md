@@ -1034,3 +1034,14 @@ and 105 chapter-bound combinations. `PlanUITests` adds only-section deletion wit
 save/relaunch and extends the populated reading/Notes journey through duplicate,
 assignment deletion, section deletion and reset while retaining note content.
 Final result paths and device verification are maintained in SP-049.
+
+Reader startup follow-up (2026-10-20): ScriptureReaderTests covers a shell save before
+startup, preference update before startup, and a persistent SwiftData store reopened
+at Romans 8:28 despite an early save. Existing corrupt-store/save-failure tests remain
+required. The native reader journey verifies book/chapter restoration across relaunch.
+Plan UI now asserts no completed stamp inside the contents page; outside records retain it.
+
+v1.4.0/build 28 final candidate: `build/v140-release/verification.xcresult` passed
+456 unit tests and three native UI journeys (459 total), zero failures/skips. Focused
+UI selection is PlanUITests plus ScriptureReaderUITests/testNavigateRelaunchSettingsAndBottomTabs.
+Hosted release checks remain a separate publication gate.

@@ -1,11 +1,11 @@
-# Notes card stamp lettering
+# Notes and Plan stamp lettering
 
-ANSWERED, REDIRECTED and PUBLISHED use vector outlines from Rubber Stamp by Billy Argel.
+ANSWERED, REDIRECTED, PUBLISHED and COMPLETED use vector outlines from Rubber Stamp by Billy Argel.
 Source: https://www.dafont.com/rubber-stamp.font (downloaded 2026-10-13).
 Author: https://billyargel.com/product/rubber-stamp/.
 The downloaded READ ME states FREE FOR PERSONAL USE. Sophia is a personal sideload app.
 The font file is retained only locally under ignored build/sp040/rubber-stamp-source/;
-it is not redistributed in this repository or bundled in the app. Only the three
+it is not redistributed in this repository or bundled in the app. Only the four
 rendered wordmarks are included. Reassess licensing before non-personal distribution.
 
 Regenerate with scripts/generate-prayer-stamps.swift and the locally licensed

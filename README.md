@@ -138,7 +138,7 @@ manual arrangement, drag/reparent and a full-tree move chooser.
 - Duplicate a folder tree with its memberships. Folder copies reuse the existing study
   items; standalone note duplication creates an independent note.
 
-Local SP-049 work adds **Plans** under Add Study Material: named Day/Section groups of
+Local SP-049 work adds **Plans** under Add Items: named Day/Section groups of
 Scripture assignments, notes and links, with checkboxes, editing, reset, duplication and
 archive/Trash. Assignment entry has separate Scripture, Notes and Links tabs. Opening a Plan shows its contents, with an explicit Edit action. Start/Resume reads
 assignments in the existing Scripture reader and Next saves progress, pausing at section
@@ -291,17 +291,13 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-Unreleased SP-049 changes (2026-10-20): Plan foundations, authoring and basic reading
-passed 453 unit tests and two native Plan UI journeys (455 total). The later action-icon
-update passed the expanded Plan journey and visual review. The signed build was installed
-in place and launched on the owner's iPad. Complete reader lifecycle, Plan Pencil layers
-and embedded Companion integration remain SP-050/051 acceptance scope; no release was published.
-
-
-The current release is **[v1.3.2](docs/releases/v1.3.2.md), build 27**, dated
-**2026-10-18**. It includes SP-048 Quiz Me reliability: ready-bank starts,
-reservation-triggered replacement, durable batched refill, foreground reconciliation
-and matching summary actions, alongside the expanded app documentation.
+The current release candidate is **[v1.4.0](docs/releases/v1.4.0.md), build 28**, dated
+**2026-10-20**. It adds Collection Plans with durable reading progress, checked note/link
+reflections, stable authoring and Notes-style completion stamps on Collection records.
+Collections uses Items/Add Items; reader startup protects the last saved book/chapter.
+It retains SP-048 Quiz Me reliability and the earlier connected study workflows.
+Complete reader lifecycle, Plan Pencil layers and embedded Companion integration remain
+SP-050/051 acceptance scope. See the release notes and tickets for verification limits.
 
 The project has executable unit/integration and UI tests, signed iPad installation evidence
 and owner-device walkthroughs. Passing simulator tests or installation does not close all

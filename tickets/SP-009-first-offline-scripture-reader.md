@@ -231,3 +231,24 @@ cached-access recovery; the standard Release/Archive lease remains unchanged. Vo
 is explicitly waived for this closure, not passed. Earlier unrun cases remain historical
 verification gaps; this closure does not claim a new physical expiry or accessibility
 test. M2 is closed and SP-008 is selected as the first M3 validation ticket.
+
+## Owner reading-position follow-up — 2026-10-20
+
+Selected: remember last book/chapter after opening the app. Existing ReaderSnapshot
+already stores location, but ReaderSession.save can run before start loads it, writing
+its initial empty snapshot through shell/lifecycle callbacks. Scope: load-before-write
+startup ordering in ReaderSession, native regression coverage and relaunch verification.
+No schema migration, new reader preference or unrelated reader feature is selected.
+
+Implemented loadStateIfNeeded before startup/writes/navigation/edition/preferences.
+It hydrates once, preserving corrupt-store fail-closed behavior and the existing
+schema. Added three regressions: save-before-start, preferences-before-start and
+real SwiftData store reopening at Romans 8:28 after an early save. All passed with
+456 unit tests and the native reader navigation/relaunch journey (457 total) in
+`build/sp-049/reader-startup-final.xcresult`, zero failures. The ordinary relaunch
+baseline also passed before the guard, so exact equivalence with the owner's physical
+startup sequence is not claimed; the early-write vulnerability is corrected and covered.
+Signed build, strict signature/identity checks, in-place iPad install and launch passed
+(`build/sp-049/reader-position-outside-stamp-install.log`), preserving data at version
+1.3.2/build 27. No migration, commit or release. `git diff --check` passed. Owner's
+physical reopen confirmation remains separate from automated evidence.

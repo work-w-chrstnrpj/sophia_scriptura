@@ -1,7 +1,7 @@
 # Sophia documentation
 
-Source reconciliation: **2026-10-18**. Current source is v1.3.2/build 27 including
-SP-048 Quiz Me changes; later feature acceptance remains ticket-specific.
+Source reconciliation: **2026-10-20**. Current source targets v1.4.0/build 28, including
+Collection Plans and reader position protection; feature acceptance remains ticket-specific.
 
 Start with the [development plan](development-plan/development-plan.md) and
 [owner-driven AI workflow](guidelines/ai-structure-guidelines.md).

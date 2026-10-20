@@ -317,7 +317,7 @@ preserved; destination ancestry determines inherited protection after moving.
 
 ## Owner folder material layouts — 2026-10-13
 
-Each folder’s Study Material View menu offers List View and Card View, including
+Each folder’s Items View menu offers List View and Card View, including
 No Folder and nested folders. The choice is remembered per folder in local UI
 preferences. List records are uniformly 80pt high; card records uniformly 176pt
 high in a shared adaptive 220–320pt grid. All artifact types use the same geometry
@@ -371,7 +371,7 @@ cleanup removes only references/memberships, never underlying ink.
 
 ## v1.3.0 — Points to Ponder and conversions
 
-Add Study Material includes New Point to Ponder in folders and No Folder. The question
+Add Items includes New Point to Ponder in folders and No Folder. The question
 card shows Close, Delete and Explore. Explore opens a separate choice modal for Send
 Question to Companion or Turn into a Note. New note opens with the editable question
 title. Bookmark cards offer Turn into a Gleaning; gleanings offer Turn into a Note,
@@ -420,3 +420,17 @@ workspace and per-item progress. Owner-confirmed reflections, section pauses and
 Pencil layers are recorded separately from recommended defaults. Existing Collections
 membership ownership remains; no Plan UI or storage is implemented by this documentation.
 See SP-049–052 in the [ticket index](../../tickets/README.md).
+
+Completed Plans show a green outlined “COMPLETED” stamp in Items list/card views and
+the Plan contents page. Completion is derived from all assignments being checked;
+empty Plans are not completed. Resetting or adding an unfinished assignment removes
+the stamp automatically. The mark is passive and exposes “Plan completed” to accessibility.
+
+Stamp consistency correction: COMPLETED uses the same distressed vector lettering,
+size, border, stable tilt and impression animation as Notes' status stamps. Full-size
+marks overlay Collection cards centrally; compact list rows scale that same component
+to fit. Plan contents uses the full-size shared mark. This supersedes the initial
+small inline outlined badge.
+
+Owner placement correction: COMPLETED appears only on the outside Collection
+list/card record. The Plan contents page does not display a stamp.

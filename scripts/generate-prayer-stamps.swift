@@ -11,7 +11,7 @@ let provider = CGDataProvider(url: url as CFURL)!
 let graphicsFont = CGFont(provider)!
 let font = CTFontCreateWithGraphicsFont(graphicsFont, 64, nil, nil)
 print("Rendering", CTFontCopyPostScriptName(font))
-for (text, asset) in [("ANSWERED", "PrayerAnsweredStamp"), ("REDIRECTED", "PrayerRedirectedStamp"), ("PUBLISHED", "PagePublishedStamp")] {
+for (text, asset) in [("ANSWERED", "PrayerAnsweredStamp"), ("REDIRECTED", "PrayerRedirectedStamp"), ("PUBLISHED", "PagePublishedStamp"), ("COMPLETED", "PlanCompletedStamp")] {
     let attributed = NSAttributedString(string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
     let line = CTLineCreateWithAttributedString(attributed)
     let combined = CGMutablePath()

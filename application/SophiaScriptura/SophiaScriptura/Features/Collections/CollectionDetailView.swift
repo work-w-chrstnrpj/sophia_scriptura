@@ -240,7 +240,7 @@ struct CollectionDetailView: View {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
                 if !collection.isUnfiled {
-                    Button("Add Study Material", systemImage: "plus") { showingPicker = true }
+                    Button("Add Items", systemImage: "plus") { showingPicker = true }
                     Button("New Subfolder", systemImage: "folder.badge.plus") { showingSubfolderEditor = true }
                     Button("Duplicate Collection", systemImage: "doc.on.doc") { duplicatingCollection = collection }
                         .accessibilityIdentifier("collections.duplicate")
@@ -438,7 +438,7 @@ struct CollectionDetailView: View {
     private func studyMaterial(_ collection: StudyCollection) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
-                sectionTitle("Study Material")
+                sectionTitle("Items")
                 Spacer()
                 Menu {
                     Picker("Layout", selection: Binding(get: { cards }, set: setCards)) {
@@ -465,7 +465,7 @@ struct CollectionDetailView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(Color(theme.palette.secondary))
                 }
-                .accessibilityLabel("Study material view options")
+                .accessibilityLabel("Items view options")
                 .accessibilityIdentifier("collections.filter")
                 Button {
                     showingPicker = true
@@ -475,7 +475,7 @@ struct CollectionDetailView: View {
                         .frame(width: 16, height: 44)
                 }
                 .buttonStyle(CollectionSecondaryButtonStyle())
-                .accessibilityLabel("Add Study Material")
+                .accessibilityLabel("Add Items")
                 .accessibilityIdentifier("collections.addMaterial")
             }
 
@@ -550,7 +550,7 @@ struct CollectionDetailView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
             if !collection.isUnfiled {
-                Button("Add Study Material") { showingPicker = true }
+                Button("Add Items") { showingPicker = true }
                     .buttonStyle(CollectionProminentButtonStyle())
                     .padding(.top, 4)
                     .accessibilityIdentifier("collections.addMaterialEmpty")

@@ -711,3 +711,32 @@ SP-049 action presentation follow-up: assignment removal is available in the ite
 ellipsis menu with a trash icon. Plan reset/duplicate/archive/trash rows have icons;
 Move Plan to Trash explicitly uses red. Command ownership and schemas are unchanged.
 Verification evidence is recorded in SP-049.
+
+Owner wording follow-up (2026-10-20): Collections now uses “Items” for its section
+heading and “Add Items” for actions/picker title. Accessibility and search labels use
+the same terminology; existing identifiers and behavior remain unchanged.
+
+SP-049 completion presentation follow-up: completed Plans show a passive COMPLETED
+stamp on Collection list/cards and their contents page, derived from checked nonempty
+assignments. Reset removes it; no new persistence format. Evidence is recorded in SP-049.
+
+SP-049 owner stamp correction: replace the initial badge with the actual Notes stamp
+renderer and matching Rubber Stamp vector wordmark; center over Collection cards,
+with compact list scaling and full-size Plan contents presentation. See ticket evidence.
+
+Owner placement correction: COMPLETED appears only on the outside Collection
+list/card record. The Plan contents page does not display a stamp.
+
+SP-009 owner reading-position correction: hydrate ReaderSnapshot once before writes,
+including early lifecycle/shell saves, so the last book/chapter survives startup.
+Existing persistence format and corrupt-store protection remain unchanged. Native
+ordering/store-reopen tests and physical install evidence are tracked in SP-009.
+
+### Owner-authorized v1.4.0 / build 28 delivery — 2026-10-20
+
+Includes SP-049 authoring/basic reading, structural stability corrections, Items labels,
+Notes-style outside-only Plan completion stamps and SP-009 startup position protection.
+Full Plan reader lease, Plan Pencil and embedded Companion scope remain unselected/open.
+The final candidate passed 456 unit tests; focused UI/release evidence is recorded in
+[release notes](../releases/v1.4.0.md). Signed in-place iPad install/version query passed;
+launch initially blocked by device lock. Remote cleanup preserves development and main.

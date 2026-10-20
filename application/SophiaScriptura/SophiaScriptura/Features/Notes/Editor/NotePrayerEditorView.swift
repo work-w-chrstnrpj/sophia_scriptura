@@ -469,7 +469,7 @@ private struct PrayerUpdateRow: View {
 
 /// Presentation-only card mark; never part of note text or ink.
 struct NoteCardStatusStamp: View {
-    enum Mark { case answered, redirected, published }
+    enum Mark { case answered, redirected, published, completed }
     let mark: Mark
     let noteID: UUID
     var isActive = true
@@ -487,6 +487,7 @@ struct NoteCardStatusStamp: View {
         case .answered: "PrayerAnsweredStamp"
         case .redirected: "PrayerRedirectedStamp"
         case .published: "PagePublishedStamp"
+        case .completed: "PlanCompletedStamp"
         }
     }
     private var tint: Color { mark == .redirected ? .yellow : .green }
@@ -506,8 +507,8 @@ struct NoteCardStatusStamp: View {
             .scaleEffect(impression == 0 ? 1.12 : (impression == 1 ? 1.04 : 1))
             .rotationEffect(.degrees(tilt))
             .allowsHitTesting(false)
-            .accessibilityLabel(mark == .published ? "Page published" : (mark == .answered ? "Prayer answered" : "Prayer redirected"))
-            .accessibilityIdentifier(mark == .published ? "notes.page.stamp" : "notes.prayer.stamp")
+            .accessibilityLabel(mark == .completed ? "Plan completed" : mark == .published ? "Page published" : (mark == .answered ? "Prayer answered" : "Prayer redirected"))
+            .accessibilityIdentifier(mark == .completed ? "plans.completedStamp" : mark == .published ? "notes.page.stamp" : "notes.prayer.stamp")
             .task(id: isActive) {
                 guard isActive else { impression = 0; return }
                 guard !reduceMotion else { impression = 2; return }

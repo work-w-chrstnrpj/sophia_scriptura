@@ -141,9 +141,9 @@ struct CollectionArtifactPicker: View {
                 }
             }
             .appSurface()
-            .navigationTitle("Add Study Material")
+            .navigationTitle("Add Items")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, prompt: "Search saved material")
+            .searchable(text: $searchText, prompt: "Search saved items")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

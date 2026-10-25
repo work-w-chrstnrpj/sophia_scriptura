@@ -121,8 +121,8 @@ struct CollectionsView: View {
             .overlay {
                 if let collection = deletingCollection {
                     StudyCenteredConfirmationOverlay(
-                        title: "Delete \(collection.name)?",
-                        message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                        title: store.planFolderDeleteTitle(collection.id),
+                        message: store.planFolderDeleteMessage(collection.id),
                         confirmLabel: "Delete Collection",
                         onConfirm: {
                             store.deleteCollection(id: collection.id)

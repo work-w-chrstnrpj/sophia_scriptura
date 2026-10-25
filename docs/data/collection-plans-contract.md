@@ -17,8 +17,8 @@ Notes 1–4, annotations 1, full backup 1). New data never masquerades as an old
 
 | Payload | New write version | Read versions | Activation and retention |
 | --- | --- | --- | --- |
-| CollectionsSnapshot | 4 | 1–4 | First Plan, Plan operation or retained Plan access record; sticky thereafter |
-| Collections Pointer / Envelope | 2 / 2 for activated store | 1–2 / 1–2 | Both current/previous point to v4 payloads; old readers stop on unsupported |
+| CollectionsSnapshot | 5 | 1–5 | Strict Plan ownership / grouped Trash; sticky after activation (legacy Plan format was v4) |
+| Collections Pointer / Envelope | 2 / 2 for activated store | 1–2 / 1–2 | Both current/previous point to version-gated Plan payloads; old readers stop on unsupported |
 | NotesSnapshot | 5 | 1–5 | First Plan-derived note/access requirement; sticky thereafter |
 | Notes Pointer / Envelope (including Notes-only archive envelope) | 2 / 2 for activated store | 1–2 / 1–2 | Prevent old fallback from stripping new Collections-domain requirements |
 | AnnotationSnapshot / Archive / Pointer | 2 / 2 / 2 | 1–2 each | First Plan-owned layer/operation/access requirement; sticky thereafter |
@@ -41,8 +41,8 @@ Existing Collections fields remain. Add these required top-level fields:
 
 | Record | Fields and meaning |
 | --- | --- |
-| StudyPlan | `id`, `revision`, `title`, `detail`, `sectionPrefix`, `preferredEditionID`, `referenceSystemID`, `sections`, `cursor?`, `access`, `createdAt`, `modifiedAt`, `archivedAt?`, `trashedAt?` |
-| PlanSection | `id`, `title?`, `items`; ordinal is derived from array position |
+| StudyPlan | `id`, `revision`, `materialsFolderID?`, `folderOwnershipConfirmed?`, `title`, `detail`, `sectionPrefix`, `preferredEditionID`, `referenceSystemID`, `sections`, `cursor?`, `access`, `createdAt`, `modifiedAt`, `archivedAt?`, `trashedAt?` |
+| PlanSection | `id`, `materialsFolderID?`, `title?`, `items`; ordinal is derived from array position |
 | PlanItem | `id`, `payload`, `completedAt?`, `origin` (`assignment` or `reflection`), `createdAt`, `operationID?` |
 | PlanItemPayload | `kind`: `scripture`, `note` or `link`; scripture has `referenceSystemID`, `book`, `chapter`, `selection`; note/link has `targetID` |
 | Scripture selection | Tagged `wholeChapter`, or `verseRange` with inclusive `startVerse`/`endVerse`; multi-chapter input is split before commit |
@@ -510,3 +510,102 @@ an assignment keeps the original Note/Link. Canceling replacement clears that ro
 A multi-chapter replacement keeps the first assignment identity, clears its completion,
 and inserts all additional chapter assignments in order. None of these corrections
 changes persisted schemas. See the [investigation](../testing/sp049-plan-stability-investigation.md).
+
+## SP-053 additive editing and optional material filing
+
+`StudyPlan.materialsFolderID: UUID?` defaults to nil when absent. Collections v4,
+pointer and backup versions remain unchanged. Copies clear the ID. Ordinary saves
+preserve nil; choosing existing assignments or Scripture does not require a folder.
+PlanEditorView owns optional existing/new/none choices inside Edit through
+PlanLinkedFolderPicker. The content view does not display this configuration.
+
+`createPlanMaterialsFolder` creates/links a folder atomically with a receipt and a Plan
+revision update. Automatic calls reuse an existing link; explicit Create and link can
+replace it with a newly named folder. `filePlanMaterial` checks target/folder access and
+acknowledges note filing after the Notes repository save. Both PlanAssignmentPicker and
+PlanReflectionDraft ensure a folder only when creating a new note/link. New links commit
+the target and membership together. A new automatic folder uses the Plan title and source
+collection as parent (nil for virtual No Folder). Existing folder metadata is untouched.
+
+Plan saves add shared memberships for linked materials and reference-only Scripture
+projections. No body is copied. Unlinking clears only the pointer, keeping folders,
+materials and memberships; inherited access restrictions are not relaxed. New material
+after unlink creates a new folder instead of rediscovering an old one by name. Moves
+preserve the UUID link. The previous SP-053 binary's always-create behavior is superseded;
+reinstalling that older binary would not honor an intentionally empty link on save.
+
+PlanEditorDraft owns debounced immutable snapshots and drains edits made during writes.
+CollectionsStore checks expected revisions and returns receipts. Editor creation callbacks
+adopt the checked folder revision before adding the assignment. In-flight folder choices
+remain in the next snapshot instead of being replaced by an older write completion.
+Failed or invalid saves retain the draft with visible feedback.
+
+SP-053 inline editing: PlanDetailView owns a transient PlanEditorDraft while rendering
+the shared PlanEditorView inline. Done and Exit await persist; failure retains edits.
+The existing debounce, revisions, receipts, folder behavior and file schemas are unchanged.
+
+### Day/Section hierarchy — SP-053 follow-up
+
+`PlanSection.materialsFolderID: UUID?` decodes nil for previous stores; Collections
+v4 and backup versions stay unchanged. The sole writer creates managed children below
+the linked root, reusing committed section IDs and folder IDs when still under that
+root. New Plan/section copies clear these IDs. Names follow section custom title or
+prefix/ordinal. The root holds the same Plan record; section folders hold shared target
+IDs or reference-only Scripture PlanItem IDs. No duplicate Plan or study bodies.
+
+On save/ensure, known current assignment edges previously flat at the root are moved
+to section folders, preserving unrelated items and other folders. Section moves remove
+the prior managed edge only when that target remains assigned elsewhere. Removed
+assignments/sections keep prior contents; unlink/relink keeps old trees and inherited
+access. Moved-away child folders are retained and a fresh child is created under the
+current root. `filePlanMaterial` includes sectionID; note/link creation uses its child's
+checked destination, before attachment. Folder mappings and revision changes commit
+together. Access preflight validates every affected active folder/ancestor before publish.
+
+Old binaries can decode the optional field but cannot preserve this organization on
+subsequent editing. No reset/migration command or content deletion is required.
+
+## Strict ownership and grouped Trash — superseding SP-053 optional-link rules
+
+Collections v5 adds required `planLifecycleActivated: Bool` and
+`planTreeTrash: [PlanTreeTrash]`. Activation is sticky through save/restore; v1–4 decode
+with no bundles. Repositories and full-backup inspection support v5; envelope/pointer
+v2 remain, with fallback payloads promoted and the original pre-lifecycle envelope
+retained. Older binaries reject v5 rather than stripping deletion records.
+
+New Plan saves create a dedicated root. Existing root identity becomes immutable; nil
+and replacement saves reject. Older records are adopted on save/accessible startup,
+with missing/shared roots replaced by dedicated roots. Section organization is retained.
+The folder reference is read-only in Edit; root metadata/location remain Collection
+properties. Main progress uses completedSectionCount; nonempty/all-checked means complete.
+
+`setPlanTreeTrashed` computes the owned subtree, including nested Plan roots. Both
+Plan/folder routes use it after confirmation. Shared edges/references outside this group
+(including archived/trashed folders and Plans) preserve their target records. Exclusive
+links, passages, saved annotation references, conversations and points move to a typed
+bundle; note IDs go to Notes-owned Trash. Source scripture and annotation ink stay with
+their owning features. The bundle retains IDs, original Collections records, timestamp
+and a pending Notes action. Collections commits before Notes mutation; a pending phase
+is visible/retriable and reconciles on launch/foreground. A failed first commit never
+changes Notes. Idempotent Notes trash/restore preserves newer independent Trash choices.
+Companion-owned conversations use the same durable completion boundary when present.
+
+Restore either group side restores retained folders/parents, Plans and exclusive records;
+shared records are not overwritten. Permanent purge/expiry removes the Collections group
+and retains copied access requirements; Notes uses its independent 30-day retention.
+Backup/export and restore check archived link access as well as active material.
+
+A per-Plan optional `folderOwnershipConfirmed` marker distinguishes untouched legacy
+records during a multi-Plan upgrade. The writer sets it after adopting a root; subsequent
+root replacements/clears reject. This avoids global activation skipping another legacy
+Plan that still needs a valid folder. It is reset when duplicating a Plan.
+
+### Scripture assignment edit command — SP-053
+
+PlanScriptureEditTarget resolves an accessible active Plan/section/Scripture item by
+stable ID. PlanCommandService.replaceScripture checks its expected revision, target
+kind, reference system and capacity, then uses the existing savePlan transaction and
+passage validator. First replacement keeps item ID; extra chapters get their own IDs.
+Changed completion clears, unchanged selection and unrelated completion remain. Section
+folder projections derive updated references from the committed Plan. Errors keep the
+editor open; no additional persistence format is introduced.

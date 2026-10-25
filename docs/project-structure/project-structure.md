@@ -356,3 +356,42 @@ SP-049 stability correction: `Features/Plans/PlanEditorDraft.swift` owns stable-
 draft mutations, safe title bindings and stale-callback guards. PlanEditorView renders
 value snapshots; PlanAssignmentPicker clamps dependent chapter bounds before book changes.
 No persistence schema changes are involved.
+
+## SP-053 editing refinement — 2026-10-25
+
+PlanEditorDraft owns snapshot autosave and stable-ID reorder callbacks; CollectionsStore
+owns atomic linked-folder updates and Scripture-reference material projections.
+PlanDetailView exposes Linked Folder without constraining its position in Collections.
+Collection/link/gleaning editors and Notes metadata/object/Prayer-update editors feed
+their existing store/session writers. Core/Plans/StudyPlan.swift adds optional
+materialsFolderID; no new runtime store, target or backend is introduced.
+
+SP-053 folder creation/filing: PlanCommandService builds ensure-folder commands;
+CollectionsStore remains the only writer for atomic folder creation and checked
+material filing. Both editor assignments and reading reflections use it. The previous
+optional-folder picker was removed by the strict lifecycle update below.
+
+SP-053 inline editing: PlanEditorView supports creation and embedded presentations;
+PlanDetailView mounts the editor directly in its workspace and owns header Done/Exit
+flush boundaries. The separate main-Plan edit sheet is removed; assignment/folder
+pickers retain their temporary sheets. No new module/store is introduced.
+
+SP-053 section folders: Core/Plans/StudyPlan.swift owns optional section folder IDs.
+CollectionsStore reconciles managed section children/edges through its existing serialized
+writer. PlanAssignmentPicker/PlanStudyTools use each target section's folder, and
+PlanEditorView passes stable section identity. No separate persistence service is added.
+
+SP-053 strict lifecycle: CollectionModels owns PlanTreeTrash/v5 values; CollectionsStore
+owns mandatory root commands and grouped deletion/restore. NotesSession owns checked
+Notes Trash batching. Root reconciles durable pending phases. PlanLinkedFolderPicker
+is removed; PlanEditor displays fixed identity. PlanDetail/Collection captions use
+completed sections. Settings/Plan confirmations describe paired deletion.
+
+SP-053 Scripture editing: Features/Plans/PlanScriptureAssignmentEditor.swift owns the
+shared Plan/folder editor and stable target resolver. PlanAssignmentPicker handles
+seeded Scripture-only fields and checked Save; PlanCommandService builds the guarded
+replacement command. CollectionArtifactRow retains explicit Read Scripture actions.
+
+Nested CollectionDetailView destinations pass the shared ReaderSession recursively,
+so Scripture editing and other reader-dependent Plan controls remain available inside
+all Day/Section folder depths.

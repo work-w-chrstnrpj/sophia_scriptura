@@ -31,6 +31,10 @@ struct StudyMutationRequest: Sendable {
 }
 enum StudyMutationIntent: Codable, Sendable {
     case savePlan(StudyPlan, collectionID: UUID?)
+    case createPlanMaterialsFolder(planID: UUID, folder: StudyCollection, replaceExisting: Bool)
+    case filePlanMaterial(planID: UUID, sectionID: UUID, artifactID: UUID)
+    case setPlanTreeTrashed(planID: UUID, trashed: Bool)
+    case finishPlanTreeNotes(UUID)
     case purgePlan(UUID)
     case saveLink(SavedLink, collectionID: UUID?)
     case prepareOperation(PlanOperation)

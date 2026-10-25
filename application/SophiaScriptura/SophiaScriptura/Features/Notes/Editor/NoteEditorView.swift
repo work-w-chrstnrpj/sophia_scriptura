@@ -88,6 +88,9 @@ struct NoteEditorView: View {
             Button("Save") { if let note = session.note { session.metadata(title: title, tags: note.tags.joined(separator: ","), paper: note.paper) } }
             Button("Cancel", role: .cancel) {}
         }
+        .onChange(of: title) { _, value in
+            if rename, let note = session.note { session.metadata(title: value, tags: note.tags.joined(separator: ","), paper: note.paper) }
+        }
         .sheet(isPresented: $showDetails) { NoteDetailsView(session: session) }
         .sheet(item: Binding(get: { session.editingObjectID.flatMap { id in session.note?.allObjects.first { $0.id == id } } }, set: { if $0 == nil { session.editingObjectID = nil } })) { object in
             NoteObjectInspector(session: session, object: object)
@@ -457,6 +460,7 @@ struct NoteEditorView: View {
 private struct NoteDetailsView: View {
     let session: NotesSession
     @Environment(\.dismiss) private var dismiss
+    @State private var initialized = false
     @State private var title = ""
     @State private var tags = ""
     @State private var paper = NoteDocument.Paper.plain
@@ -474,7 +478,7 @@ private struct NoteDetailsView: View {
                 }
             }.appSurface().navigationTitle("Note details")
                 .toolbar {
-                    Button("Cancel") { dismiss() }
+                    Button("Done") { dismiss() }
                     Button("Save") {
                         session.metadata(title: title, tags: tags, paper: paper)
                         dismiss()
@@ -484,7 +488,15 @@ private struct NoteDetailsView: View {
             title = session.note?.title ?? ""
             tags = session.note?.tags.joined(separator: ", ") ?? ""
             paper = session.note?.paper ?? .plain
+            initialized = true
         }
+        .onChange(of: title) { _, _ in autosave() }
+        .onChange(of: tags) { _, _ in autosave() }
+        .onChange(of: paper) { _, _ in autosave() }
+    }
+    private func autosave() {
+        guard initialized else { return }
+        session.metadata(title: title, tags: tags, paper: paper)
     }
 }
 
@@ -530,21 +542,21 @@ private struct NoteObjectInspector: View {
                 if object.kind == .ink { Text("Use Pencil to draw or erase. Select the drawing with your finger to move or resize it.") }
             }.appSurface().navigationTitle(object.kind.rawValue.capitalized)
                 .toolbar {
-                    Button("Cancel") { dismiss() }
-                    Button("Save") {
-                        let width = object.frame.width, height = object.frame.height
-                        let changedURL = object.kind == .link && session.note?.allObjects.first(where: { $0.id == object.id })?.url != object.url
-                        session.update(object.id) { original in
-                            let frame = original.frame
-                            original = object; original.frame = frame
-                            if changedURL { original.payload = Data(); original.text = object.url }
-                        }
-                        session.resize(object.id, width: width, height: height)
-                        if changedURL { session.refreshLink(object.id) }
-                        dismiss()
-                    }
+                    Button("Done") { applyChanges(refreshPreview: true); dismiss() }
                 }
         }
+        .onChange(of: object) { _, _ in applyChanges() }
+    }
+    private func applyChanges(refreshPreview: Bool = false) {
+        let width = object.frame.width, height = object.frame.height
+        let changedURL = object.kind == .link && session.note?.allObjects.first(where: { $0.id == object.id })?.url != object.url
+        session.update(object.id) { original in
+            let frame = original.frame
+            original = object; original.frame = frame
+            if changedURL { original.payload = Data(); original.text = object.url }
+        }
+        session.resize(object.id, width: width, height: height)
+        if refreshPreview && object.kind == .link { session.refreshLink(object.id) }
     }
     private func cell(row: Int, column: Int) -> some View {
         let value = Binding<String>(get: { object.cells[row][column] }, set: { object.cells[row][column] = $0 })

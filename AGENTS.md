@@ -395,3 +395,33 @@ SP-049 stability correction: `Features/Plans/PlanEditorDraft.swift` owns stable-
 draft mutations, safe title bindings and stale-callback guards. PlanEditorView renders
 value snapshots; PlanAssignmentPicker clamps dependent chapter bounds before book changes.
 No persistence schema changes are involved.
+
+## SP-053 structure update
+
+PlanEditorDraft owns debounced, responsive snapshot autosave. StudyPlan adds optional
+materialsFolderID; CollectionsStore atomically creates/renames the Plan folder and
+files shared targets plus reference-only Scripture item projections. CollectionDetailView
+opens these references with existing reader navigation. Notes detail/object/Prayer-update
+editors feed NotesSession autosave; Collection/link/gleaning editors feed CollectionsStore.
+See tickets/SP-053-plan-autosave-and-materials-folders.md for acceptance evidence.
+
+SP-053 folder ownership now uses a mandatory fixed root; the earlier optional-folder
+workflow and its picker were removed. Both new note/link entry points use checked
+section-folder filing receipts. See the strict lifecycle update below.
+
+SP-053 inline editing: PlanDetailView owns the transient editor draft and renders
+PlanEditorView embedded inside its main workspace. Header Done/Exit flush edits;
+PlanEditorView retains creation presentation and shared tools/autosave.
+
+SP-053 section folders: PlanSection.materialsFolderID is optional. CollectionsStore
+atomically organizes assignments in named section children and retains the shared Plan
+at the linked root. New note/link routes use sectionID for checked child filing.
+
+SP-053 strict lifecycle: Plan roots are mandatory/immutable. CollectionModels owns
+Collections v5 PlanTreeTrash bundles; CollectionsStore owns paired tree Trash/restore
+and NotesSession owns checked note batching. Root reconciles pending phases. Optional
+folder picker is removed. Progress captions count completed Days/Sections.
+
+SP-053 Scripture editing: PlanScriptureAssignmentEditor.swift is shared by Plan and
+section-folder projections. PlanAssignmentPicker seeds the current passage;
+PlanCommandService.replaceScripture checks revision/access and uses the existing writer.

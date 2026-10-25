@@ -135,6 +135,9 @@ struct PassageCardSheet: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .onAppear { draft = passage.insight }
+        .onChange(of: draft) { _, value in
+            if editing { store.updateInsight(id: passageID, insight: value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        }
     }
 
     private func insightSection(_ passage: SavedPassage, accent: CollectionAccent) -> some View {

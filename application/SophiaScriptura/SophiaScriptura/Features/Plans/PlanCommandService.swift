@@ -3,6 +3,28 @@ import Foundation
 /// Builds requests; CollectionsStore owns both revision and persistence queue.
 @MainActor struct PlanCommandService {
     let store: CollectionsStore
+    func ensureMaterialsFolder(planID: UUID, parentID: UUID, commandID: UUID, folderID: UUID) async -> StudyCommitResult {
+        guard let plan = store.plans.first(where: { $0.id == planID }) else { return .rejected(.unavailable) }
+        let parent = parentID == StudyCollection.unfiledID ? nil : parentID
+        let folder = StudyCollection(id: folderID, name: plan.title,
+            detail: "This folder contains the study materials for the Plan ‘\(plan.title)’.",
+            parentID: parent, accent: parent.flatMap { store.collection(id: $0)?.accent } ?? .preset, modifiedAt: plan.createdAt)
+        return await store.submit(.init(commandID: commandID,
+            intent: .createPlanMaterialsFolder(planID: planID, folder: folder, replaceExisting: false)))
+    }
+    func replaceScripture(planID: UUID, sectionID: UUID, itemID: UUID, expectedRevision: Int,
+                          payloads: [PlanItemPayload]) async -> StudyCommitResult {
+        guard let plan = store.plans.first(where: { $0.id == planID }), plan.isActive,
+              store.planAccessAllowed(plan) else { return .rejected(.accessDenied) }
+        guard plan.revision == expectedRevision else { return .rejected(.stale) }
+        guard let section = plan.sections.first(where: { $0.id == sectionID }),
+              let original = section.items.first(where: { $0.id == itemID }), original.payload.kind == .scripture,
+              !payloads.isEmpty, payloads.allSatisfy({ $0.kind == .scripture && $0.referenceSystemID == plan.referenceSystemID }),
+              plan.items.count - 1 + payloads.count <= 2000 else { return .rejected(.invalid) }
+        let model = PlanEditorDraft(plan: plan, isExisting: true)
+        if payloads != [original.payload] { model.applyAssignments(payloads, sectionID: sectionID, replacing: itemID) }
+        return await store.submit(.init(expectedPlanRevision: expectedRevision, intent: .savePlan(model.draft, collectionID: nil)))
+    }
     func save(_ plan: StudyPlan, collectionID: UUID? = nil, commandID: UUID = UUID()) async -> StudyCommitResult {
         await store.submit(.init(commandID: commandID, expectedPlanRevision: store.plans.contains(where: { $0.id == plan.id }) ? plan.revision : nil,
                                  intent: .savePlan(plan, collectionID: collectionID)))

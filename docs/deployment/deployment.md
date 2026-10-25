@@ -677,3 +677,89 @@ passed (`build/v140-release/ipad-install.log`). Device app query confirms 1.4.0/
 (`installed-apps.json`). Initial launch was blocked by iPadOS Locked; unlock requested.
 No uninstall/reset or user-data cleanup was performed. Feature acceptance remains open
 where tracked in SP-050–052. Bravado files remain excluded from this release.
+
+### SP-053 install deferred — 2026-10-25
+
+Installer preview passed, but the signed build stopped before installation: Xcode
+reported No Accounts and no development provisioning profile for the existing Live
+Activity extension. No uninstall or install occurred. Evidence: `build/sp053/ipad-install.log`.
+The owner selected “Finish verification; I’ll sign in later.” Installation remains
+pending until the existing Apple account/Personal Team is available in Xcode.
+
+### SP-053 signed-in retry installed — 2026-10-25
+
+Owner confirmed Xcode sign-in and requested retry. The standard installer passed
+signed Debug build, strict signature/bundle identity checks, in-place installation
+and normal launch on iPad ni Paj. Evidence: `build/sp053/ipad-install-signed-in.log`.
+No uninstall or study-data reset was used. This supersedes the earlier deferred
+installation; simulator/runtime and physical feature acceptance remain separately open.
+
+### SP-053 optional-folder refinement installed — 2026-10-25
+
+The signed build and standard installer passed build, strict signature/bundle-identity
+checks, in-place installation and normal launch on iPad ni Paj. This installs the later
+existing/new/none folder chooser inside Edit and new-note/link folder creation/filing rules.
+Evidence: `build/sp053/optional-folder-device-build.log` and
+`build/sp053/optional-folder-ipad-install.log`. No uninstall or data reset.
+466 unit tests passed before delivery; physical UI acceptance remains separate.
+
+### SP-053 inline Plan Edit installed — 2026-10-25
+
+The main Plan now switches directly into Edit with shared features/autosave. The
+standard installer passed signed build, strict signature/bundle checks, in-place
+installation and normal launch on iPad ni Paj (1.4.0/build 28). No uninstall or data
+reset. Evidence: `build/sp053/inline-edit-ipad-install.log`. 46 focused Plan unit tests
+and the inline-edit UI flow passed before delivery; physical acceptance remains open.
+
+### SP-053 Day/Section folders installed — 2026-10-25
+
+Signed build, strict signature/bundle checks, in-place installation and normal launch
+passed on iPad ni Paj (1.4.0/build 28). Evidence:
+`build/sp053/section-folders-ipad-install.log`. The source passed 469 unit tests and
+the section-folder UI flow on an iPad simulator. Existing linked Plans reorganize
+assigned items on the next Plan save/creation command. No uninstall/reset or deletion.
+Owner physical acceptance remains separate.
+
+### SP-053 mandatory Plan-folder lifecycle installed — 2026-10-25
+
+Standard installer passed signed build, strict signature/bundle checks, in-place install
+and normal launch on iPad ni Paj, 1.4.0/build 28. Evidence:
+`build/sp053/strict-plan-ipad-install.log`. Source verification passed 477 unit tests
+and the cancellation/both-direction deletion/section-progress UI flow. Plan folders are
+fixed/mandatory; paired deletion goes to recoverable Trash and preserves shared items.
+Collections v5 activation preserves a pre-lifecycle recovery envelope and version-gates
+older binaries. No uninstall/reset or deletion of personal study material was performed
+by the delivery process. Physical feature acceptance remains separate.
+
+### SP-053 shared Scripture assignment editor installed — 2026-10-25
+
+The standard installer passed signed Debug build, strict signature/bundle checks,
+in-place installation and normal launch on iPad ni Paj (1.4.0/build 28).
+Evidence: `build/sp053/scripture-edit-ipad-install.log`. Scripture assignment rows
+in Plans and their section folders open the same seeded editor; Read Scripture
+remains in folder actions. 481 unit tests passed. No uninstall/reset or Bible-text
+modification; physical feature acceptance remains separate.
+
+### Corrected nested-folder Scripture editor installed — 2026-10-25
+
+Corrected signed build passed (`build/sp053/scripture-edit-device-final.log`).
+An initial remote-connect install error was followed by successful in-place installation
+on iPad ni Paj via the standard installer (`build/sp053/scripture-edit-ipad-retry.log`),
+1.4.0/build 28. Signature/bundle checks passed. **Launch was blocked by iPadOS Locked**,
+FBS error 7; unlock and open Sophia manually or retry normal launch. This corrected
+build passes ReaderSession through child folders, with 481 unit tests and the dual-entry
+Scripture-edit UI flow passing. No uninstall/reset or scripture text modification.
+
+After the owner reported the iPad unlocked, normal launch was retried twice. Both
+were still rejected by iPadOS with Locked/FBS error 7. Evidence:
+`build/sp053/scripture-edit-unlocked-launch.log` and
+`build/sp053/scripture-edit-unlocked-launch-retry.log`. Corrected installation remains
+successful; manual launch from the unlocked Home Screen is still needed.
+
+### v1.5.0 / build 29 signed device delivery — 2026-10-25
+
+The standard installer passed build, strict signature and bundle-identity checks,
+in-place installation and normal launch on iPad ni Paj. A subsequent device app
+query confirms `com.personal.SophiaScriptura`, version 1.5.0, build 29. Evidence:
+`build/v1.5.0-release/ipad-install.log` and `device-apps.json`. No uninstall/reset
+was performed. Physical feature acceptance remains open.

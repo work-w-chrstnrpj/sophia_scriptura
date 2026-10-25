@@ -489,14 +489,32 @@ struct PointToPonder: Codable, Identifiable, Hashable {
     var trashedAt: Date? = nil
 }
 
+struct PlanTreeTrash: Codable, Equatable, Identifiable, Sendable {
+    var id = UUID()
+    var planIDs: [UUID]
+    var folderIDs: [UUID]
+    var noteIDs: [UUID]
+    var links: [SavedLink]
+    var passages: [SavedPassage]
+    var annotations: [SavedAnnotation]
+    var conversations: [StudyConversation]
+    var points: [PointToPonder]
+    var timestamp: Date
+    /// true = trash Notes, false = restore Notes; nil = cross-store work completed.
+    var pendingNotesAction: Bool?
+    var restoring = false
+}
+
 struct CollectionsSnapshot: Codable, Equatable {
     var pointsToPonder: [PointToPonder] = []
+    var planLifecycleActivated = false
+    var planTreeTrash: [PlanTreeTrash] = []
     var planFormatActivated = false
     var plans: [StudyPlan] = []
     var planOperations: [PlanOperation] = []
     var commandReceipts: [StudyCommandReceipt] = []
     var retainedPlanAccess: [RetainedPlanAccess] = []
-    var requiredSchemaVersion: Int { planFormatActivated || !plans.isEmpty || !planOperations.isEmpty || !retainedPlanAccess.isEmpty || links.contains(where: { !$0.access.isEmpty || $0.planOrigin != nil }) ? 4 : !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1 }
+    var requiredSchemaVersion: Int { planLifecycleActivated ? 5 : planFormatActivated || !plans.isEmpty || !planOperations.isEmpty || !retainedPlanAccess.isEmpty || links.contains(where: { !$0.access.isEmpty || $0.planOrigin != nil }) ? 4 : !pointsToPonder.isEmpty ? 3 : collections.contains(where: { $0.protectionID != nil }) ? 2 : 1 }
     var schemaVersion = 1
     var revision = 0
     var collections: [StudyCollection] = []
@@ -509,6 +527,7 @@ struct CollectionsSnapshot: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case pointsToPonder, schemaVersion, revision, collections, passages, savedAnnotations, links, conversations, memberships, unfiledAccent
+        case planLifecycleActivated, planTreeTrash
         case planFormatActivated, plans, planOperations, commandReceipts, retainedPlanAccess
     }
 
@@ -542,6 +561,11 @@ struct CollectionsSnapshot: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 0
+        if schemaVersion >= 5 {
+            planLifecycleActivated = try container.decode(Bool.self, forKey: .planLifecycleActivated)
+            planTreeTrash = try container.decode([PlanTreeTrash].self, forKey: .planTreeTrash)
+            guard planLifecycleActivated else { throw CollectionsError.invalid }
+        }
         if schemaVersion >= 4 {
             planFormatActivated = try container.decode(Bool.self, forKey: .planFormatActivated)
             plans = try container.decode([StudyPlan].self, forKey: .plans)
@@ -555,7 +579,7 @@ struct CollectionsSnapshot: Codable, Equatable {
         passages = try container.decodeIfPresent([SavedPassage].self, forKey: .passages) ?? []
         savedAnnotations = try container.decodeIfPresent([SavedAnnotation].self, forKey: .savedAnnotations) ?? []
         links = try container.decodeIfPresent([SavedLink].self, forKey: .links) ?? []
-        if schemaVersion == 4 {
+        if schemaVersion >= 4 {
             var records = try container.nestedUnkeyedContainer(forKey: .links)
             while !records.isAtEnd {
                 let decoder = try records.superDecoder()
@@ -659,10 +683,15 @@ extension SavedLink {
 
 extension CollectionsSnapshot {
     func validatePlans() throws {
-        guard (1...4).contains(schemaVersion), revision >= 0 else { throw CollectionsError.unsupported }
+        guard (1...5).contains(schemaVersion), revision >= 0 else { throw CollectionsError.unsupported }
         guard plans.count <= 100, planOperations.count <= 128, commandReceipts.count <= 256,
               Set(commandReceipts.map(\.commandID)).count == commandReceipts.count,
               Set(planOperations.map(\.id)).count == planOperations.count else { throw CollectionsError.invalid }
+        guard Set(planTreeTrash.map(\.id)).count == planTreeTrash.count else { throw CollectionsError.invalid }
+        for record in planTreeTrash {
+            guard !record.planIDs.isEmpty, record.planIDs.allSatisfy({ id in plans.contains { $0.id == id } }),
+                  record.folderIDs.allSatisfy({ id in id != StudyCollection.unfiledID && collections.contains { $0.id == id } }) else { throw CollectionsError.invalid }
+        }
         var ids = Set(collections.map(\.id) + passages.map(\.id) + links.map(\.id) + savedAnnotations.map(\.id) + conversations.map(\.id) + pointsToPonder.map(\.id))
         for plan in plans {
             try plan.validate()
@@ -672,6 +701,7 @@ extension CollectionsSnapshot {
         }
     }
     mutating func preservePlanAccess(from previous: Self) {
+        planLifecycleActivated = planLifecycleActivated || previous.planLifecycleActivated
         planFormatActivated = planFormatActivated || previous.planFormatActivated || !plans.isEmpty
         for i in plans.indices {
             if let old = previous.plans.first(where: { $0.id == plans[i].id }) { plans[i].access = plans[i].access.union(old.access) }

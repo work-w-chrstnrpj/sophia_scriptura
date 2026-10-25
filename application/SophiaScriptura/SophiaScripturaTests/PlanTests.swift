@@ -18,9 +18,9 @@ import XCTest
         XCTAssertNotNil(result.receipt)
         let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await reopened.load()
         let saved = try XCTUnwrap(reopened.plans.first)
-        XCTAssertEqual(saved.sections, draft.sections); XCTAssertEqual(saved.completedCount, 1)
+        XCTAssertEqual(saved.sections.map(\.items), draft.sections.map(\.items)); XCTAssertEqual(saved.completedCount, 1)
         XCTAssertEqual(saved.title, "My Plan"); XCTAssertEqual(saved.sectionTitle(1), "Day 2")
-        XCTAssertEqual(try reopened.exportBackupSnapshot().schemaVersion, 4)
+        XCTAssertEqual(try reopened.exportBackupSnapshot().schemaVersion, 5)
         let current = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("current.json"))) as! [String: Any]
         XCTAssertEqual(current["schemaVersion"] as? Int, 2)
     }
@@ -135,7 +135,7 @@ extension PlanTests {
         _ = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
         try Data("broken".utf8).write(to: directory.appendingPathComponent("current.json"))
         let recovered = try await repository.load()
-        XCTAssertTrue(recovered.recovered); XCTAssertEqual(recovered.snapshot.schemaVersion, 4)
+        XCTAssertTrue(recovered.recovered); XCTAssertEqual(recovered.snapshot.schemaVersion, 5)
         XCTAssertTrue(recovered.snapshot.planFormatActivated); XCTAssertEqual(recovered.snapshot.plans.first?.id, draft.id)
     }
     func testNotesV5OrphanAccessSurvivesSaveArchiveAndLegacyRestore() async throws {
@@ -271,5 +271,211 @@ extension PlanTests {
         XCTAssertNoThrow(try StudyBackupService.validateRecoveryRecords([record], notes: [note], links: []))
         // A missing target remains a valid inert recovery reference, not a created note.
         XCTAssertNoThrow(try StudyBackupService.validateRecoveryRecords([record], notes: [], links: []))
+    }
+}
+
+
+extension PlanTests {
+    func testAutosaveKeepsEditsMadeDuringWriteAndRapidReorders() async throws {
+        let repository = SuspendedPlanRepository()
+        let store = CollectionsStore(repository: repository); await store.load()
+        let model = PlanEditorDraft(plan: plan())
+        await repository.holdNextSave()
+        let first = Task { await model.persist(store: store, collectionID: StudyCollection.unfiledID) }
+        while !(await repository.isWaiting()) { await Task.yield() }
+        model.draft.title = "Edited during save"
+        let section = model.draft.sections[0]
+        model.moveItems(in: section.id, from: [0], to: 2, renderedIDs: section.items.map(\.id))
+        model.addSection()
+        await repository.release()
+        let success = await first.value
+        XCTAssertTrue(success)
+        let disk = await repository.load().snapshot
+        XCTAssertEqual(disk.plans.first?.title, "Edited during save")
+        XCTAssertEqual(disk.plans.first?.sections, model.draft.sections)
+        XCTAssertEqual(model.saveStatus, "Saved")
+        XCTAssertEqual(disk.collections.count, 1 + model.draft.sections.count)
+    }
+    func testRootIdentityCannotChangeDuringAutosave() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let model = PlanEditorDraft(plan: plan())
+        let success = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(success)
+        let root = try XCTUnwrap(model.draft.materialsFolderID)
+        model.draft.materialsFolderID = nil
+        let rejected = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertFalse(rejected); XCTAssertEqual(store.plans.first?.materialsFolderID, root)
+        XCTAssertNotNil(model.message)
+    }
+    func testAutosavePreservesTypingWhitespaceAndInvalidDraftCanRetry() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let model = PlanEditorDraft(plan: plan(title: "My "))
+        let first = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(first); XCTAssertEqual(model.draft.title, "My ")
+        XCTAssertEqual(store.plans.first?.title, "My"); XCTAssertEqual(model.saveStatus, "Saved")
+        model.draft.title = ""
+        let invalid = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertFalse(invalid); XCTAssertNotNil(model.message)
+        XCTAssertEqual(store.plans.first?.title, "My")
+        model.draft.title = "My next words"
+        let retried = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(retried); XCTAssertEqual(store.plans.first?.title, "My next words")
+    }
+    func testPlanMaterialsShareExistingItemsWithoutOverwritingFolderCustomization() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let parent = try XCTUnwrap(store.createCollection(name: "Study", detail: "", parentID: nil, accent: .sage))
+        let original = try XCTUnwrap(store.createCollection(name: "Originals", detail: "", parentID: nil, accent: .gold))
+        let link = try XCTUnwrap(store.addLink(title: "Source", url: "https://example.com"))
+        store.addMembership(artifactID: link, collectionID: original)
+        await store.flush()
+        var draft = plan()
+        draft.sections[0].items.append(.init(payload: .init(kind: .link, targetID: link)))
+        let result = await store.submit(.init(intent: .savePlan(draft, collectionID: parent)))
+        XCTAssertNotNil(result.receipt)
+        var saved = try XCTUnwrap(store.plans.first)
+        XCTAssertNotNil(saved.materialsFolderID)
+        let ensure = await PlanCommandService(store: store).ensureMaterialsFolder(planID: saved.id,
+            parentID: parent, commandID: UUID(), folderID: UUID())
+        XCTAssertNotNil(ensure.receipt)
+        saved = try XCTUnwrap(store.plans.first)
+        let folderID = try XCTUnwrap(saved.materialsFolderID)
+        XCTAssertEqual(store.collection(id: folderID)?.parentID, parent)
+        XCTAssertEqual(store.collection(id: folderID)?.name, saved.title)
+        XCTAssertTrue(store.collectionIDs(containing: link).contains(original))
+        XCTAssertTrue(store.collectionIDs(containing: link).contains(try XCTUnwrap(saved.sections[0].materialsFolderID)))
+        XCTAssertTrue(store.collectionIDs(containing: saved.id).contains(folderID))
+        saved.title = "Renamed"
+        _ = await store.submit(.init(expectedPlanRevision: saved.revision, intent: .savePlan(saved, collectionID: parent)))
+        XCTAssertEqual(store.collection(id: folderID)?.name, "My Plan")
+        XCTAssertEqual(store.collection(id: folderID)?.detail, "This folder contains the study materials for the Plan ‘My Plan’.")
+        XCTAssertTrue(store.moveCollection(id: folderID, to: original))
+        await store.flush()
+        var movedPlan = try XCTUnwrap(store.plans.first)
+        movedPlan.detail = "Keep the linked folder wherever I put it"
+        let movedResult = await store.submit(.init(expectedPlanRevision: movedPlan.revision, intent: .savePlan(movedPlan, collectionID: parent)))
+        XCTAssertNotNil(movedResult.receipt)
+        XCTAssertEqual(store.collection(id: folderID)?.parentID, original)
+        XCTAssertEqual(store.plans.first?.materialsFolderID, folderID)
+        XCTAssertEqual(store.links.filter { $0.id == link }.count, 1)
+        let references = store.presentedArtifacts(for: folderID, includingDescendants: true, notes: [])
+            .filter { $0.kind == .scripture }
+        XCTAssertEqual(references.count, saved.items.filter { $0.payload.kind == .scripture }.count)
+        XCTAssertTrue(references.allSatisfy { $0.passageText.isEmpty })
+        XCTAssertNil(saved.duplicated().materialsFolderID)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as? [String: Any])
+        json.removeValue(forKey: "materialsFolderID")
+        let legacy = try JSONDecoder().decode(StudyPlan.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(legacy.materialsFolderID)
+        XCTAssertEqual(legacy.sections, saved.sections)
+    }
+}
+
+
+extension PlanTests {
+    func testSectionFoldersUpgradeFlatItemsAndKeepPlanAtRootAfterReopen() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = CollectionsFileRepository(directory: directory)
+        let store = CollectionsStore(repository: repository); await store.load()
+        let root = try XCTUnwrap(store.createCollection(name: "SamplePlan", detail: "Keep my root", parentID: nil, accent: .sage))
+        let elsewhere = try XCTUnwrap(store.createCollection(name: "Originals", detail: "", parentID: nil, accent: .gold))
+        let link = try XCTUnwrap(store.addLink(title: "Shared source", url: "https://example.com"))
+        await store.flush()
+        var draft = plan(title: "SamplePlan")
+        draft.sections[0].items.append(.init(payload: .init(kind: .link, targetID: link)))
+        draft.sections[1].items.append(.init(payload: .init(kind: .link, targetID: link)))
+        draft.materialsFolderID = root
+        var old = try store.exportBackupSnapshot()
+        old.plans = [draft]; old.planFormatActivated = true; old.schemaVersion = 4
+        old.memberships.append(.init(collectionID: root, artifactID: link))
+        old.memberships.append(.init(collectionID: elsewhere, artifactID: link))
+        let imported = await store.submit(.init(intent: .restoreCollections(try JSONEncoder().encode(old))))
+        XCTAssertNotNil(imported.receipt)
+        draft = try XCTUnwrap(store.plans.first)
+        let result = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertNotNil(result.receipt)
+        let saved = try XCTUnwrap(store.plans.first)
+        let days = try saved.sections.map { try XCTUnwrap($0.materialsFolderID) }
+        XCTAssertEqual(days.map { store.collection(id: $0)?.name }, ["Day 1", "Day 2"])
+        XCTAssertTrue(days.allSatisfy { store.collection(id: $0)?.parentID == root })
+        XCTAssertEqual(Set(store.collectionIDs(containing: link)), Set(days + [elsewhere]))
+        let rootItems = store.presentedArtifacts(for: root, includingDescendants: false, notes: [])
+        XCTAssertEqual(rootItems.map(\.id), [saved.id])
+        for section in saved.sections {
+            let id = try XCTUnwrap(section.materialsFolderID)
+            let contents = store.presentedArtifacts(for: id, includingDescendants: false, notes: [])
+            XCTAssertEqual(Set(contents.map(\.id)), Set(section.items.map { $0.payload.targetID ?? $0.id }))
+        }
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        XCTAssertEqual(reopened.plans.first?.sections, saved.sections)
+        XCTAssertEqual(reopened.collection(id: root)?.detail, "Keep my root")
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(saved)) as? [String: Any])
+        var sections = try XCTUnwrap(legacy["sections"] as? [[String: Any]])
+        for i in sections.indices { sections[i].removeValue(forKey: "materialsFolderID") }
+        legacy["sections"] = sections
+        let decoded = try JSONDecoder().decode(StudyPlan.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertTrue(decoded.sections.allSatisfy { $0.materialsFolderID == nil })
+        XCTAssertEqual(decoded.items, saved.items)
+        XCTAssertTrue(saved.duplicated().sections.allSatisfy { $0.materialsFolderID == nil })
+    }
+    func testSectionRenameReorderMoveAndRejectedRelinkKeepStableFolders() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let root = try XCTUnwrap(store.createCollection(name: "Plan", detail: "", parentID: nil, accent: .sage))
+        await store.flush()
+        var draft = plan(); draft.materialsFolderID = root
+        _ = await store.submit(.init(intent: .savePlan(draft, collectionID: nil)))
+        draft = try XCTUnwrap(store.plans.first)
+        let firstID = try XCTUnwrap(draft.sections[0].materialsFolderID)
+        let secondID = try XCTUnwrap(draft.sections[1].materialsFolderID)
+        let moved = draft.sections[0].items.removeFirst()
+        let retained = draft.sections[0].items[0]
+        draft.sections[1].items.append(moved)
+        draft.sections.swapAt(0, 1)
+        draft.sections[1].title = "Reflection"
+        let result = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertNotNil(result.receipt)
+        draft = try XCTUnwrap(store.plans.first)
+        XCTAssertEqual(draft.sections.map(\.materialsFolderID), [secondID, firstID])
+        XCTAssertEqual(store.collection(id: secondID)?.name, "Day 1")
+        XCTAssertEqual(store.collection(id: firstID)?.name, "Reflection")
+        XCTAssertEqual(store.collectionIDs(containing: moved.id), [secondID])
+        let total = store.collections.count
+        _ = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertEqual(store.collections.count, total)
+        draft = try XCTUnwrap(store.plans.first)
+        draft.sections.removeLast()
+        _ = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertNotNil(store.collection(id: firstID))
+        XCTAssertTrue(store.collectionIDs(containing: retained.id).contains(firstID))
+        let another = try XCTUnwrap(store.createCollection(name: "Another", detail: "Keep", parentID: nil, accent: .gold))
+        await store.flush()
+        draft = try XCTUnwrap(store.plans.first); draft.materialsFolderID = another
+        _ = await store.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertNotEqual(store.plans.first?.materialsFolderID, another)
+        XCTAssertEqual(store.plans.first?.sections.first?.materialsFolderID, secondID)
+        XCTAssertTrue(store.collectionIDs(containing: moved.id).contains(secondID))
+
+    }
+    func testLockedSectionFolderRejectsReorganizationAtomically() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        let root = try XCTUnwrap(store.createCollection(name: "Plan", detail: "", parentID: nil, accent: .sage))
+        await store.flush()
+        var draft = plan(); draft.materialsFolderID = root
+        _ = await store.submit(.init(intent: .savePlan(draft, collectionID: nil)))
+        var snapshot = try store.exportBackupSnapshot()
+        let childID = try XCTUnwrap(snapshot.plans.first?.sections.first?.materialsFolderID)
+        let index = try XCTUnwrap(snapshot.collections.firstIndex { $0.id == childID })
+        snapshot.collections[index].protectionID = UUID()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = CollectionsFileRepository(directory: directory)
+        snapshot.revision = 0
+        _ = try await repository.save(snapshot, expectedRevision: 0)
+        let locked = CollectionsStore(repository: repository); await locked.load()
+        draft = try XCTUnwrap(locked.plans.first); draft.sections[0].title = "Must not rename"
+        let result = await locked.submit(.init(expectedPlanRevision: draft.revision, intent: .savePlan(draft, collectionID: nil)))
+        XCTAssertEqual(result, .rejected(.accessDenied))
+        XCTAssertEqual(locked.collection(id: childID)?.name, "Day 1")
+        XCTAssertNil(locked.plans.first?.sections.first?.title)
     }
 }

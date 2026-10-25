@@ -105,3 +105,28 @@ editors while the Plan owns presentation. Notes flush before leaving their previ
 Previous/Next or exit; revocation hides Plan content and subordinate creation/preview
 routes. Reflection targets copy existing Plan access requirements before attachment.
 This does not close the remaining managed-ink/access-removal or physical privacy gates.
+
+## SP-053 owner-selected material filing — 2026-10-25
+
+Plan saves now add shared existing note/link memberships to the Plan materials folder.
+New edges require access to protected Notes/copied requirements and links; existing
+unchanged memberships remain intact. Scripture items are reference-only projections
+shown only for accessible active Plans. This changes the earlier no-implicit-refiling
+checkpoint at the owner's request; it does not clone bodies or relax credential bindings.
+
+SP-053 optional-folder correction: existing/new/none selection is guarded in Edit.
+Creating/linking a folder and filing materials run through the serialized writer with
+access checks/receipts. Unlinking clears the pointer only; existing membership edges and
+copied access requirements remain, so changing a folder never relaxes protection.
+
+SP-053 section-folder organization validates each proposed/reused child and its active
+ancestor chain before publishing. Flat-edge upgrade and cross-section moves retain
+Notes/copied-access checks. Locked section folders reject the entire Plan transaction
+without partial rename/refiling; original protection bindings and other memberships stay.
+
+SP-053 strict lifecycle: tree deletion preflights its folders, Plans and exclusive Notes
+access before publish. Shared material in other folders/Plans (including Trash) is kept.
+Trash bundles retain link access metadata and export/restore honor it. A durable pending
+phase reconciles Notes/Companion after the checked Collections commit; locks or persistence
+errors retain retry state. Purge retains Plan access requirements for remaining material.
+The v5 guard prevents old binaries silently stripping the recovery records.

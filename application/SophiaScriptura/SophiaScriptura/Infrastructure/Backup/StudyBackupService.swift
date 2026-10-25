@@ -129,7 +129,7 @@ enum StudyBackupService {
         try notes.requireNoteAccess(notes.snapshot.notes)
         try collections.protection.require(collections.collections.map(\.protectionID), in: .collections)
         _ = try NotesFileRepository.inspectArchive(envelope.notes)
-        guard (1...4).contains(envelope.collections.schemaVersion) else { throw StudyBackupError.unsupported }
+        guard (1...5).contains(envelope.collections.schemaVersion) else { throw StudyBackupError.unsupported }
         // Save immutable pre-restore inputs before the first feature write. Imported intents are inert.
         if !companion.backupLeaseHeld { await companion.writeChain?.value }
         await collections.flush()

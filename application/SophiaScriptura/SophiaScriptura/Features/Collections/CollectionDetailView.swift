@@ -24,6 +24,7 @@ struct CollectionDetailView: View {
     var trashConversation: (UUID) -> Void = { _ in }
     var books: [ScriptureBook] = []
     var reader: ReaderSession? = nil
+    @State private var scriptureEdit: PlanScriptureEditTarget?
     @State private var viewingPlanID: UUID?
 
     @AppStorage("collections.subfolder.arrange") private var arrangeStore = ""
@@ -122,6 +123,9 @@ struct CollectionDetailView: View {
 
     private func collectionSheets(_ collection: StudyCollection) -> some View {
                 collectionContent(collection)
+                .sheet(item: $scriptureEdit) { target in
+                    PlanScriptureAssignmentEditor(store: store, notes: notes, reader: reader, target: target)
+                }
                 .sheet(item: $movingSubfolder) { folder in
                     CollectionFolderMoveSheet(store: store, folderID: folder.id)
                 }
@@ -195,8 +199,8 @@ struct CollectionDetailView: View {
                 collectionSheets(collection)
                 .studyCenteredConfirmation(
                     isPresented: $showingDeleteAlert,
-                    title: "Delete \(collection.name)?",
-                    message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                    title: store.planFolderDeleteTitle(collection.id),
+                    message: store.planFolderDeleteMessage(collection.id),
                     confirmLabel: "Delete Collection"
                 ) {
                     store.deleteCollection(id: collectionID)
@@ -205,8 +209,8 @@ struct CollectionDetailView: View {
                 .overlay {
                     if let subfolder = deletingSubfolder {
                         StudyCenteredConfirmationOverlay(
-                            title: "Delete \(subfolder.name)?",
-                            message: "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted.",
+                            title: store.planFolderDeleteTitle(subfolder.id),
+                            message: store.planFolderDeleteMessage(subfolder.id),
                             confirmLabel: "Delete Collection",
                             onConfirm: {
                                 store.deleteCollection(id: subfolder.id)
@@ -377,7 +381,8 @@ struct CollectionDetailView: View {
                                 createConversation: createConversation,
                                 exploreQuestion: exploreQuestion,
                                 trashConversation: trashConversation,
-                                books: books
+                                books: books,
+                                reader: reader
                             )
                         } label: {
                             subfolderTile(child)
@@ -529,7 +534,8 @@ struct CollectionDetailView: View {
                 libraryJournalField = LibraryJournalFieldContext(noteID: artifact.id, field: field)
             },
             editLink: artifact.kind == .link ? { editingLink = store.link(id: artifact.id) } : nil,
-            cards: cards
+            cards: cards,
+            readScripture: artifact.kind == .scripture ? { readPlanScripture(artifact) } : nil
         )
         .collectionStudyMaterialDrag(artifact.id, sourceID: collectionID, store: store, enabled: placement != .subfolder) { store.link(notes: notes.snapshot.notes) }
     }
@@ -653,7 +659,7 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactTitle(_ item: CollectionArtifact) -> String {
         switch item.kind {
-        case .plan: return "Move this Plan to Trash?"
+        case .plan: return "Delete this Plan?"
         case .pointToPonder: return "Move this question to Trash?"
         case .note: return "Move \"\(item.title)\" to Trash?"
         case .conversation: return "Delete \"\(item.title)\"?"
@@ -663,7 +669,7 @@ struct CollectionDetailView: View {
 
     private func deleteArtifactMessage(_ item: CollectionArtifact) -> String {
         switch item.kind {
-        case .plan: return "Restore it from Settings → Trash → Plans. Notes, links and ink are kept."
+        case .plan: return store.planDeleteMessage
         case .pointToPonder:
             return "Restore it from Settings → Trash → Points to Ponder."
         case .annotation:
@@ -680,10 +686,7 @@ struct CollectionDetailView: View {
     private func confirmDeleteArtifact(_ item: CollectionArtifact) {
         switch item.kind {
         case .plan:
-            if var plan = store.plans.first(where: { $0.id == item.id }) {
-                plan.trashedAt = Date()
-                Task { _ = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(plan, collectionID: nil))) }
-            }
+            Task { _ = await store.setPlanTreeTrashed(item.id, trashed: true) }
         case .pointToPonder: store.trashPoint(item.id)
         case .annotation: store.deleteAnnotationReference(item.id)
         case .link: store.deleteLink(item.id)
@@ -694,6 +697,16 @@ struct CollectionDetailView: View {
         }
     }
 
+    private func readPlanScripture(_ artifact: CollectionArtifact) {
+            guard let plan = store.plans.first(where: { plan in
+                plan.isActive && store.planAccessAllowed(plan) && plan.items.contains { $0.id == artifact.id }
+            }), let item = plan.items.first(where: { $0.id == artifact.id }), let book = item.payload.book,
+                let chapter = item.payload.chapter else { return }
+            openPassage(SavedPassage(id: item.id, bookID: book, bookTitle: bookTitleForCode(book),
+                chapter: chapter, startVerse: item.payload.startVerse ?? 1, endVerse: item.payload.endVerse ?? 1,
+                editionID: plan.preferredEditionID, versionAbbreviation: "", passageText: "", insight: "",
+                kind: .bookmark, createdAt: item.createdAt))
+    }
     private func open(_ artifact: CollectionArtifact) {
         switch artifact.kind {
         case .plan:
@@ -709,7 +722,7 @@ struct CollectionDetailView: View {
         case .conversation:
             conversationCard = artifact.id
         case .scripture:
-            break
+            scriptureEdit = .resolve(itemID: artifact.id, store: store)
         case .annotation:
             if let saved = store.savedAnnotation(id: artifact.id) {
                 openAnnotation(saved)

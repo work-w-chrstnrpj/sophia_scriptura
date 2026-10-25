@@ -248,7 +248,10 @@ struct StudyArchivedCollectionsView: View {
                         }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) { store.moveCollectionToTrash(id: collection.id) } label: {
+                        Button(role: .destructive) {
+                            if store.planOwningFolder(collection.id) != nil { pendingTrashIDs = [collection.id]; confirmTrash = true }
+                            else { store.moveCollectionToTrash(id: collection.id) }
+                        } label: {
                             Label("Delete", systemImage: "trash")
                         }
                         .tint(.red)
@@ -266,7 +269,7 @@ struct StudyArchivedCollectionsView: View {
         .navigationTitle("Collections archive")
         .navigationBarTitleDisplayMode(.inline)
         .appSurface()
-        .alert("Move \(pendingTrashIDs.count) collections to Trash?", isPresented: $confirmTrash) {
+        .alert(pendingTrashIDs.count == 1 && pendingTrashIDs.first.flatMap(store.planOwningFolder) != nil ? "Delete this Plan folder?" : "Move \(pendingTrashIDs.count) collections to Trash?", isPresented: $confirmTrash) {
             Button("Move to Trash", role: .destructive) {
                 let ids = pendingTrashIDs
                 pendingTrashIDs.removeAll()
@@ -275,7 +278,7 @@ struct StudyArchivedCollectionsView: View {
             }
             Button("Cancel", role: .cancel) { pendingTrashIDs.removeAll() }
         } message: {
-            Text("Trash keeps collections until you restore or delete them permanently.")
+            Text(pendingTrashIDs.contains(where: { store.planOwningFolder($0) != nil }) ? "Deleting a Plan folder also deletes its Plan, subfolders, and items that aren’t shared elsewhere. Shared items will be kept. You can restore them together from Trash." : "Trash keeps collections until you restore or delete them permanently.")
         }
     }
 }

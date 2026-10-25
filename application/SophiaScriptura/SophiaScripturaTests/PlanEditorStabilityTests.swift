@@ -69,6 +69,13 @@ import XCTest
         model.moveItems(in: s.id, from: [0], to: 1, renderedIDs: s.items.map(\.id))
         XCTAssertEqual(model.draft, changed)
     }
+    func testRepeatedDragCallbackUsesRenderedIdentitiesAfterReorder() {
+        let model = PlanEditorDraft(plan: makePlan())
+        let ids = model.draft.sections.map(\.id)
+        model.moveSections(from: [0], to: 3, renderedIDs: ids)
+        model.moveSections(from: [1], to: 0, renderedIDs: ids)
+        XCTAssertEqual(model.draft.sections.map(\.id), [ids[1], ids[0], ids[2]])
+    }
     func testReorderAndCrossSectionMoveRetainIDsAndCompletion() throws {
         let model = PlanEditorDraft(plan: makePlan()), before = makePlan()
         let firstID = model.draft.sections[0].id, targetID = model.draft.sections[1].id
@@ -190,7 +197,7 @@ import XCTest
         let result = await store.submit(.init(intent: .savePlan(model.draft, collectionID: nil)))
         XCTAssertNotNil(result.receipt)
         let reopened = CollectionsStore(repository: repository); await reopened.load()
-        XCTAssertEqual(reopened.plans.first?.sections, model.draft.sections)
+        XCTAssertEqual(reopened.plans.first?.sections.map(\.items), model.draft.sections.map(\.items))
     }
     func testChapterBoundsSurviveShorterBookAndTransientInvalidValues() {
         let shorter = PlanChapterBounds(chapter: 150, lastChapter: 150, chapterCount: 1)

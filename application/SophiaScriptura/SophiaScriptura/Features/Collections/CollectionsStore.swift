@@ -26,6 +26,8 @@ final class CollectionsStore: ObservableObject {
     private var writeChain: Task<StudyCommitResult, Never>?
     @Published private(set) var plans: [StudyPlan] = []
     @Published private(set) var persistenceUncertain = false
+    private var planLifecycleActivated = false
+    private var planTreeTrash: [PlanTreeTrash] = []
     private var planFormatActivated = false
     private var planOperations: [PlanOperation] = []
     private var commandReceipts: [StudyCommandReceipt] = []
@@ -34,6 +36,7 @@ final class CollectionsStore: ObservableObject {
     private var legacyBaseline: CollectionsSnapshot?
     private var pendingLegacy: [(UUID, CollectionsLegacyPatch)] = []
     weak var planNotes: NotesSession?
+    weak var planCompanion: CompanionSession?
     var validatePlanReference: ((PlanItemPayload, String) async throws -> Void)?
     @Published var studyMutationBlocked = false
 
@@ -623,6 +626,7 @@ final class CollectionsStore: ObservableObject {
     }
 
     func moveCollectionToTrash(id: UUID) {
+        if let plan = planOwningFolder(id) { Task { _ = await setPlanTreeTrashed(plan.id, trashed: true) }; return }
         guard !rejectWhileSophyCommits() else { return }
 
         protection.cancel(affecting: [.collections])
@@ -638,6 +642,9 @@ final class CollectionsStore: ObservableObject {
     }
 
     func restoreCollectionFromTrash(id: UUID) {
+        if let record = planTreeTrash.first(where: { $0.folderIDs.contains(id) }), let planID = record.planIDs.first {
+            Task { _ = await setPlanTreeTrashed(planID, trashed: false) }; return
+        }
         guard !rejectWhileSophyCommits() else { return }
 
         guard let index = collections.firstIndex(where: { $0.id == id }) else { return }
@@ -647,6 +654,9 @@ final class CollectionsStore: ObservableObject {
     }
 
     func permanentlyDeleteCollection(id: UUID) {
+        if let record = planTreeTrash.first(where: { $0.folderIDs.contains(id) }), let planID = record.planIDs.first {
+            Task { _ = await submit(.init(expectedPlanRevision: plans.first(where: { $0.id == planID })?.revision, intent: .purgePlan(planID))) }; return
+        }
         guard !rejectWhileSophyCommits() else { return }
 
         protection.cancel(affecting: [.collections])
@@ -686,6 +696,7 @@ final class CollectionsStore: ObservableObject {
         guard noteAccessAllows(artifactID) else { return }
         guard allowChanges([collectionID]) else { return }
         guard collection(id: collectionID)?.isUnfiled != true else { return }
+        if plans.contains(where: { $0.id == artifactID && $0.materialsFolderID == collectionID }) { notice = "The Plan must remain in its Plan folder."; return }
         memberships.remove(CollectionMembership(collectionID: collectionID, artifactID: artifactID))
         touch(collectionID)
         enqueueWrite()
@@ -911,7 +922,13 @@ final class CollectionsStore: ObservableObject {
             return AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
         }
         let planItems = plans.filter { $0.isActive && planAccessAllowed($0) }.map {
-            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedCount)/\($0.items.count) complete", kind: .plan, modifiedAt: $0.modifiedAt, isPlanComplete: $0.isComplete)
+            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedSectionCount)/\($0.sections.count) sections complete", kind: .plan, modifiedAt: $0.modifiedAt, isPlanComplete: $0.isComplete)
+        }
+        let readingItems: [CollectionArtifact] = plans.filter { $0.isActive && planAccessAllowed($0) }.flatMap { plan in
+            plan.items.filter { $0.payload.kind == .scripture }.map { item in
+                CollectionArtifact(id: item.id, title: item.payload.referenceLabel,
+                    subtitle: "Scripture · \(plan.title)", kind: .scripture, modifiedAt: plan.modifiedAt)
+            }
         }
         let covered = Set(noteItems.map(\.id))
             .union(pointsToPonder.map(\.id))
@@ -919,7 +936,7 @@ final class CollectionsStore: ObservableObject {
             .union(linkItems.map(\.id))
             .union(conversationItems.map(\.id))
             .union(savedAnnotations.map(\.id))
-        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems + pointItems + planItems
+        return artifacts.filter { !covered.contains($0.id) && $0.kind != .note && $0.kind != .conversation } + noteItems + passageItems + linkItems + conversationItems + annotationItems + pointItems + planItems + readingItems
     }
 
     func pickableArtifacts(
@@ -1082,7 +1099,9 @@ final class CollectionsStore: ObservableObject {
 
     private func knownItem(_ id: UUID) -> Bool {
         guard noteAccessAllows(id) else { return false }
-        return plans.contains { $0.id == id && $0.isActive && planAccessAllowed($0) }
+        return plans.contains { plan in
+            plan.isActive && planAccessAllowed(plan) && (plan.id == id || plan.items.contains { $0.id == id && $0.payload.kind == .scripture })
+        }
             || artifacts.contains { $0.id == id && $0.kind != .note && $0.kind != .conversation }
             || pointsToPonder.contains { $0.id == id && $0.trashedAt == nil }
             || passages.contains { $0.id == id }
@@ -1108,6 +1127,7 @@ final class CollectionsStore: ObservableObject {
         plans = snapshot.plans; planOperations = snapshot.planOperations
         commandReceipts = snapshot.commandReceipts; retainedPlanAccess = snapshot.retainedPlanAccess
         planFormatActivated = snapshot.planFormatActivated
+        planLifecycleActivated = snapshot.planLifecycleActivated; planTreeTrash = snapshot.planTreeTrash
         revision = snapshot.revision
         pointsToPonder = snapshot.pointsToPonder
         passages = snapshot.passages
@@ -1127,7 +1147,8 @@ final class CollectionsStore: ObservableObject {
     func exportBackupSnapshot() throws -> CollectionsSnapshot {
         try protection.require(collections.map(\.protectionID), in: .collections)
         guard plans.allSatisfy(planAccessAllowed), links.allSatisfy({ accessAllowed($0.access) }),
-              retainedPlanAccess.allSatisfy({ accessAllowed($0.access) }) else { throw ItemLockError.locked }
+              retainedPlanAccess.allSatisfy({ accessAllowed($0.access) }),
+              planTreeTrash.allSatisfy({ $0.links.allSatisfy { accessAllowed($0.access) } }) else { throw ItemLockError.locked }
         return exportSnapshot()
     }
 
@@ -1136,7 +1157,7 @@ final class CollectionsStore: ObservableObject {
 
         do {
             try protection.require(collections.map(\.protectionID), in: .collections)
-            guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+            guard (1...5).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
             await flush()
             try protection.require(collections.map(\.protectionID), in: .collections)
             var restored = snapshot
@@ -1167,6 +1188,7 @@ final class CollectionsStore: ObservableObject {
             unfiledAccent: unfiledAccent
         )
         result.planFormatActivated = planFormatActivated; result.plans = plans
+        result.planLifecycleActivated = planLifecycleActivated; result.planTreeTrash = planTreeTrash
         result.planOperations = planOperations; result.commandReceipts = commandReceipts
         result.retainedPlanAccess = retainedPlanAccess; result.schemaVersion = result.requiredSchemaVersion
         return result
@@ -1278,6 +1300,7 @@ extension CollectionsStore {
         collections.contains { !$0.isUnfiled && $0.protectionID != nil }
             || plans.contains { !$0.access.collectionsCredentialIDs.isEmpty }
             || links.contains { !$0.access.collectionsCredentialIDs.isEmpty }
+            || planTreeTrash.contains { $0.links.contains { !$0.access.collectionsCredentialIDs.isEmpty } }
             || linkedNoteAccess.values.contains { !$0.collectionsCredentialIDs.isEmpty }
             || retainedPlanAccess.contains { !$0.access.collectionsCredentialIDs.isEmpty }
     }
@@ -1324,6 +1347,72 @@ extension CollectionsStore {
             return await submit(.init(intent: .legacyPatch(try JSONEncoder().encode(patch))))
         } catch { return .rejected(.invalid) }
     }
+    private func planFolderAccessAllowed(_ id: UUID, snapshot: CollectionsSnapshot) -> Bool {
+        var current: UUID? = id; var seen = Set<UUID>()
+        while let next = current {
+            guard seen.insert(next).inserted, let folder = snapshot.collections.first(where: { $0.id == next }),
+                  folder.isActiveInLibrary, !protection.isLocked(folder.protectionID, in: .collections) else { return false }
+            current = folder.parentID
+        }
+        return true
+    }
+    private func filePlanMaterials(_ plan: inout StudyPlan, folderID: UUID, snapshot: inout CollectionsSnapshot) throws {
+        guard planFolderAccessAllowed(folderID, snapshot: snapshot) else { throw StudyMutationFailure.accessDenied }
+        let prior = snapshot.plans.first { $0.id == plan.id }
+        let allTargets = Set(plan.items.map { $0.payload.targetID ?? $0.id })
+        var expected: [UUID: Set<UUID>] = [:]
+        for index in plan.sections.indices {
+            let section = plan.sections[index]
+            let previousID = prior?.sections.first(where: { $0.id == section.id })?.materialsFolderID
+            let title = plan.sectionTitle(index)
+            let sectionFolderID: UUID
+            if let previousID, let f = snapshot.collections.firstIndex(where: { $0.id == previousID && $0.parentID == folderID }) {
+                guard planFolderAccessAllowed(previousID, snapshot: snapshot) else { throw StudyMutationFailure.accessDenied }
+                sectionFolderID = previousID
+                let detail = "Study materials for \(title) of the Plan ‘\(plan.title)’."
+                if snapshot.collections[f].name != title || snapshot.collections[f].detail != detail {
+                    snapshot.collections[f].name = title; snapshot.collections[f].detail = detail
+                    snapshot.collections[f].modifiedAt = Date()
+                }
+            } else {
+                sectionFolderID = UUID()
+                let accent = snapshot.collections.first(where: { $0.id == folderID })?.accent ?? .preset
+                snapshot.collections.append(StudyCollection(id: sectionFolderID, name: title,
+                    detail: "Study materials for \(title) of the Plan ‘\(plan.title)’.",
+                    parentID: folderID, accent: accent, modifiedAt: Date()))
+            }
+            plan.sections[index].materialsFolderID = sectionFolderID
+            expected[sectionFolderID] = Set(section.items.map { $0.payload.targetID ?? $0.id })
+        }
+        // Reorganize known assignments only. Removed assignments, unrelated material,
+        // old unlinked trees and their source objects remain available.
+        let oldFolders = Set(prior?.sections.compactMap(\.materialsFolderID) ?? [])
+        for oldFolder in oldFolders where snapshot.collections.contains(where: { $0.id == oldFolder && $0.parentID == folderID }) {
+            let desired = expected[oldFolder] ?? []
+            let removed = snapshot.memberships.filter { $0.collectionID == oldFolder && allTargets.contains($0.artifactID) && !desired.contains($0.artifactID) }
+            if !removed.isEmpty {
+                guard planFolderAccessAllowed(oldFolder, snapshot: snapshot) else { throw StudyMutationFailure.accessDenied }
+                snapshot.memberships.removeAll { removed.contains($0) }
+            }
+        }
+        // Upgrade the previous flat filing at this linked root without deleting items.
+        let flatTargets = snapshot.memberships.filter { $0.collectionID == folderID && allTargets.contains($0.artifactID) && $0.artifactID != plan.id }
+        for edge in flatTargets {
+            guard noteAccessAllows(edge.artifactID), accessAllowed(linkedNoteAccess[edge.artifactID] ?? .init()) else { throw StudyMutationFailure.accessDenied }
+            if let link = snapshot.links.first(where: { $0.id == edge.artifactID }), !accessAllowed(link.access) { throw StudyMutationFailure.accessDenied }
+        }
+        snapshot.memberships.removeAll { flatTargets.contains($0) }
+        expected[folderID] = [plan.id]
+        for (destination, targets) in expected {
+            for target in targets {
+                let edge = CollectionMembership(collectionID: destination, artifactID: target)
+                guard !snapshot.memberships.contains(edge) else { continue }
+                guard noteAccessAllows(target), accessAllowed(linkedNoteAccess[target] ?? .init()) else { throw StudyMutationFailure.accessDenied }
+                if let link = snapshot.links.first(where: { $0.id == target }), !accessAllowed(link.access) { throw StudyMutationFailure.accessDenied }
+                snapshot.memberships.append(edge)
+            }
+        }
+    }
     private func perform(_ request: StudyMutationRequest) async -> StudyCommitResult {
         defer {
             pendingLegacy.removeAll { $0.0 == request.commandID }
@@ -1357,9 +1446,12 @@ extension CollectionsStore {
             case .savePlan(var plan, let destination):
                 guard accessAllowed(plan.access) else { return .rejected(.accessDenied) }
                 planID = plan.id
+                let existingPlan = value.plans.first { $0.id == plan.id }
                 if let existing = value.plans.first(where: { $0.id == plan.id }) {
                     guard planAccessAllowed(existing) else { return .rejected(.accessDenied) }
                     guard request.expectedPlanRevision == existing.revision else { return .rejected(.stale) }
+                    if existing.folderOwnershipConfirmed == true, let owned = existing.materialsFolderID, plan.materialsFolderID != owned { return .rejected(.invalid) }
+                    if existing.trashedAt != plan.trashedAt { return .rejected(.invalid) }
                     // Replacing targets reopens only those assignments, regardless of a stale editor checkbox.
                     let prior = Dictionary(uniqueKeysWithValues: existing.items.map { ($0.id, $0) })
                     for s in plan.sections.indices { for i in plan.sections[s].items.indices {
@@ -1378,18 +1470,20 @@ extension CollectionsStore {
                     let edge = CollectionMembership(collectionID: destination, artifactID: plan.id)
                     if !value.memberships.contains(edge) { value.memberships.append(edge) }
                 }
-                // Newly saved reading reflections inherit the Plan's folder memberships in
-                // the same Collections commit as their checked ordered item.
-                let existingItemIDs = Set(value.plans.first(where: { $0.id == plan.id })?.items.map(\.id) ?? [])
-                let planFolders = Set(value.memberships.filter { $0.artifactID == plan.id }.map(\.collectionID))
-                for item in plan.items where item.origin == .reflection && item.operationID != nil && !existingItemIDs.contains(item.id) {
-                    if let target = item.payload.targetID {
-                        for folderID in planFolders {
-                            let membership = CollectionMembership(collectionID: folderID, artifactID: target)
-                            if !value.memberships.contains(membership) { value.memberships.append(membership) }
-                        }
-                    }
+                // New Plans own a dedicated root. Legacy Plans retain a unique valid
+                // link or acquire a root on their next save. The identity is immutable.
+                if existingPlan == nil || plan.materialsFolderID == nil || (existingPlan?.folderOwnershipConfirmed != true && !value.collections.contains(where: { $0.id == plan.materialsFolderID && $0.trashedAt == nil })) || value.plans.contains(where: { $0.id != plan.id && $0.materialsFolderID == plan.materialsFolderID }) {
+                    let parent = destination == StudyCollection.unfiledID ? nil : destination
+                    let folder = StudyCollection(id: UUID(), name: plan.title,
+                        detail: "This folder contains the study materials for the Plan ‘\(plan.title)’.",
+                        parentID: parent, accent: parent.flatMap { collection(id: $0)?.accent } ?? .preset, modifiedAt: Date())
+                    value.collections.append(folder); plan.materialsFolderID = folder.id
                 }
+                if plan.isActive, let folderID = plan.materialsFolderID {
+                    try filePlanMaterials(&plan, folderID: folderID, snapshot: &value)
+                }
+                plan.folderOwnershipConfirmed = true
+                value.planLifecycleActivated = true
                 plan.modifiedAt = Date(); try plan.validate()
                 let oldItems = Dictionary(uniqueKeysWithValues: value.plans.first(where: { $0.id == plan.id })?.items.map { ($0.id, $0.payload) } ?? [])
                 if let validatePlanReference {
@@ -1398,9 +1492,48 @@ extension CollectionsStore {
                     }
                 }
                 guard accessAllowed(plan.access), !collectionIDs(containing: plan.id).contains(where: isLocked) else { return .rejected(.accessDenied) }
+                if let folderID = plan.materialsFolderID, !planFolderAccessAllowed(folderID, snapshot: value) { return .rejected(.accessDenied) }
                 if let index = value.plans.firstIndex(where: { $0.id == plan.id }) { value.plans[index] = plan }
                 else { value.plans.append(plan) }
                 value.planFormatActivated = true
+            case .createPlanMaterialsFolder(let id, let folder, let replaceExisting):
+                guard let index = value.plans.firstIndex(where: { $0.id == id }), value.plans[index].isActive,
+                      planAccessAllowed(value.plans[index]) else { return .rejected(.accessDenied) }
+                if let expected = request.expectedPlanRevision, expected != value.plans[index].revision { return .rejected(.stale) }
+                planID = id
+                let priorPlanRevision = value.plans[index].revision
+                if replaceExisting, value.plans[index].materialsFolderID != nil { return .rejected(.invalid) }
+                if value.plans[index].materialsFolderID == nil {
+                    guard folder.id != StudyCollection.unfiledID, !value.collections.contains(where: { $0.id == folder.id }),
+                          folder.isActiveInLibrary, folder.protectionID == nil,
+                          !folder.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          folder.name == folder.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                          folder.name.localizedCaseInsensitiveCompare("No Folder") != .orderedSame else { return .rejected(.invalid) }
+                    if let parent = folder.parentID {
+                        guard value.collections.contains(where: { $0.id == parent && $0.isActiveInLibrary }), !isLocked(parent) else { return .rejected(.accessDenied) }
+                    }
+                    value.collections.append(folder)
+                    value.plans[index].materialsFolderID = folder.id
+                    value.plans[index].revision += 1; value.plans[index].modifiedAt = Date()
+                }
+                if let folderID = value.plans[index].materialsFolderID {
+                    var organized = value.plans[index]
+                    let oldSections = organized.sections
+                    try filePlanMaterials(&organized, folderID: folderID, snapshot: &value)
+                    if oldSections != organized.sections && priorPlanRevision == organized.revision { organized.revision += 1 }
+                    value.plans[index] = organized
+                }
+            case .filePlanMaterial(let id, let sectionID, let artifactID):
+                guard let plan = value.plans.first(where: { $0.id == id }), plan.isActive, planAccessAllowed(plan),
+                      let rootID = plan.materialsFolderID,
+                      let section = plan.sections.first(where: { $0.id == sectionID }),
+                      let folderID = section.materialsFolderID, knownItem(artifactID),
+                      noteAccessAllows(artifactID), accessAllowed(linkedNoteAccess[artifactID] ?? .init()) else { return .rejected(.accessDenied) }
+                guard value.collections.contains(where: { $0.id == folderID && $0.parentID == rootID && $0.isActiveInLibrary }), !isLocked(folderID) else { return .rejected(.accessDenied) }
+                if let link = value.links.first(where: { $0.id == artifactID }), !accessAllowed(link.access) { return .rejected(.accessDenied) }
+                let edge = CollectionMembership(collectionID: folderID, artifactID: artifactID)
+                if !value.memberships.contains(edge) { value.memberships.append(edge) }
+                planID = id
             case .saveLink(let link, let destination):
                 guard accessAllowed(link.access), let url = URL(string: link.url),
                       ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host?.isEmpty == false,
@@ -1411,7 +1544,29 @@ extension CollectionsStore {
                 }
                 value.links.append(link)
                 if link.planOrigin != nil || !link.access.isEmpty { value.planFormatActivated = true }
+            case .setPlanTreeTrashed(let id, let trashed):
+                planID = id
+                try preparePlanTreeTrash(planID: id, trashed: trashed, snapshot: &value)
+                value.planLifecycleActivated = true
+            case .finishPlanTreeNotes(let id):
+                guard let index = value.planTreeTrash.firstIndex(where: { $0.id == id }) else { return .rejected(.unavailable) }
+                if value.planTreeTrash[index].restoring { value.planTreeTrash.remove(at: index) }
+                else { value.planTreeTrash[index].pendingNotesAction = nil }
             case .purgePlan(let id):
+                if let record = value.planTreeTrash.first(where: { $0.planIDs.contains(id) }) {
+                    guard record.pendingNotesAction == nil else { return .rejected(.busy) }
+                    let pids = Set(record.planIDs), fids = Set(record.folderIDs)
+                    guard value.plans.filter({ pids.contains($0.id) }).allSatisfy(planAccessAllowed) else { return .rejected(.accessDenied) }
+                    for plan in value.plans where pids.contains(plan.id) {
+                        if !value.retainedPlanAccess.contains(where: { $0.planID == plan.id }) {
+                            value.retainedPlanAccess.append(.init(planID: plan.id, lastTitle: plan.title, access: plan.access, detachedAt: Date()))
+                        }
+                    }
+                    value.plans.removeAll { pids.contains($0.id) }; value.collections.removeAll { fids.contains($0.id) }
+                    value.memberships.removeAll { fids.contains($0.collectionID) || pids.contains($0.artifactID) }
+                    value.planTreeTrash.removeAll { $0.id == record.id }; planID = id
+                    break
+                }
                 guard let plan = value.plans.first(where: { $0.id == id }), plan.trashedAt != nil,
                       planAccessAllowed(plan), request.expectedPlanRevision == plan.revision else { return .rejected(.accessDenied) }
                 guard !value.planOperations.contains(where: { $0.planID == id }) else { return .rejected(.busy) }
@@ -1426,6 +1581,14 @@ extension CollectionsStore {
             case .finishOperation(let id):
                 guard let operation = value.planOperations.first(where: { $0.id == id }), accessAllowed(operation.access) else { return .rejected(.accessDenied) }
                 value.planOperations.removeAll { $0.id == id }
+            }
+            if value.planLifecycleActivated {
+                for plan in value.plans where plan.trashedAt == nil {
+                    guard let root = plan.materialsFolderID else { continue } // legacy record awaits next edit
+                    guard value.collections.contains(where: { $0.id == root && $0.trashedAt == nil }) else { return .rejected(.invalid) }
+                    let edge = CollectionMembership(collectionID: root, artifactID: plan.id)
+                    if !value.memberships.contains(edge) { value.memberships.append(edge) }
+                }
             }
             // Sticky union on all filing/protection paths, not just the Plan editor.
             for i in value.plans.indices {
@@ -1478,5 +1641,122 @@ extension CollectionsStore {
             notice = StudyMutationFailure.persistence.localizedDescription
             return .rejected(.persistence)
         }
+    }
+}
+
+extension CollectionsStore {
+    func adoptMandatoryPlanFolders() async {
+        for plan in plans where plan.trashedAt == nil && planAccessAllowed(plan) {
+            guard plan.materialsFolderID == nil || plan.folderOwnershipConfirmed != true else { continue }
+            let parent = memberships.first(where: { $0.artifactID == plan.id && $0.collectionID != plan.materialsFolderID })?.collectionID
+            _ = await submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(plan, collectionID: parent)))
+        }
+    }
+    func planOwningFolder(_ id: UUID) -> StudyPlan? { plans.first { $0.materialsFolderID == id } }
+    func planFolderDeleteTitle(_ id: UUID) -> String {
+        planOwningFolder(id) == nil ? "Delete \(collection(id: id)?.name ?? "Collection")?" : "Delete this Plan folder?"
+    }
+    func planFolderDeleteMessage(_ id: UUID) -> String {
+        planOwningFolder(id) == nil
+            ? "Subfolders move up one level. Anything that is not in another collection moves to No Folder. Nothing is deleted."
+            : "This will also delete the Plan, its subfolders, and items that aren’t shared elsewhere. Shared items will be kept. You can restore the Plan and folder together from Trash."
+    }
+    var planDeleteMessage: String {
+        "This will also delete its Plan folder, subfolders, and items that aren’t shared elsewhere. Shared items will be kept. You can restore the Plan and folder together from Trash."
+    }
+    func setPlanTreeTrashed(_ planID: UUID, trashed: Bool) async -> StudyCommitResult {
+        // Finish a prior interrupted Notes phase before accepting an opposite action.
+        await reconcilePlanTreeTrash()
+        guard !planTreeTrash.contains(where: { $0.planIDs.contains(planID) && $0.pendingNotesAction != nil }) else { return .rejected(.busy) }
+        let result = await submit(.init(intent: .setPlanTreeTrashed(planID: planID, trashed: trashed)))
+        guard result.receipt != nil else { notice = result.message; return result }
+        await reconcilePlanTreeTrash()
+        if planTreeTrash.contains(where: { $0.planIDs.contains(planID) && $0.pendingNotesAction != nil }) {
+            notice = "The Plan folder is in Trash, but its study items still need to finish saving. Retry after unlocking Notes."
+            return .uncertain(commandID: result.receipt!.commandID)
+        }
+        return result
+    }
+    func reconcilePlanTreeTrash() async {
+        for record in planTreeTrash {
+            guard let action = record.pendingNotesAction else { continue }
+            if !record.noteIDs.isEmpty {
+                guard let planNotes else { notice = "Open Notes before finishing the Plan deletion."; continue }
+                let result = await planNotes.setPlanTreeNotesTrashed(record.noteIDs, trashed: action, timestamp: record.timestamp)
+                guard case .committed = result else { notice = "The Plan's Notes changes are pending. Unlock Notes and retry."; continue }
+            }
+            if !record.conversations.isEmpty, planCompanion == nil { notice = "Open Companion to finish the Plan deletion."; continue }
+            if !record.conversations.isEmpty, let planCompanion {
+                for conversation in record.conversations where !conversation.isPlaceholder {
+                    if action { planCompanion.moveConversationToTrash(conversation.id) }
+                    else { planCompanion.restoreConversationFromTrash(conversation.id) }
+                }
+                await planCompanion.flush()
+            }
+            _ = await submit(.init(intent: .finishPlanTreeNotes(record.id)))
+        }
+    }
+    private func preparePlanTreeTrash(planID: UUID, trashed: Bool, snapshot: inout CollectionsSnapshot) throws {
+        guard let selected = snapshot.plans.first(where: { $0.id == planID }), planAccessAllowed(selected) else { throw StudyMutationFailure.accessDenied }
+        if !trashed {
+            if selected.trashedAt == nil { return }
+            guard let index = snapshot.planTreeTrash.firstIndex(where: { $0.planIDs.contains(planID) }) else {
+                // Pre-cascade Trash records have no archived bundle to recover.
+                if let i = snapshot.plans.firstIndex(where: { $0.id == planID }) { snapshot.plans[i].trashedAt = nil; snapshot.plans[i].revision += 1 }
+                return
+            }
+            let record = snapshot.planTreeTrash[index]
+            guard record.links.allSatisfy({ accessAllowed($0.access) }) else { throw StudyMutationFailure.accessDenied }
+            if let planNotes { try planNotes.requireNoteAccess(planNotes.snapshot.notes.filter { record.noteIDs.contains($0.id) }) }
+            guard record.pendingNotesAction == nil else { throw StudyMutationFailure.busy }
+            let ids = Set(record.folderIDs)
+            guard snapshot.collections.filter({ ids.contains($0.id) }).allSatisfy({ !isLocked($0.id) }) else { throw StudyMutationFailure.accessDenied }
+            for i in snapshot.collections.indices where ids.contains(snapshot.collections[i].id) { snapshot.collections[i].trashedAt = nil }
+            for i in snapshot.plans.indices where record.planIDs.contains(snapshot.plans[i].id) {
+                snapshot.plans[i].trashedAt = nil; snapshot.plans[i].revision += 1
+            }
+            for item in record.links where !snapshot.links.contains(where: { $0.id == item.id }) { snapshot.links.append(item) }
+            for item in record.passages where !snapshot.passages.contains(where: { $0.id == item.id }) { snapshot.passages.append(item) }
+            for item in record.annotations where !snapshot.savedAnnotations.contains(where: { $0.id == item.id }) { snapshot.savedAnnotations.append(item) }
+            for item in record.conversations where !snapshot.conversations.contains(where: { $0.id == item.id }) { snapshot.conversations.append(item) }
+            for item in record.points where !snapshot.pointsToPonder.contains(where: { $0.id == item.id }) { snapshot.pointsToPonder.append(item) }
+            snapshot.planTreeTrash[index].restoring = true; snapshot.planTreeTrash[index].pendingNotesAction = false
+            return
+        }
+        if selected.trashedAt != nil { return }
+        guard let root = selected.materialsFolderID else { throw StudyMutationFailure.unavailable }
+        var folders: Set<UUID> = [root]
+        var changed = true
+        while changed {
+            changed = false
+            for folder in snapshot.collections where folder.parentID.map(folders.contains) == true {
+                if folders.insert(folder.id).inserted { changed = true }
+            }
+        }
+        guard folders.allSatisfy({ !isLocked($0) }) else { throw StudyMutationFailure.accessDenied }
+        let planIDs = Set(snapshot.plans.filter { $0.materialsFolderID.map(folders.contains) == true }.map(\.id))
+        guard snapshot.plans.filter({ planIDs.contains($0.id) }).allSatisfy(planAccessAllowed) else { throw StudyMutationFailure.accessDenied }
+        let candidates = Set(snapshot.memberships.filter { folders.contains($0.collectionID) }.map(\.artifactID))
+        let sharedEdges = Set(snapshot.memberships.filter { edge in
+            !folders.contains(edge.collectionID) && snapshot.collections.contains { $0.id == edge.collectionID }
+        }.map(\.artifactID))
+        let sharedAssignments = Set(snapshot.plans.filter { !planIDs.contains($0.id) }.flatMap { $0.items.compactMap(\.payload.targetID) })
+        let exclusive = candidates.subtracting(sharedEdges).subtracting(sharedAssignments).subtracting(planIDs)
+        let notes = planNotes?.snapshot.notes.filter { exclusive.contains($0.id) && $0.trashedAt == nil } ?? []
+        if let planNotes { try planNotes.requireNoteAccess(notes) }
+        guard !exclusive.contains(where: { !noteAccessAllows($0) || !accessAllowed(linkedNoteAccess[$0] ?? .init()) }),
+              snapshot.links.filter({ exclusive.contains($0.id) }).allSatisfy({ accessAllowed($0.access) }) else { throw StudyMutationFailure.accessDenied }
+        let now = Date()
+        let record = PlanTreeTrash(planIDs: Array(planIDs), folderIDs: Array(folders), noteIDs: notes.map(\.id),
+            links: snapshot.links.filter { exclusive.contains($0.id) }, passages: snapshot.passages.filter { exclusive.contains($0.id) },
+            annotations: snapshot.savedAnnotations.filter { exclusive.contains($0.id) },
+            conversations: snapshot.conversations.filter { exclusive.contains($0.id) && !$0.isPlaceholder },
+            points: snapshot.pointsToPonder.filter { exclusive.contains($0.id) }, timestamp: now, pendingNotesAction: true)
+        snapshot.planTreeTrash.append(record)
+        snapshot.links.removeAll { exclusive.contains($0.id) }; snapshot.passages.removeAll { exclusive.contains($0.id) }
+        snapshot.savedAnnotations.removeAll { exclusive.contains($0.id) }; snapshot.conversations.removeAll { exclusive.contains($0.id) && !$0.isPlaceholder }
+        snapshot.pointsToPonder.removeAll { exclusive.contains($0.id) }
+        for i in snapshot.collections.indices where folders.contains(snapshot.collections[i].id) { snapshot.collections[i].trashedAt = now }
+        for i in snapshot.plans.indices where planIDs.contains(snapshot.plans[i].id) { snapshot.plans[i].trashedAt = now; snapshot.plans[i].revision += 1 }
     }
 }

@@ -1404,3 +1404,56 @@ Notes/Collections owners still perform all writes. Checked reflections preserve 
 order after the current assignment and inherit Plan memberships in its save. Music
 uses the existing root MusicSession. Plan ink, Companion embedding and the complete
 reader lease/restoration contract remain separate acceptance work.
+
+### Plan editing and automatic material filing — SP-053
+
+Owner-selected 2026-10-25: Plan editing uses a 350 ms debounce and serialized immutable
+save snapshots through CollectionsStore.submit. Writes do not disable draft editing;
+changes arriving during persistence are drained into the next revision. Validation and
+save failures remain visible. Notes and Collections retain their existing feature-owned
+writers, with editor changes feeding autosave and lifecycle boundaries flushing pending work.
+Each Plan may have a materialsFolderID, configured only inside Edit by choosing an
+existing folder, creating a named folder, or selecting None. Ordinary saves preserve nil.
+New note/link assignment creation first ensures a linked folder, creating a Plan-named
+folder only when none is linked; creation/linking uses the same Collections transaction.
+Both the assignment picker and reading study tools file newly saved materials directly
+there. Existing selected folders retain metadata and location. Unlinking retains original
+folders/materials/memberships, and a subsequent new note/link creates a fresh folder.
+No Folder uses a root folder. Scripture remains reference-only; no new schema is required.
+See [SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md) for scope/evidence.
+
+SP-053 inline-edit refinement (2026-10-25): the main Plan content screen switches
+between contents and the shared editor inside the existing fullscreen workspace.
+PlanDetailView owns the editing draft and header Done/Exit persistence boundaries.
+PlanEditorView supports embedded rendering without another NavigationStack or edit
+modal, keeping all commands/autosave and subordinate assignment/folder pickers.
+Creation still uses its existing route; no schema changes.
+
+SP-053 Day/Section filing (2026-10-25): each linked Plan has managed section subfolders,
+identified by optional PlanSection.materialsFolderID. CollectionsStore atomically
+creates/reconciles names and section assignment memberships; the root holds the shared
+Plan reference. The previous flat assigned materials are moved into these children
+on next save/ensure. Shared items can belong to multiple sections; other source folders
+remain intact. Section rename/reorder/move update managed filing, while removal/unlink
+retains materials. New note/link creation saves to the target section folder.
+
+### Strict Plan/folder lifecycle — SP-053, 2026-10-25
+
+Every new Plan owns a fixed non-null root with managed Day/Section children. Root
+identity cannot be changed/cleared; existing records are adopted non-destructively.
+Edit exposes only the read-only folder, without the previous arrangement help text.
+Progress is completed nonempty sections over total sections.
+
+Deleting either the Plan or owned root asks confirmation then moves the pair, descendant
+folders and exclusive contents to Trash. Shared items remain in other folders/Plans.
+A typed PlanTreeTrash bundle stores Collections-owned records and a durable Notes
+phase; launch/foreground can resume the idempotent cross-store save. Restore from
+either side restores the group. Collections v5 is sticky and version-gates current
+and fallback generations; v1–4 are still readable, with a pre-upgrade recovery envelope.
+See the SP-053 contract/ticket for exact receipt, retention and verification limits.
+
+SP-053 Scripture assignment editing: Plan and section-folder projections share a
+prefilled passage editor. Save validates the range and expected Plan revision through
+PlanCommandService/CollectionsStore; both presentations observe the same assignment ID.
+Changed selections reopen completion; unchanged selections preserve it. Folder actions
+retain Read Scripture. No copied scripture text, provider or schema changes.

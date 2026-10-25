@@ -263,7 +263,7 @@ struct StudyTrashedCollectionsView: View {
             }
             Button("Cancel", role: .cancel) { pendingPermanentDelete = nil }
         } message: {
-            Text("Subfolders move up one level. Items not in another collection move to No Folder. This cannot be undone.")
+            Text("For a deleted Plan folder, this also permanently removes its Plan and deleted folder tree. Shared items remain in their other locations. Ordinary collection subfolders move up one level. This cannot be undone.")
         }
         .alert("Delete \(pendingBulkDelete.count) collections permanently?", isPresented: $confirmBulkDelete) {
             Button("Delete Permanently", role: .destructive) {
@@ -274,7 +274,7 @@ struct StudyTrashedCollectionsView: View {
             }
             Button("Cancel", role: .cancel) { pendingBulkDelete.removeAll() }
         } message: {
-            Text("Subfolders move up one level. Items not in another collection move to No Folder. This cannot be undone.")
+            Text("For a deleted Plan folder, this also permanently removes its Plan and deleted folder tree. Shared items remain in their other locations. Ordinary collection subfolders move up one level. This cannot be undone.")
         }
     }
 }

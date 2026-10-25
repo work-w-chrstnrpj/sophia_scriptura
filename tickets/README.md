@@ -94,3 +94,7 @@ known. Do not invent module paths or mark draft schemas as finalized to make wor
 2026-10-20 owner correction: Plans open content-first with explicit Edit; basic Start/Resume
 uses the existing reader without a new mode. SP-049/basic SP-050 correction is selected;
 full D4 lifecycle/focus and SP-051/052 acceptance remain open. See SP-049 evidence.
+
+2026-10-25 owner selected [SP-053](SP-053-plan-autosave-and-materials-folders.md):
+Plan editing/autosave, shared linked folders, Notes/Collections editor autosave and
+personal-iPad delivery. Folder location remains independent of the Plan's memberships.

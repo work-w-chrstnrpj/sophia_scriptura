@@ -82,6 +82,9 @@ struct NotePrayerEditorView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .onChange(of: title) { _, value in
+            if rename, let note = session.note { session.metadata(title: value, tags: note.tags.joined(separator: ","), paper: note.paper) }
+        }
         .alert("Clear prayer?", isPresented: $confirmClear) {
             Button("Clear", role: .destructive) { session.clearPrayerContent() }
             Button("Cancel", role: .cancel) {}
@@ -115,7 +118,7 @@ struct NotePrayerEditorView: View {
                 }
                 .navigationTitle("Edit update")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { editingUpdate = nil } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Done") { editingUpdate = nil } }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             session.updatePrayerUpdate(id: update.id, body: editingUpdateBody)
@@ -125,6 +128,7 @@ struct NotePrayerEditorView: View {
                 }
             }
             .onAppear { editingUpdateBody = update.body }
+            .onChange(of: editingUpdateBody) { _, value in session.updatePrayerUpdate(id: update.id, body: value) }
         }
         .onAppear {
             session.toolsVisible = true

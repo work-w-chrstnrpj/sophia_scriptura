@@ -2,6 +2,8 @@ import Foundation
 
 struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
     var id = UUID()
+    var materialsFolderID: UUID?
+    var folderOwnershipConfirmed: Bool?
     var revision = 0
     var title: String
     var detail = ""
@@ -17,8 +19,9 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
     var trashedAt: Date?
     var isActive: Bool { archivedAt == nil && trashedAt == nil }
     var items: [PlanItem] { sections.flatMap(\.items) }
+    var completedSectionCount: Int { sections.filter { !$0.items.isEmpty && $0.items.allSatisfy { $0.completedAt != nil } }.count }
     var completedCount: Int { items.filter { $0.completedAt != nil }.count }
-    var isComplete: Bool { !items.isEmpty && completedCount == items.count }
+    var isComplete: Bool { !sections.isEmpty && completedSectionCount == sections.count }
     func sectionTitle(_ index: Int) -> String { sections[index].title ?? "\(sectionPrefix) \(index + 1)" }
     func validate() throws {
         guard revision >= 0, title == title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -53,11 +56,11 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
         if sectionID == nil || cursor?.sectionID == sectionID { cursor = nil }
     }
     func duplicated() -> Self {
-        var copy = self; copy.id = UUID(); copy.revision = 0; copy.cursor = nil
+        var copy = self; copy.id = UUID(); copy.materialsFolderID = nil; copy.folderOwnershipConfirmed = nil; copy.revision = 0; copy.cursor = nil
         copy.title = String(title.prefix(73)) + " (Copy)"; copy.createdAt = Date(); copy.modifiedAt = copy.createdAt
         copy.archivedAt = nil; copy.trashedAt = nil
         for s in copy.sections.indices {
-            copy.sections[s].id = UUID()
+            copy.sections[s].id = UUID(); copy.sections[s].materialsFolderID = nil
             for i in copy.sections[s].items.indices {
                 copy.sections[s].items[i].id = UUID(); copy.sections[s].items[i].completedAt = nil
                 copy.sections[s].items[i].operationID = nil
@@ -68,6 +71,7 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
 }
 struct PlanSection: Codable, Equatable, Identifiable, Sendable {
     var id = UUID()
+    var materialsFolderID: UUID?
     var title: String?
     var items: [PlanItem] = []
 }

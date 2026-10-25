@@ -740,3 +740,92 @@ Full Plan reader lease, Plan Pencil and embedded Companion scope remain unselect
 The final candidate passed 456 unit tests; focused UI/release evidence is recorded in
 [release notes](../releases/v1.4.0.md). Signed in-place iPad install/version query passed;
 launch initially blocked by device lock. Remote cleanup preserves development and main.
+
+### SP-053 owner-selected refinement — 2026-10-25
+
+Owner authorized Plan assignment emphasis/reorder repair, autosave across Plans,
+Notes and Collections, automatic shared-material subfolders and in-place iPad install.
+[SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md) tracks implementation
+and evidence; remaining SP-050/051 feature gates are unchanged.
+
+SP-053 implementation includes the owner's movable Linked Folder clarification and
+grammatical folder description. Final arm64 simulator build and documentation checks
+passed; final runtime tests are blocked by simulator launch/service timeouts. The prior
+unit checkpoint was 460/461 passing before the final whitespace correction. iPad install
+failed before installation on missing Xcode account/widget profile; owner deferred sign-in.
+See SP-053 for exact evidence and open checks; no release or acceptance closure is claimed.
+
+SP-053 installation retry (2026-10-25): after owner-confirmed Xcode sign-in, signed
+build, signature/identity checks, in-place iPad install and normal launch passed.
+See `build/sp053/ipad-install-signed-in.log`. Final runtime/physical feature acceptance
+remains open; install is no longer deferred.
+
+SP-053 optional-folder correction selected (2026-10-25): owner requests configuration
+only inside Edit, existing/new/none choices, no folder recreation on ordinary autosave,
+and direct filing/automatic folder creation when creating a new note/link assignment.
+The preceding install is historical; follow-up verification and delivery are pending.
+
+SP-053 optional-folder correction delivered (2026-10-25): **466 unit tests passed**;
+signed build, signature/bundle checks, in-place iPad installation and normal launch passed.
+The content view omits Linked Folder; Edit supports existing/new/none, ordinary autosave
+keeps None, and a new note/link creates a folder only if needed. Existing folder metadata
+and old material survive relinking/unlinking. Physical interaction acceptance stays open.
+
+SP-053 inline editing selected (2026-10-25): owner authorized replacing the existing
+Plan edit modal with edit mode inside the main Plan, preserving every editor feature
+and autosave, then installing on iPad. PlanDetailView owns the editing draft/header;
+PlanEditorView supplies the shared embedded editor. Verification/delivery pending.
+
+SP-053 inline editing delivered (2026-10-25): 46 focused unit tests and 1 UI flow
+passed. Signed build, signature/bundle checks, in-place iPad install and launch passed
+(`build/sp053/inline-edit-ipad-install.log`). Main Plan Edit is inline; Done/Exit flush
+pending edits, and creation/subordinate pickers retain their routes. Owner acceptance open.
+
+SP-053 section-folder refinement selected (2026-10-25): owner requests Day/Section
+subfolders containing the matching assignments, with the shared Plan at the linked
+root. Optional per-section identity and atomic filing reconcile rename/reorder/moves,
+upgrade flat assignments, preserve other study data and route newly created material
+to its section child. First 48 focused checks passed; final verification pending.
+
+SP-053 section-folder refinement delivered (2026-10-25): **469 unit tests and 1
+hierarchy UI test passed**. Signed build, signature/bundle checks, in-place iPad
+installation and normal launch passed (`build/sp053/section-folders-ipad-install.log`).
+Plan stays at linked root; assignments file into their Day/Section children. Existing
+flat Plans upgrade on their next save/creation command. Owner physical acceptance open.
+
+SP-053 strict lifecycle selected (2026-10-25): owner requires mandatory immutable
+Plan roots, paired Plan/folder subtree deletion with confirmation, retention of items
+shared elsewhere, and section-based progress. Optional folder controls/help text are
+removed. Collections v5 and a resumable cross-store Trash bundle preserve recovery.
+The first corrected full run passed 475 unit tests; final UI/device verification pending.
+
+SP-053 strict lifecycle delivered (2026-10-25): 477 unit tests and the paired-deletion
+confirmation/progress UI flow passed. Signed build, strict signature/bundle checks,
+in-place iPad installation and normal launch passed (`build/sp053/strict-plan-ipad-install.log`).
+Fixed mandatory roots, shared-item-aware grouped Trash/restore, removed Edit help and
+completed-section progress are included. Owner physical acceptance remains open.
+
+SP-053 Scripture editing selected (2026-10-25): owner requests passage edits from the
+Plan view and section-folder item. Shared seeded picker and revision-checked command
+update the same reference, preserving the first item identity and folder layout.
+Full unit/UI verification and device delivery are pending.
+
+SP-053 Scripture editing delivered (2026-10-25): 481 unit tests passed; signed build,
+signature/bundle checks, in-place iPad install and normal launch passed
+(`build/sp053/scripture-edit-ipad-install.log`). Plan/folder rows edit one shared
+assignment with seeded fields; final UI retry and physical acceptance are separate.
+
+SP-053 Scripture editing corrected delivery (2026-10-25): 481 unit tests and the
+Plan/folder save-and-reopen UI flow passed. Nested folders now receive the shared reader.
+Signed build, strict signature/bundle checks and corrected in-place installation passed;
+launch blocked by iPadOS Locked (`build/sp053/scripture-edit-ipad-retry.log`). Owner
+unlock/manual launch and physical acceptance remain open.
+
+### Owner-authorized v1.5.0 / build 29 delivery — 2026-10-25
+
+SP-053 is selected for commit, push, merge and source release. It includes inline
+Plan autosave, mandatory section-organized materials folders, paired recoverable
+deletion preserving shared items, section-based progress, and Scripture editing
+from Plans and folders. See [release notes](../releases/v1.5.0.md) and
+[SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md). Automated
+release verification is separate from remaining physical owner acceptance.

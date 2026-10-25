@@ -5,6 +5,9 @@ import SwiftUI
     let id: UUID
     var draft: StudyPlan
     var expectedRevision: Int?
+    var autosaving = false
+    private var autosaveTask: Task<Void, Never>?
+    private var persistedDraft: StudyPlan?
     var saving = false
     var message: String?
     var addingTo: UUID?
@@ -14,6 +17,61 @@ import SwiftUI
     var commandID = UUID()
     init(plan: StudyPlan, isExisting: Bool = false) {
         id = plan.id; draft = plan; expectedRevision = isExisting ? plan.revision : nil
+        persistedDraft = isExisting ? plan : nil
+    }
+    var saveStatus: String { autosaving ? "Saving…" : draft == persistedDraft ? "Saved" : "Changes pending" }
+    func scheduleAutosave(store: CollectionsStore, collectionID: UUID) {
+        autosaveTask?.cancel()
+        guard draft != persistedDraft else { return }
+        autosaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled, let self else { return }
+            self.autosaveTask = nil
+            _ = await self.persist(store: store, collectionID: collectionID)
+        }
+    }
+    /// Serialize immutable snapshots while keeping the editor responsive. Edits made
+    /// during an awaited write are drained in the next revision, never overwritten.
+    func persist(store: CollectionsStore, collectionID: UUID) async -> Bool {
+        autosaveTask?.cancel(); autosaveTask = nil
+        while autosaving { await Task.yield() }
+        autosaving = true; defer { autosaving = false }
+        while draft != persistedDraft {
+            let captured = draft
+            var value = captured
+            value.title = value.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            do { try value.validate() }
+            catch { message = "Enter a Plan title and valid section details to save automatically."; return false }
+            let result = await store.submit(.init(commandID: UUID(), expectedPlanRevision: expectedRevision,
+                intent: .savePlan(value, collectionID: collectionID)))
+            guard result.receipt != nil, let saved = store.plans.first(where: { $0.id == value.id }) else {
+                message = result.message; return false
+            }
+            expectedRevision = saved.revision; persistedDraft = saved
+            if draft == captured {
+                // Keep the user's in-progress trailing space/caret while the durable
+                // title uses canonical trimming. It belongs to the acknowledged edit.
+                var acknowledged = saved; acknowledged.title = captured.title
+                draft = acknowledged; persistedDraft = acknowledged
+            } else {
+                draft.revision = saved.revision
+                draft.materialsFolderID = saved.materialsFolderID
+                for i in draft.sections.indices {
+                    if let section = saved.sections.first(where: { $0.id == draft.sections[i].id }) { draft.sections[i].materialsFolderID = section.materialsFolderID }
+                }
+                draft.access = draft.access.union(saved.access); draft.createdAt = saved.createdAt
+                draft.modifiedAt = saved.modifiedAt
+            }
+            message = nil
+        }
+        return true
+    }
+    /// Called after a checked material/folder command while its sheet owns input.
+    func adoptSavedPlan(_ saved: StudyPlan) {
+        guard saved.id == draft.id else { return }
+        autosaveTask?.cancel(); autosaveTask = nil
+        draft = saved; expectedRevision = saved.revision; persistedDraft = saved
+        message = nil
     }
     func sectionTitle(_ id: UUID) -> String {
         guard let i = draft.sections.firstIndex(where: { $0.id == id }) else { return draft.sectionPrefix }
@@ -70,13 +128,17 @@ import SwiftUI
         draft.sections[target].items.append(item); changed()
     }
     func moveSections(from source: IndexSet, to target: Int, renderedIDs: [UUID]) {
-        guard !saving, draft.sections.map(\.id) == renderedIDs, validMove(source, target, count: renderedIDs.count) else { return }
-        draft.sections.move(fromOffsets: source, toOffset: target); changed()
+        guard !saving, Set(draft.sections.map(\.id)) == Set(renderedIDs), validMove(source, target, count: renderedIDs.count) else { return }
+        let order = reorderedIDs(source, target, renderedIDs: renderedIDs)
+        let sections = Dictionary(uniqueKeysWithValues: draft.sections.map { ($0.id, $0) })
+        draft.sections = order.compactMap { sections[$0] }; changed()
     }
     func moveItems(in sectionID: UUID, from source: IndexSet, to target: Int, renderedIDs: [UUID]) {
         guard !saving, let s = draft.sections.firstIndex(where: { $0.id == sectionID }),
-              draft.sections[s].items.map(\.id) == renderedIDs, validMove(source, target, count: renderedIDs.count) else { return }
-        draft.sections[s].items.move(fromOffsets: source, toOffset: target); changed()
+              Set(draft.sections[s].items.map(\.id)) == Set(renderedIDs), validMove(source, target, count: renderedIDs.count) else { return }
+        let order = reorderedIDs(source, target, renderedIDs: renderedIDs)
+        let items = Dictionary(uniqueKeysWithValues: draft.sections[s].items.map { ($0.id, $0) })
+        draft.sections[s].items = order.compactMap { items[$0] }; changed()
     }
     func beginAssignment(sectionID: UUID, replacing itemID: UUID? = nil) {
         guard !saving, let section = draft.sections.first(where: { $0.id == sectionID }),
@@ -100,6 +162,11 @@ import SwiftUI
     func resetProgress(sectionID: UUID?) {
         guard !saving, sectionID.map({ id in draft.sections.contains { $0.id == id } }) ?? true else { return }
         draft.reset(sectionID: sectionID); changed()
+    }
+    private func reorderedIDs(_ source: IndexSet, _ target: Int, renderedIDs: [UUID]) -> [UUID] {
+        var ids = renderedIDs
+        ids.move(fromOffsets: source, toOffset: target)
+        return ids
     }
     private func validMove(_ source: IndexSet, _ target: Int, count: Int) -> Bool {
         !source.isEmpty && source.allSatisfy { (0..<count).contains($0) } && (0...count).contains(target)

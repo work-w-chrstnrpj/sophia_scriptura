@@ -10,8 +10,11 @@ struct PlanAssignmentPicker: View {
     var reader: ReaderSession?
     let referenceSystemID: String
     let planID: UUID
-    let access: StudyAccessRequirements
+    let sectionID: UUID
     let collectionID: UUID
+    var initialScripture: PlanItemPayload? = nil
+    var scriptureOnly = false
+    var onSaveScripture: (([PlanItemPayload]) async -> StudyCommitResult)? = nil
     @State private var newNoteTitle = ""
     @State private var newNoteKind: NoteKind = .page
     @State private var newLinkTitle = ""
@@ -27,8 +30,12 @@ struct PlanAssignmentPicker: View {
     @State private var createdNoteID = UUID()
     @State private var linkCommandID = UUID()
     @State private var createdLinkID = UUID()
+    @State private var folderCommandID = UUID()
+    @State private var proposedFolderID = UUID()
+    @State private var fileNoteCommandID = UUID()
     @State private var loading = false
     @State private var message: String?
+    @State private var seeded = false
     private var chapterCount: Int { max(1, reader?.books.first(where: { $0.id == bookID })?.chapterCount ?? 1) }
     private var bounds: PlanChapterBounds { .init(chapter: chapter, lastChapter: lastChapter, chapterCount: chapterCount) }
     private var selectedBook: Binding<String> {
@@ -40,9 +47,9 @@ struct PlanAssignmentPicker: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Assignment type", selection: $tab) {
+                if !scriptureOnly { Picker("Assignment type", selection: $tab) {
                     ForEach(AssignmentTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented).padding(.horizontal, 24).padding(.vertical, 16)
+                }.pickerStyle(.segmented).padding(.horizontal, 24).padding(.vertical, 16) }
                 Form {
                     switch tab {
                     case .scripture: scriptureFields
@@ -53,8 +60,17 @@ struct PlanAssignmentPicker: View {
                 }.scrollContentBackground(.hidden)
             }
             .appSurface().disabled(loading)
-            .navigationTitle("Add assignment").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(initialScripture == nil ? "Add assignment" : "Edit Scripture assignment").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .task {
+                await reader?.start()
+                if !seeded, let seed = initialScripture {
+                    chapter = seed.chapter ?? 1; lastChapter = chapter
+                    firstVerse = seed.startVerse ?? 1; lastVerse = seed.endVerse ?? firstVerse
+                    wholeChapter = seed.selection == .wholeChapter; bookID = seed.book ?? "GEN"
+                    seeded = true
+                }
+            }
             .onChange(of: tab) { _, _ in message = nil }
             .onChange(of: chapter) { _, value in lastChapter = max(value, lastChapter) }
             .onChange(of: firstVerse) { _, value in lastVerse = max(value, lastVerse) }
@@ -73,7 +89,8 @@ struct PlanAssignmentPicker: View {
                     Stepper("First verse \(firstVerse)", value: $firstVerse, in: 1...176)
                     Stepper("Last verse \(max(firstVerse, lastVerse))", value: $lastVerse, in: firstVerse...176)
                 }
-                Button("Add Scripture") { Task { await addScripture(reader) } }
+                Button(initialScripture == nil ? "Add Scripture" : "Save Scripture") { Task { await addScripture(reader) } }
+                    .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
                     .accessibilityIdentifier("plans.addScripture")
             } else { Text("Open Scripture to load the available books, then add readings here.") }
         }.listRowBackground(Color(theme.palette.soft))
@@ -86,6 +103,7 @@ struct PlanAssignmentPicker: View {
                 Text("Prayer").tag(NoteKind.prayer); Text("Journal").tag(NoteKind.journal)
             }
             Button("Create note assignment") { Task { await createNote() } }
+                .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
                 .accessibilityIdentifier("plans.assignment.createNote")
         }.listRowBackground(Color(theme.palette.soft))
         Section("Existing notes") {
@@ -106,6 +124,7 @@ struct PlanAssignmentPicker: View {
             TextField("Link title", text: $newLinkTitle).accessibilityIdentifier("plans.assignment.linkTitle")
             TextField("https://", text: $newLinkURL).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
             Button("Create link assignment") { Task { await createLink() } }
+                .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
                 .accessibilityIdentifier("plans.assignment.createLink")
         }.listRowBackground(Color(theme.palette.soft))
         Section("Existing links") {
@@ -118,12 +137,14 @@ struct PlanAssignmentPicker: View {
     }
     private func createNote() async {
         loading = true; defer { loading = false }
+        guard await ensureFolder() != nil else { return }
         let operationID = noteOperationID, noteID = createdNoteID
         let result = await notes.createPlanNote(planID: planID, operationID: operationID, noteID: noteID,
-            title: newNoteTitle, kind: newNoteKind, access: access)
+            title: newNoteTitle, kind: newNoteKind, access: store.accessForPlan(planID))
         guard case .committed = result else { message = "The note save was not confirmed. Check Notes before retrying."; return }
         store.link(notes: notes.snapshot.notes)
-        if collectionID != StudyCollection.unfiledID { store.addMembership(artifactID: noteID, collectionID: collectionID); await store.flush() }
+        let filing = await store.submit(.init(commandID: fileNoteCommandID, intent: .filePlanMaterial(planID: planID, sectionID: sectionID, artifactID: noteID)))
+        guard filing.receipt != nil else { message = filing.message; return }
         onAdded([.init(kind: .note, targetID: noteID)]); dismiss()
     }
     private func createLink() async {
@@ -131,11 +152,23 @@ struct PlanAssignmentPicker: View {
         let id = createdLinkID
         let url = newLinkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let title = newLinkTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let link = SavedLink(access: access, planOrigin: .init(planID: planID), id: id,
+        guard let parsed = URL(string: url), ["http", "https"].contains(parsed.scheme?.lowercased() ?? ""), parsed.host?.isEmpty == false else {
+            message = "Enter a valid http or https link."; return
+        }
+        guard let folderID = await ensureFolder() else { return }
+        let link = SavedLink(access: store.accessForPlan(planID), planOrigin: .init(planID: planID), id: id,
                              title: title.isEmpty ? (URL(string: url)?.host ?? "Link") : title, url: url, createdAt: Date())
-        let result = await store.submit(.init(commandID: linkCommandID, intent: .saveLink(link, collectionID: collectionID)))
+        let result = await store.submit(.init(commandID: linkCommandID, intent: .saveLink(link, collectionID: folderID)))
         guard result.receipt != nil else { message = result.message; return }
         onAdded([.init(kind: .link, targetID: id)]); dismiss()
+    }
+    private func ensureFolder() async -> UUID? {
+        let result = await PlanCommandService(store: store).ensureMaterialsFolder(planID: planID,
+            parentID: collectionID, commandID: folderCommandID, folderID: proposedFolderID)
+        guard result.receipt != nil, let folderID = store.plans.first(where: { $0.id == planID })?.sections.first(where: { $0.id == sectionID })?.materialsFolderID else {
+            message = result.message; return nil
+        }
+        return folderID
     }
     private func addScripture(_ reader: ReaderSession) async {
         loading = true; defer { loading = false }
@@ -147,7 +180,11 @@ struct PlanAssignmentPicker: View {
                 payloads.append(.scripture(referenceSystemID: referenceSystemID, book: bookID, chapter: number,
                     start: wholeChapter ? nil : firstVerse, end: wholeChapter ? nil : max(firstVerse, lastVerse)))
             }
-            onAdded(payloads); dismiss()
+            if let onSaveScripture {
+                let result = await onSaveScripture(payloads)
+                guard result.receipt != nil else { message = result.message; return }
+            } else { onAdded(payloads) }
+            dismiss()
         } catch { message = error.localizedDescription }
     }
 }

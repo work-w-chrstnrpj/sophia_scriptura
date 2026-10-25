@@ -23,6 +23,7 @@ struct CollectionArtifactRow: View {
     var onJournalField: ((JournalFieldSheet) -> Void)? = nil
     var editLink: (() -> Void)? = nil
     var cards = false
+    var readScripture: (() -> Void)? = nil
     static let listHeight: CGFloat = 80
     static let cardHeight: CGFloat = 176
 
@@ -168,6 +169,12 @@ struct CollectionArtifactRow: View {
 
     @ViewBuilder
     private var actions: some View {
+        if let readScripture {
+            Button("Edit Scripture assignment", systemImage: "pencil", action: open)
+                .accessibilityIdentifier("collections.artifact.editScripture")
+            Button("Read Scripture", systemImage: "book", action: readScripture)
+                .accessibilityIdentifier("collections.artifact.readScripture")
+        }
         if artifact.kind == .link, let editLink {
             Button("Edit Link", systemImage: "pencil", action: editLink)
                 .accessibilityIdentifier("collections.artifact.editLink")

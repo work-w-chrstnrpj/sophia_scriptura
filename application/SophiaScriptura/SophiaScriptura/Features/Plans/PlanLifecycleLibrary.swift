@@ -17,8 +17,10 @@ struct PlanLifecycleLibrary: View {
                         Button(archived ? "Unarchive" : "Restore") {
                             Task {
                                 var restored = plan
-                                if archived { restored.archivedAt = nil } else { restored.trashedAt = nil }
-                                message = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(restored, collectionID: nil))).message
+                                if archived {
+                                    restored.archivedAt = nil
+                                    message = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(restored, collectionID: nil))).message
+                                } else { message = await store.setPlanTreeTrashed(plan.id, trashed: false).message }
                             }
                         }
                         if !archived { Button("Delete permanently", role: .destructive) { pendingDelete = plan } }
@@ -33,6 +35,6 @@ struct PlanLifecycleLibrary: View {
                 guard let plan = pendingDelete else { return }; pendingDelete = nil
                 Task { message = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .purgePlan(plan.id))).message }
             }
-        } message: { Text("Referenced notes, links and drawings are kept.") }
+        } message: { Text("The Plan and its deleted folder tree will be permanently removed. Shared items remain in their other locations.") }
     }
 }

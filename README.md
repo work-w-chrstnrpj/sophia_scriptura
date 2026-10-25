@@ -291,13 +291,13 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release candidate is **[v1.4.0](docs/releases/v1.4.0.md), build 28**, dated
-**2026-10-20**. It adds Collection Plans with durable reading progress, checked note/link
-reflections, stable authoring and Notes-style completion stamps on Collection records.
-Collections uses Items/Add Items; reader startup protects the last saved book/chapter.
-It retains SP-048 Quiz Me reliability and the earlier connected study workflows.
-Complete reader lifecycle, Plan Pencil layers and embedded Companion integration remain
-SP-050/051 acceptance scope. See the release notes and tickets for verification limits.
+The current release is **[v1.5.0](docs/releases/v1.5.0.md), build 29**, dated
+**2026-10-25**. Plans edit inline with autosave, organize assignments in mandatory
+Plan/Day folders, and support editing Scripture from either the Plan or its folder.
+Deleting a Plan or its folder moves the pair to Trash while preserving shared items.
+Notes and Collections editors also autosave. Complete reader lifecycle, Plan Pencil
+layers and embedded Companion integration remain SP-050/051 acceptance scope.
+See the release notes and tickets for verification limits.
 
 The project has executable unit/integration and UI tests, signed iPad installation evidence
 and owner-device walkthroughs. Passing simulator tests or installation does not close all

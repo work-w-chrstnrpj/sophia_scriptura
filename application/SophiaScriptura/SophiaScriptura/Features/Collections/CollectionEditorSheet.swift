@@ -9,6 +9,8 @@ struct CollectionEditorSheet: View {
     let parentID: UUID?
     var editingID: UUID? = nil
 
+    @State private var initialized = false
+    @State private var createdID: UUID?
     @State private var name = ""
     @State private var detail = ""
     @State private var accent: CollectionAccent = .preset
@@ -63,6 +65,7 @@ struct CollectionEditorSheet: View {
                     .listRowBackground(Color(theme.palette.soft))
                 }
 
+                if let notice = store.notice { Text(notice).foregroundStyle(.red) }
                 Section {
                     CollectionColorGrid(selection: $accent)
                 } header: {
@@ -77,7 +80,7 @@ struct CollectionEditorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Done") { autosave(); Task { await store.flush(); if store.notice == nil { dismiss() } } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(editing == nil ? "Create" : "Save", action: commit)
@@ -91,6 +94,11 @@ struct CollectionEditorSheet: View {
                 Color(uiColor: .systemBackground).ignoresSafeArea().overlay { ContentUnavailableView("Collection locked", systemImage: "lock.fill") }
             }
         }
+        .onChange(of: name) { _, _ in autosave() }
+        .onChange(of: detail) { _, _ in autosave() }
+        .onChange(of: accent) { _, _ in autosave() }
+        .onChange(of: icon) { _, _ in autosave() }
+        .onDisappear { Task { await store.flush() } }
         .onChange(of: protection.unlocked) { _, _ in
             if let id = editingID ?? parentID, store.isLocked(id) { dismiss() }
         }
@@ -105,19 +113,24 @@ struct CollectionEditorSheet: View {
                 accent = parentID.flatMap(store.collection(id:))?.accent ?? .preset
                 nameFocused = true
             }
+            initialized = true
         }
     }
 
     private func commit() {
-        if let editingID {
+        autosave()
+        Task { await store.flush(); if store.notice == nil { dismiss() } }
+    }
+    private func autosave() {
+        guard initialized, unfiled || !trimmedName.isEmpty else { return }
+        if let editingID = editingID ?? createdID {
             if store.collection(id: editingID)?.isUnfiled == true {
                 guard store.updateUnfiledAccent(accent) else { return }
             } else {
                 guard store.updateCollection(id: editingID, name: name, detail: detail, accent: accent, icon: icon) else { return }
             }
         } else {
-            guard store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent, icon: icon) != nil else { return }
+            createdID = store.createCollection(name: name, detail: detail, parentID: parentID, accent: accent, icon: icon)
         }
-        dismiss()
     }
 }

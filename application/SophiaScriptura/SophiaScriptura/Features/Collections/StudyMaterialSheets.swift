@@ -69,6 +69,7 @@ struct StudyLinkEditorSheet: View {
     let linkID: UUID
     var collectionID: UUID? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var initialized = false
     @State private var title = ""
     @State private var url = ""
     @State private var error: String?
@@ -86,7 +87,7 @@ struct StudyLinkEditorSheet: View {
             .navigationTitle("Edit Link")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         if store.updateLink(id: linkID, title: title, url: url, from: collectionID) { dismiss() }
@@ -98,7 +99,16 @@ struct StudyLinkEditorSheet: View {
         }
         .onAppear {
             if let link = store.link(id: linkID) { title = link.title; url = link.url }
+            initialized = true
         }
+        .onChange(of: title) { _, _ in autosave() }
+        .onChange(of: url) { _, _ in autosave() }
+        .onDisappear { Task { await store.flush() } }
+    }
+    private func autosave() {
+        guard initialized else { return }
+        if store.updateLink(id: linkID, title: title, url: url, from: collectionID) { error = nil }
+        else { error = store.notice ?? "Enter a valid link to save automatically." }
     }
 }
 

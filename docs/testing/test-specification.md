@@ -1045,3 +1045,87 @@ v1.4.0/build 28 final candidate: `build/v140-release/verification.xcresult` pass
 456 unit tests and three native UI journeys (459 total), zero failures/skips. Focused
 UI selection is PlanUITests plus ScriptureReaderUITests/testNavigateRelaunchSettingsAndBottomTabs.
 Hosted release checks remain a separate publication gate.
+
+## SP-053 editing/autosave — 2026-10-25
+
+Final arm64 simulator build passed (`build/sp053/build-arm64.log`). A preceding unit
+checkpoint recorded 461 tests, 460 passed and one whitespace/caret failure; final source
+fixes that behavior but the rerun could not launch its host. All-four-kind Notes autosave
+and Plan concurrent-write/reorder/shared-folder checks passed at the earlier checkpoint.
+UI tests were interrupted by cross-project simulator contention; a separate iPad Pro
+runtime then shut down and later timed out on app queries. Final runtime/UI acceptance
+remains blocked, not passed. See [SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md)
+for commands, logs, final moved-folder checks, physical gaps and deferred signing/install.
+
+### SP-053 optional linked-folder refinement — 2026-10-25
+
+The final optional-folder source passed **466 unit tests, 0 failures** on iPad Pro
+13-inch (M5), iOS 27.0 simulator (`build/sp053/optional-folder-final.log`). This includes
+empty-link persistence/reopen, custom-folder metadata, unlink/new-material recreation,
+idempotent creation, direct note/link filing, stale attachment retention, access rejection
+and folder selection during in-flight autosave. An earlier focused rerun passed 46/46.
+This supersedes the prior unit-runtime gap; UI and device results are recorded in SP-053.
+
+### SP-053 inline main-Plan editing — 2026-10-25
+
+**46 focused Plan unit tests and 1 UI test passed**, zero failures, on iPad Pro
+13-inch (M5) simulator. UI coverage confirms the main header remains visible/hittable
+inside Edit, full-width editing without modal Save, folder chooser/None, Done, section
+editing and relaunch persistence. Evidence: `build/sp053/inline-edit-tests.log` and
+`build/sp053/inline-edit.xcresult`. Signed Debug build also passed. The preceding
+optional-folder source passed the full 466-unit suite; it is not a second full run
+after this presentation change. Physical acceptance remains separate.
+
+### SP-053 Day/Section folders — 2026-10-25
+
+The final section-folder source passed **469 unit tests, 0 failures** on iPad Pro
+13-inch (M5) simulator (`build/sp053/section-folders-r2.log`). New checks cover flat-root
+upgrade, root Plan reference, per-section/shared items, optional-key compatibility,
+reopen, stable rename/reorder/move, unlink/relink retention, removed-section material
+and atomic rejection for locked children. An initial focused run passed 48/48.
+The first combined attempt failed to compile the new UI fixture due to a local variable
+named `add` shadowing XCTest's attachment method; it was renamed before the passing
+unit run. UI/device results are recorded separately in SP-053.
+
+### SP-053 strict Plan/folder lifecycle — 2026-10-25
+
+The corrected ownership/cascade source passed **477 unit tests, 0 failures**, including
+root invariants, section progress, both cascade directions, shared-item retention across
+multiple Plan Trash records, restore/reopen, pending Notes recovery, write failure and
+legacy schema conversion (`build/sp053/strict-plan-final.log`). A UI rerun then replaced
+iPad-native confirmation-popover assumptions with the project's centered confirmation
+component and explicit cancellation. Final presentation/device evidence is recorded in
+[SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md).
+
+Strict-lifecycle final evidence: **477 unit tests passed** in
+`build/sp053/strict-plan-verified.log`; the confirmation/progress UI flow passed in
+`build/sp053/strict-plan-ui-menu.xcresult`. It checks both deletion directions, explicit
+Cancel, fixed-folder controls/help removal and completed-section totals. A long-press
+automation attempt stalled; the passing UI run uses the folder's action menu.
+
+### SP-053 Scripture assignment edits — 2026-10-25
+
+The shared Plan/folder Scripture editor source passed **481 unit tests, 0 failures**
+(`build/sp053/scripture-edit-final.log`). Regressions cover stable item/folder identity,
+changed-range reopen, multiple chapters, unchanged completion, stale/invalid targets,
+trashed access rejection and persistence/reopen. Signed device build passed. A first UI
+run failed before Plan navigation due to the tab dock's automation timing; the test
+retry avoids slow element scrolling. Final interaction/delivery evidence is in SP-053.
+
+Shared Scripture editor final verification: **481 unit tests passed** after recursively
+passing ReaderSession to child Collections. The UI flow passed in
+`build/sp053/scripture-edit-ui-final.xcresult`, editing from Plan → Day folder → Plan
+and confirming the prefilled chapter, both saved changes and Cancel behavior. Earlier
+failures identified setup selectors plus the missing nested reader; they are superseded
+by this corrected-source verification. Owner physical acceptance remains separate.
+
+### Final local release verification
+
+Versioned candidate: **481 unit tests and three native UI journeys passed**.
+The initial combined run passed units, inline edit/relaunch autosave, and shared
+Scripture editing, then stopped on an ambiguous XCTest Collection actions selector.
+Only that selector was disambiguated with firstMatch; the focused lifecycle retry
+passed all Plan/folder confirmation, Cancel/delete and section-progress checks.
+Evidence: `build/v1.5.0-release/verification.log` and `lifecycle-ui.log`, with matching
+result bundles. App product source did not change between these runs. Signed iPad
+build, install, launch and device version query passed. Physical acceptance remains open.

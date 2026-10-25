@@ -4,6 +4,33 @@ import CryptoKit
 @testable import SophiaScriptura
 
 final class NotesTests: XCTestCase {
+    @MainActor func testEveryNoteKindAutosavesEditsWithoutSaveButton() async throws {
+        let repository = NotesFileRepository(directory: try folder())
+        let session = NotesSession(repository: repository); await session.load()
+        var ids: [UUID] = []
+        for kind in [NoteKind.page, .canvas, .journal, .prayer] {
+            let id = try XCTUnwrap(session.create(kind: kind, title: "Autosave \(kind.displayName)"))
+            ids.append(id)
+            session.metadata(title: "Edited \(kind.displayName)", tags: "autosaved", paper: .ruled)
+            session.edit { note in
+                if kind == .canvas { note.objects.append(NoteObject(kind: .text, text: "Persist this object")) }
+                else { note.page?.body = "Persist this body" }
+            }
+        }
+        // Wait for the production debounce and repository; never call save explicitly.
+        for _ in 0..<100 {
+            if !session.dirty && !session.saving { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertFalse(session.dirty)
+        let reopened = NotesSession(repository: repository); await reopened.load()
+        for id in ids {
+            let note = try XCTUnwrap(reopened.snapshot.notes.first { $0.id == id })
+            XCTAssertTrue(note.title.hasPrefix("Edited")); XCTAssertEqual(note.tags, ["autosaved"])
+            if note.kind == .canvas { XCTAssertEqual(note.objects.last?.text, "Persist this object") }
+            else { XCTAssertEqual(note.page?.body, "Persist this body") }
+        }
+    }
     func testJournalTypeLegacyUnknownAndRoundTripPreserveBody() throws {
         var journal = JournalContent(); XCTAssertEqual(journal.journalType, .unset)
         journal.page.body = "Preserve my journal"; journal.mentalState = .thriving

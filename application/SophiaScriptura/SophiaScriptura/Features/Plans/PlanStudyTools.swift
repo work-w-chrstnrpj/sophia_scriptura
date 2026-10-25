@@ -11,6 +11,11 @@ import SwiftUI
     let targetCommandID = UUID()
     let attachCommandID = UUID()
     let finishID = UUID()
+    private let folderCommandID = UUID()
+    private let proposedFolderID = UUID()
+    private let fileNoteCommandID = UUID()
+    private var creationFolderID: UUID?
+    private var creationPlanRevision: Int?
     let kind: Kind
     let plan: StudyPlan
     let sectionID: UUID
@@ -26,13 +31,15 @@ import SwiftUI
     }
     func createNote(kind: NoteKind, color: CollectionAccent, title: String, notes: NotesSession, store: CollectionsStore, collectionID: UUID) async -> UUID? {
         guard !saving else { return nil }; saving = true; defer { saving = false }
-        guard eligible(store), await prepare(store) else { return nil }
+        guard eligible(store), await ensureFolder(store, collectionID: collectionID), await prepare(store) else { return nil }
         let result = await notes.createPlanNote(planID: plan.id, operationID: id, noteID: targetID,
             title: title, kind: kind, access: store.accessForPlan(plan.id), color: color)
         guard case .committed = result else { message = "The note save was not confirmed. Its draft is retained for retry."; return nil }
         targetSaved = true
-        guard await attach(store, collectionID: collectionID) else { return nil }
         store.link(notes: notes.snapshot.notes)
+        let filing = await store.submit(.init(commandID: fileNoteCommandID, intent: .filePlanMaterial(planID: plan.id, sectionID: sectionID, artifactID: targetID)))
+        guard filing.receipt != nil else { message = filing.message; return nil }
+        guard await attach(store, collectionID: collectionID) else { return nil }
         return targetID
     }
     func createLink(title: String, url: String, store: CollectionsStore, collectionID: UUID) async -> Bool {
@@ -48,11 +55,25 @@ import SwiftUI
             savedLink = SavedLink(access: store.accessForPlan(plan.id), planOrigin: .init(planID: plan.id), id: targetID,
                 title: name.isEmpty ? parsed.host! : name, url: address, createdAt: Date())
         }
+        guard await ensureFolder(store, collectionID: collectionID), let folderID = creationFolderID else { return false }
+        if !targetSaved { self.savedLink?.access = store.accessForPlan(plan.id) }
         guard let savedLink else { return false }
-        let result = await store.submit(.init(commandID: targetCommandID, intent: .saveLink(savedLink, collectionID: collectionID)))
+        let result = await store.submit(.init(commandID: targetCommandID, intent: .saveLink(savedLink, collectionID: folderID)))
         guard result.receipt != nil else { message = result.message; return false }
         targetSaved = true
         return await attach(store, collectionID: collectionID)
+    }
+    private func ensureFolder(_ store: CollectionsStore, collectionID: UUID) async -> Bool {
+        if creationFolderID != nil { return true }
+        let before = store.plans.first(where: { $0.id == plan.id })?.revision
+        let result = await PlanCommandService(store: store).ensureMaterialsFolder(planID: plan.id,
+            parentID: collectionID, commandID: folderCommandID, folderID: proposedFolderID)
+        guard result.receipt != nil, let current = store.plans.first(where: { $0.id == plan.id }),
+              let folderID = current.sections.first(where: { $0.id == sectionID })?.materialsFolderID else { message = result.message; return false }
+        creationFolderID = folderID
+        // Count our folder commit, without accepting an unrelated revision change.
+        creationPlanRevision = before == plan.revision ? current.revision : plan.revision
+        return true
     }
     private func eligible(_ store: CollectionsStore) -> Bool {
         guard let current = store.plans.first(where: { $0.id == plan.id }), current.isActive,
@@ -70,7 +91,7 @@ import SwiftUI
     private func attach(_ store: CollectionsStore, collectionID: UUID) async -> Bool {
         if attachment == nil {
             guard var current = store.plans.first(where: { $0.id == plan.id }), store.planAccessAllowed(current),
-                  current.isActive, current.revision == plan.revision,
+                  current.isActive, current.revision == (creationPlanRevision ?? plan.revision),
                   let s = current.sections.firstIndex(where: { $0.id == sectionID }) else {
                 message = "The Plan changed. Your new material is saved; reopen the Plan before assigning it."; return false
             }
@@ -83,7 +104,7 @@ import SwiftUI
             } else { position = current.sections[s].items.count }
             current.sections[s].items.insert(.init(id: itemID, payload: .init(kind: kind == .note ? .note : .link, targetID: targetID),
                 completedAt: Date(), origin: .reflection, operationID: id), at: position)
-            attachment = .init(commandID: attachCommandID, expectedPlanRevision: current.revision, intent: .savePlan(current, collectionID: collectionID))
+            attachment = .init(commandID: attachCommandID, expectedPlanRevision: current.revision, intent: .savePlan(current, collectionID: nil))
         }
         guard let attachment else { return false }
         let result = await store.submit(attachment)

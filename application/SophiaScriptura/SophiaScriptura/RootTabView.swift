@@ -250,7 +250,7 @@ struct RootTabView: View {
         shellContent
         .onAppear {
             sophy.setIdleQuotesSuspended(sophyIdleQuotesSuspended)
-            notes.collections = collections; collections.planNotes = notes
+            notes.collections = collections; collections.planNotes = notes; collections.planCompanion = companion
             collections.validatePlanReference = { payload, editionID in
                 let repository = try await reader.contentRepository(editionID: editionID)
                 let edition = try await repository.edition()
@@ -304,7 +304,7 @@ struct RootTabView: View {
             music.attachStudyAudio(studyAudio)
             scriptureNarration.bind(music: music, reader: reader)
         }
-        .task { await notes.load(); await collections.load(); collections.link(notes: notes.snapshot.notes); await companion.load();
+        .task { await notes.load(); await collections.load(); collections.link(notes: notes.snapshot.notes); await collections.adoptMandatoryPlanFolders(); await companion.load(); await collections.reconcilePlanTreeTrash();
             let activeIDs = Set(companion.activeConversations.map(\.id))
             for conversation in collections.conversations where !activeIDs.contains(conversation.id) { collections.removeCompanionConversation(conversation.id) }
             await activity.load(); activity.importQuizStudyLinks(companion.reviewingLinks)
@@ -391,8 +391,8 @@ struct RootTabView: View {
             protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil) || (notes.planPresentationActive && notes.selectedNoteID != nil))
-            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); companion.scheduleQuizCacheWarmup() }
-            else { chrome.stop(); Task { await collections.flush(); await companion.flush(); await activity.flush() } }
+            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); companion.scheduleQuizCacheWarmup(); Task { await collections.adoptMandatoryPlanFolders(); await collections.reconcilePlanTreeTrash() } }
+            else { chrome.stop(); notes.flushSurface?(); Task { await notes.save(); await collections.flush(); await companion.flush(); await activity.flush() } }
         }
     }
     private var shellFABBottomPadding: CGFloat {

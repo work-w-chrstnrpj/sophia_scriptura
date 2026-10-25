@@ -100,12 +100,16 @@ actor CollectionsFileRepository: CollectionsRepository {
                 let backup = directory.appendingPathComponent("before-plans.collections")
                 if !fm.fileExists(atPath: backup.path) { try original.write(to: backup, options: .atomic) }
                 var safe = try decode(original)
+                if snapshot.planLifecycleActivated && !safe.planLifecycleActivated {
+                    let lifecycleBackup = directory.appendingPathComponent("before-plan-lifecycle.collections")
+                    if !fm.fileExists(atPath: lifecycleBackup.path) { try original.write(to: lifecycleBackup, options: .atomic) }
+                }
                 safe.preservePlanAccess(from: snapshot)
                 let pointer = Pointer(schemaVersion: 2, id: UUID())
                 try encode(safe).write(to: url(pointer), options: .atomic)
                 fallback = pointer
             } else {
-                var safe = CollectionsSnapshot(); safe.planFormatActivated = true; safe.schemaVersion = 4
+                var safe = CollectionsSnapshot(); safe.planFormatActivated = true; safe.planLifecycleActivated = snapshot.planLifecycleActivated; safe.schemaVersion = safe.requiredSchemaVersion
                 let pointer = Pointer(schemaVersion: 2, id: UUID())
                 try encode(safe).write(to: url(pointer), options: .atomic); fallback = pointer
             }
@@ -136,7 +140,7 @@ actor CollectionsFileRepository: CollectionsRepository {
     }
 
     private func encode(_ snapshot: CollectionsSnapshot) throws -> Data {
-        guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (1...5).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
         try snapshot.validatePlans()
         let payload = try JSONEncoder().encode(snapshot)
         let data = try JSONEncoder().encode(Envelope(schemaVersion: snapshot.planFormatActivated ? 2 : 1, payload: payload, checksum: digest(payload)))
@@ -149,8 +153,8 @@ actor CollectionsFileRepository: CollectionsRepository {
         guard (1...2).contains(envelope.schemaVersion) else { throw CollectionsError.unsupported }
         guard digest(envelope.payload) == envelope.checksum else { throw CollectionsError.invalid }
         let snapshot = try JSONDecoder().decode(CollectionsSnapshot.self, from: envelope.payload)
-        guard (1...4).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
-        guard (snapshot.schemaVersion == 4) == (envelope.schemaVersion == 2) else { throw CollectionsError.invalid }
+        guard (1...5).contains(snapshot.schemaVersion) else { throw CollectionsError.unsupported }
+        guard (snapshot.schemaVersion >= 4) == (envelope.schemaVersion == 2) else { throw CollectionsError.invalid }
         try snapshot.validatePlans()
         return snapshot
     }

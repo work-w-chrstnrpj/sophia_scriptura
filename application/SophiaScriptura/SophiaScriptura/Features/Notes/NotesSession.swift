@@ -1215,3 +1215,27 @@ extension NotesSession {
         return dirty ? .uncertain(operationID: operationID) : .committed(ids: snapshot.notes.filter { $0.planOrigin?.planID == planID }.map(\.id), revision: snapshot.revision)
     }
 }
+
+
+extension NotesSession {
+    func setPlanTreeNotesTrashed(_ ids: [UUID], trashed: Bool, timestamp: Date) async -> StudyTargetCommitResult {
+        guard loaded, !backupLeaseHeld, !restoring else { return .rejected(.busy) }
+        let selected = snapshot.notes.filter { ids.contains($0.id) }
+        do { try requireNoteAccess(selected) } catch { return .rejected(.accessDenied) }
+        flushSurface?()
+        for i in snapshot.notes.indices where ids.contains(snapshot.notes[i].id) {
+            if trashed {
+                if snapshot.notes[i].trashedAt == nil {
+                    snapshot.notes[i].trashedAt = timestamp; snapshot.notes[i].deletedAt = timestamp
+                    snapshot.notes[i].updatedAt = timestamp
+                }
+            } else if snapshot.notes[i].trashedAt == timestamp {
+                snapshot.notes[i].trashedAt = nil; snapshot.notes[i].deletedAt = snapshot.notes[i].archivedAt
+                snapshot.notes[i].updatedAt = Date()
+            }
+        }
+        if let selectedNoteID, ids.contains(selectedNoteID), trashed { self.selectedNoteID = nil; surfaceGeneration = UUID() }
+        changed(); while saving { await Task.yield() }; await save()
+        return dirty ? .rejected(.persistence) : .committed(ids: ids, revision: snapshot.revision)
+    }
+}

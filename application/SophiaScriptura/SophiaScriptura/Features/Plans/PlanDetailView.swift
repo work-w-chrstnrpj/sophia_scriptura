@@ -13,6 +13,7 @@ struct PlanDetailView: View {
     let collectionID: UUID
     let planID: UUID
     var openNote: (UUID) -> Void
+    @State private var scriptureEdit: PlanScriptureEditTarget?
     @State private var editing: PlanEditorDraft?
     @State private var reading = false
     @State private var loading = false
@@ -49,7 +50,14 @@ struct PlanDetailView: View {
             VStack(spacing: 0) {
                 header
                 if let plan, permitted {
-                    if reading { readingContent(plan) } else { contents(plan) }
+                    if let editing {
+                        PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID,
+                            model: editing, embedded: true, onFinish: {
+                                self.editing = nil
+                                if store.plans.first(where: { $0.id == planID })?.trashedAt != nil { dismiss() }
+                            })
+                            .accessibilityIdentifier("plans.inlineEditor")
+                    } else if reading { readingContent(plan) } else { contents(plan) }
                 } else {
                     ContentUnavailableView("Plan unavailable", systemImage: "lock", description: Text("Unlock Collections to view this Plan."))
                 }
@@ -62,8 +70,8 @@ struct PlanDetailView: View {
                     if reading, permitted, let plan { readingControls(plan) }
                 }.background(Color(theme.palette.paper))
             }
-            .sheet(item: $editing) { model in
-                PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID, model: model)
+            .sheet(item: $scriptureEdit) { target in
+                PlanScriptureAssignmentEditor(store: store, notes: notes, reader: reader, target: target)
             }
             .sheet(isPresented: Binding(get: { linkID != nil }, set: { if !$0 { linkID = nil } })) {
                 if let linkID, permitted, store.link(id: linkID) != nil {
@@ -95,7 +103,7 @@ struct PlanDetailView: View {
             .onChange(of: permitted) { _, allowed in
                 if !allowed {
                     notes.flushSurface?(); notes.selectedNoteID = nil; notes.active = false
-                    reading = false; editing = nil; linkID = nil; reflection = nil; previewNoteID = nil; showingMusic = false
+                    reading = false; editing = nil; scriptureEdit = nil; linkID = nil; reflection = nil; previewNoteID = nil; showingMusic = false
                 }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -114,7 +122,13 @@ struct PlanDetailView: View {
                 Text(permitted ? plan?.title ?? "Plan" : "Plan").font(.system(.title2, design: .serif).weight(.semibold)).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if permitted, !reading, let plan {
+            if let editing, permitted {
+                Text(editing.saveStatus).font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                    .accessibilityIdentifier("plans.headerSaveStatus")
+                Button("Done", systemImage: "checkmark") { Task { await finishEditing() } }
+                    .buttonStyle(CollectionSecondaryButtonStyle()).disabled(saving || editing.saving)
+                    .accessibilityIdentifier("plans.finishEditing")
+            } else if permitted, !reading, let plan {
                 Button("Edit", systemImage: "pencil") { editing = PlanEditorDraft(plan: plan, isExisting: true) }
                     .buttonStyle(CollectionSecondaryButtonStyle()).accessibilityIdentifier("plans.edit")
             }
@@ -130,14 +144,14 @@ struct PlanDetailView: View {
                     Text(plan.title).font(.system(.largeTitle, design: .serif).weight(.semibold))
                     if !plan.detail.isEmpty { Text(plan.detail).foregroundStyle(Color(theme.palette.secondary)) }
                     HStack {
-                        Text("\(plan.completedCount) of \(plan.items.count) completed").font(.subheadline).foregroundStyle(Color(theme.palette.secondary))
+                        Text("\(plan.completedSectionCount) of \(plan.sections.count) completed").font(.subheadline).foregroundStyle(Color(theme.palette.secondary))
                         Spacer()
                         Button(plan.cursor == nil ? "Start" : "Resume", systemImage: "play.fill") { Task { await start(plan) } }
                             .buttonStyle(CollectionProminentButtonStyle())
                             .disabled(plan.items.isEmpty || reader == nil || saving || plan.archivedAt != nil)
                             .accessibilityIdentifier("plans.start")
                     }
-                    ProgressView(value: Double(plan.completedCount), total: Double(max(1, plan.items.count))).tint(Color(theme.palette.accent))
+                    ProgressView(value: Double(plan.completedSectionCount), total: Double(max(1, plan.sections.count))).tint(Color(theme.palette.accent))
                 }
                 ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
                     VStack(alignment: .leading, spacing: 14) {
@@ -160,7 +174,7 @@ struct PlanDetailView: View {
             switch item.payload.kind {
             case .note: if let id = item.payload.targetID { previewNote(id) }
             case .link: linkID = item.payload.targetID
-            case .scripture: break
+            case .scripture: scriptureEdit = .resolve(itemID: item.id, store: store)
             }
         } label: {
             HStack(alignment: .top, spacing: 16) {
@@ -176,7 +190,8 @@ struct PlanDetailView: View {
                         Text("Preview note").font(.caption).foregroundStyle(Color(theme.palette.accent))
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                if item.payload.kind != .scripture { Image(systemName: "chevron.right").foregroundStyle(Color(theme.palette.secondary)) }
+                Image(systemName: item.payload.kind == .scripture ? "pencil" : "chevron.right")
+                    .foregroundStyle(Color(theme.palette.secondary))
             }.padding(20).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("plans.assignment.\(item.id)")
     }
@@ -281,8 +296,18 @@ struct PlanDetailView: View {
         notes.flushSurface?(); previewNoteID = nil; notes.selectedNoteID = nil; notes.active = false
         Task { await notes.save(); if reading { await loadAssignment() } }
     }
+    private func finishEditing() async {
+        guard let editing, !saving else { return }
+        saving = true; defer { saving = false }
+        guard await editing.persist(store: store, collectionID: collectionID) else { return }
+        self.editing = nil
+    }
     private func closePlan() async {
         guard !saving, reflection?.saving != true else { return }
+        if let editing, permitted {
+            guard await editing.persist(store: store, collectionID: collectionID) else { return }
+            self.editing = nil
+        }
         notes.flushSurface?(); await notes.save()
         guard !notes.dirty else { message = "The note could not be saved. Retry before exiting."; return }
         notes.selectedNoteID = nil; notes.active = false; reading = false; dismiss()

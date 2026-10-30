@@ -1359,6 +1359,17 @@ extension CollectionsStore {
     private func filePlanMaterials(_ plan: inout StudyPlan, folderID: UUID, snapshot: inout CollectionsSnapshot) throws {
         guard planFolderAccessAllowed(folderID, snapshot: snapshot) else { throw StudyMutationFailure.accessDenied }
         let prior = snapshot.plans.first { $0.id == plan.id }
+        // The owned root follows every saved title; preserve any owner-written description.
+        if let root = snapshot.collections.firstIndex(where: { $0.id == folderID }) {
+            let detail = "This folder contains the study materials for the Plan ‘\(plan.title)’."
+            let generatedDetails = [snapshot.collections[root].name, prior?.title].compactMap { $0 }
+                .map { "This folder contains the study materials for the Plan ‘\($0)’." }
+            let updatedDetail = generatedDetails.contains(snapshot.collections[root].detail) ? detail : snapshot.collections[root].detail
+            if snapshot.collections[root].name != plan.title || snapshot.collections[root].detail != updatedDetail {
+                snapshot.collections[root].name = plan.title; snapshot.collections[root].detail = updatedDetail
+                snapshot.collections[root].modifiedAt = Date()
+            }
+        }
         let allTargets = Set(plan.items.map { $0.payload.targetID ?? $0.id })
         var expected: [UUID: Set<UUID>] = [:]
         for index in plan.sections.indices {
@@ -1647,7 +1658,8 @@ extension CollectionsStore {
 extension CollectionsStore {
     func adoptMandatoryPlanFolders() async {
         for plan in plans where plan.trashedAt == nil && planAccessAllowed(plan) {
-            guard plan.materialsFolderID == nil || plan.folderOwnershipConfirmed != true else { continue }
+            let titleMismatch = plan.isActive && plan.materialsFolderID.flatMap { collection(id: $0)?.name } != plan.title
+            guard plan.materialsFolderID == nil || plan.folderOwnershipConfirmed != true || titleMismatch else { continue }
             let parent = memberships.first(where: { $0.artifactID == plan.id && $0.collectionID != plan.materialsFolderID })?.collectionID
             _ = await submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(plan, collectionID: parent)))
         }

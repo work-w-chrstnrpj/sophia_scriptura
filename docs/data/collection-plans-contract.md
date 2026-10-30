@@ -576,8 +576,8 @@ retained. Older binaries reject v5 rather than stripping deletion records.
 New Plan saves create a dedicated root. Existing root identity becomes immutable; nil
 and replacement saves reject. Older records are adopted on save/accessible startup,
 with missing/shared roots replaced by dedicated roots. Section organization is retained.
-The folder reference is read-only in Edit; root metadata/location remain Collection
-properties. Main progress uses completedSectionCount; nonempty/all-checked means complete.
+The folder reference is read-only in Edit. SP-055 makes the root name follow the Plan
+title; custom descriptions, accent and location remain Collection properties. Main progress uses completedSectionCount; nonempty/all-checked means complete.
 
 `setPlanTreeTrashed` computes the owned subtree, including nested Plan roots. Both
 Plan/folder routes use it after confirmation. Shared edges/references outside this group
@@ -609,3 +609,66 @@ passage validator. First replacement keeps item ID; extra chapters get their own
 Changed completion clears, unchanged selection and unrelated completion remain. Section
 folder projections derive updated references from the committed Plan. Errors keep the
 editor open; no additional persistence format is introduced.
+
+### Additive playback/schedule values — SP-054
+
+No envelope/schema version changes. StudyPlan adds optional activityModeID (nil → Reading)
+and strictSchedule (nil → dates off). PlanSchedule stores optional startDate and timeZoneID;
+missing startDate anchors to first Play. Calendar arithmetic uses Gregorian days in that
+zone, including DST transitions. PlanSection adds optional dueDate values (legacy manual
+values remain readable; SP-055 writes them through Catch up rather than per-section inputs). Completion
+dates are derived from item completedAt, so editing/resetting progress cannot leave a stale
+saved completion timestamp. Strict off hides all schedule captions, including old overrides.
+
+PlanCursor adds optional activitySessionID. ActivityDraft and ActivityRecord add optional
+planID/planSectionID; absent keys remain nil. Existing store/export codecs preserve these
+fields on current-source round trips. Older code ignores unknown keys and can lose the new
+settings if it rewrites; old mandatory fields and on-disk schemas are unchanged.
+
+PlanPlaybackService writes cursor/progress only through CollectionsStore.submit. It starts,
+pauses and finishes through awaited ActivityStore commands. The last assignment first
+saves a sectionSummary with session identity, then commits Activity History. Failure
+leaves a retriable summary/draft; retry checks the exact History ID before writing. A
+Plan activity stopped through ordinary Activity only pauses its draft, without History or
+unchecked-item completion. The Plan finish command requires every assignment in its section
+to be checked. Reconciliation can recover an already-checked day; legacy partial History
+cannot check unfinished assignments. Reset clears the cursor, preventing old History from
+replaying completion. Unrelated
+drafts reject Play. A completed day never automatically starts another timer or section.
+
+### Catch up and managed root naming — SP-055
+
+Catch up is an explicit optional Edit action available only with a strict schedule and an
+overdue unfinished assignment. It assigns today in the stored calendar/time zone to the
+first unfinished section and one subsequent calendar day to each remaining unfinished
+section, in Plan order. Completed sections retain their dates. Item completedAt, section
+identities, assignment order and cursor are unchanged. The existing optional section
+dueDate key persists results, so no schema bump, reset or conversion is needed. Merely
+opening Edit or checking availability never changes dates. Captions in Edit and contents
+share due/completion derivation; partial days have no completion date.
+
+The root folder name is synchronized atomically inside the existing Plan transaction.
+Root identity/location and custom descriptions are preserved. Startup/foreground adoption
+also submits a checked save for an accessible Plan whose root name differs, repairing
+older partial-title roots without replacing folders or materials. Existing History records
+are retained; this ticket changes future Plan stop/completion commands, not past records.
+
+### Selected Day playback and retained timers — SP-056
+
+`start(planID, sectionID:)` selects a stable section identity; nil preserves main Play/Resume.
+Invalid/empty targets reject before progress/timer mutation. A valid stored item cursor
+resumes inside that Day; otherwise its first unfinished item is selected. An explicit
+completed-Day selection starts a reread; existing completion timestamps remain. The finish
+command still requires all Day assignments to be checked and commits a single History ID.
+
+Activity schema 1 adds optional pausedPlanDrafts (nil in legacy stores). Same-Plan switches
+pause/save the outgoing draft and resume/remove the selected retained draft in one awaited
+Activity write; there is one running draft. Session/Plan-Day keys must be unique across
+active/paused drafts and cannot collide with History. Paused timers have no runningSince.
+Current backups retain the optional field; older readers can ignore/drop it on rewrite.
+Overlap detection and mode migration include retained drafts; Delete All Activity clears
+all drafts. No one-time conversion or schema bump is required.
+
+Plan contents expose one date caption per Day and no aggregate footer. Title labels contain
+no dates. Edit keeps the Plan summary and Day captions. These are presentation changes;
+schedule and catch-up values are unchanged.

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlanEditorView: View {
+    @EnvironmentObject private var activity: ActivityStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmDeletePlan = false
     @State private var editMode: EditMode = .inactive
@@ -93,6 +94,39 @@ struct PlanEditorView: View {
                 Text(model.saveStatus).font(.caption).accessibilityIdentifier("plans.saveStatus")
                 if let message = model.message { Text(message).foregroundStyle(.red).accessibilityIdentifier("plans.error") }
             }
+            Section("Playback and schedule") {
+                Picker("Activity type", selection: Binding(get: { model.draft.resolvedActivityModeID }, set: { model.draft.activityModeID = $0 })) {
+                    ForEach(activity.modes) { mode in Text(mode.name).tag(mode.id) }
+                    if !activity.modes.contains(where: { $0.id == model.draft.resolvedActivityModeID }) {
+                        Text(activity.modeIncludingArchived(model.draft.resolvedActivityModeID)?.name ?? "Unavailable type").tag(model.draft.resolvedActivityModeID)
+                    }
+                }.accessibilityIdentifier("plans.activityType")
+                Toggle("Strict plan mode", isOn: Binding(get: { model.draft.strictSchedule != nil }, set: {
+                    model.draft.strictSchedule = $0 ? PlanSchedule() : nil
+                })).accessibilityIdentifier("plans.strictMode")
+                if model.draft.strictSchedule != nil {
+                    Toggle("Choose start date", isOn: Binding(get: { model.draft.strictSchedule?.startDate != nil }, set: {
+                        model.draft.strictSchedule?.startDate = $0 ? Date() : nil
+                    }))
+                    if model.draft.strictSchedule?.startDate != nil {
+                        DatePicker("Start date", selection: Binding(get: { model.draft.strictSchedule?.startDate ?? Date() }, set: {
+                            model.draft.strictSchedule?.startDate = $0
+                        }), displayedComponents: .date)
+                    }
+                    if model.draft.canCatchUp() {
+                        Button("Catch up from today", systemImage: "calendar.badge.clock") { model.catchUp() }
+                            .accessibilityIdentifier("plans.catchUp")
+                        Text("Move the first unfinished day to today, then schedule the remaining unfinished days in order. Completed days and checked assignments stay unchanged.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let caption = model.draft.scheduleCaption() {
+                        Text(caption).font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("plans.edit.dates")
+                    }
+                    Text("Each day or section is due on the next calendar day. Without a chosen start date, the first Play sets Day 1. Dates are reminders; overdue sections remain available.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section {
                 HStack {
                     Label("Linked Folder", systemImage: "folder")
@@ -142,7 +176,8 @@ struct PlanEditorView: View {
                     .onDelete { offsets in model.removeItems(offsets.compactMap { section.items.indices.contains($0) ? section.items[$0].id : nil }, from: section.id) }
                     Button("Add assignment", systemImage: "plus") {
                         Task { if await persistDraft() { model.beginAssignment(sectionID: section.id) } }
-                    }.accessibilityIdentifier("plans.addAssignment")
+                    }.accessibilityLabel("Add assignment to \(model.sectionTitle(section.id))")
+                        .accessibilityIdentifier("plans.addAssignment")
                     Menu {
                         Button("Reset section") { model.resetSection = section.id; model.confirmReset = true }
                         Button("Duplicate section") { model.duplicateSection(section.id) }
@@ -151,7 +186,12 @@ struct PlanEditorView: View {
                         HStack { Text("Manage section"); Spacer(); Image(systemName: "ellipsis") }.contentShape(Rectangle())
                     }.buttonStyle(.borderless).accessibilityLabel("Manage section")
                     .accessibilityIdentifier("plans.manageSection.\(section.id)")
-                } header: { Text(model.sectionTitle(section.id)) }
+                } header: { Text(model.sectionTitle(section.id)) } footer: {
+                    if let index = model.draft.sections.firstIndex(where: { $0.id == section.id }),
+                       let caption = model.draft.scheduleCaption(for: index) {
+                        Text(caption).font(.caption).accessibilityIdentifier("plans.edit.sectionDates.\(section.id)")
+                    }
+                }
             }
             .onMove { source, target in model.moveSections(from: source, to: target, renderedIDs: sections.map(\.id)) }
             Section {
@@ -169,7 +209,7 @@ struct PlanEditorView: View {
         }
         .appSurface()
         .disabled(model.saving)
-        .task { await reader?.start() }
+        .task { await activity.load(); await reader?.start() }
     }
     private var linkedFolderName: String {
         guard let id = model.draft.materialsFolderID else { return "Created automatically" }

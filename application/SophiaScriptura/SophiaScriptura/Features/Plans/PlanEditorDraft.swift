@@ -159,6 +159,10 @@ import SwiftUI
         if draft.cursor?.kind == .planSummary || (draft.cursor?.kind == .sectionSummary && draft.cursor?.sectionID == sectionID) { draft.cursor = nil }
         replacingItemID = nil; changed()
     }
+    func catchUp(now: Date = Date()) {
+        guard !saving, draft.catchUp(now: now) else { return }
+        changed()
+    }
     func resetProgress(sectionID: UUID?) {
         guard !saving, sectionID.map({ id in draft.sections.contains { $0.id == id } }) ?? true else { return }
         draft.reset(sectionID: sectionID); changed()

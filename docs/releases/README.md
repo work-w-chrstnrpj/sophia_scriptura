@@ -12,6 +12,8 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v1.6.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.6.0) | 2026-10-30 | Daily Plan playback/Activity, direct Day selection, optional Catch up, managed folder naming and Prayer menu polish | [Release notes](v1.6.0.md) |
+| [v1.5.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.5.0) | 2026-10-25 | Inline Plan autosave, managed folders, paired recovery and shared Scripture editing | [Release notes](v1.5.0.md) |
 | [v1.4.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.4.0) | 2026-10-20 | Collection Plans, checked reflections, stable authoring, Items wording and reader position restoration | [Release notes](v1.4.0.md) |
 | [v1.3.2](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.3.2) | 2026-10-18 | Quiz Me ready-bank lifecycle/refill reliability, matching summary actions and expanded app documentation | [Release notes](v1.3.2.md) |
 | [v1.3.1](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.3.1) | 2026-10-16 | Link editing, study-material subfolder drops and compact Points to Ponder cards | [Release notes](v1.3.1.md) |

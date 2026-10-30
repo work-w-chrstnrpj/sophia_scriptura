@@ -12,6 +12,9 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
     var referenceSystemID: String
     var sections: [PlanSection] = []
     var cursor: PlanCursor?
+    // Additive optional fields: existing Plans remain unscheduled, with Reading activity.
+    var activityModeID: String?
+    var strictSchedule: PlanSchedule?
     var access = StudyAccessRequirements()
     var createdAt = Date()
     var modifiedAt = Date()
@@ -30,8 +33,11 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
               sectionPrefix.count <= 40, !preferredEditionID.isEmpty, !referenceSystemID.isEmpty,
               sections.count <= 200, items.count <= 2000 else { throw StudyMutationFailure.invalid }
         var ids: Set<UUID> = [id]
+        guard activityModeID.map({ !$0.isEmpty && $0.count <= 200 }) ?? true,
+              strictSchedule.map({ TimeZone(identifier: $0.timeZoneID) != nil && ($0.startDate?.timeIntervalSince1970.isFinite ?? true) }) ?? true else { throw StudyMutationFailure.invalid }
         for section in sections {
             guard ids.insert(section.id).inserted,
+                  section.dueDate?.timeIntervalSince1970.isFinite ?? true,
                   section.title.map({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.count <= 120 }) ?? true else { throw StudyMutationFailure.invalid }
             for item in section.items {
                 guard ids.insert(item.id).inserted else { throw StudyMutationFailure.invalid }
@@ -74,6 +80,7 @@ struct PlanSection: Codable, Equatable, Identifiable, Sendable {
     var materialsFolderID: UUID?
     var title: String?
     var items: [PlanItem] = []
+    var dueDate: Date?
 }
 struct PlanItem: Codable, Equatable, Identifiable, Sendable {
     enum Origin: String, Codable, Sendable { case assignment, reflection }
@@ -135,6 +142,7 @@ struct PlanCursor: Codable, Equatable, Sendable {
     var itemID: UUID?
     var location: ReadingLocation?
     var editionID: String?
+    var activitySessionID: UUID?
 }
 struct RetainedPlanAccess: Codable, Equatable, Sendable {
     var planID: UUID

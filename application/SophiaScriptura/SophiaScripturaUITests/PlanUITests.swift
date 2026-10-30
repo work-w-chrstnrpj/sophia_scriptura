@@ -11,7 +11,10 @@ final class PlanUITests: XCTestCase {
         app.buttons["collections.addMaterial"].tap()
         app.buttons["collections.newPlan"].tap()
         let title = app.textFields["plans.title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5)); title.tap(); title.typeText("Autosaved Plan")
+        XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Sam", into: title)
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == 'Saved'"), object: app.staticTexts["plans.saveStatus"])
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 10), .completed)
+        enterText("ple Plan", into: title)
         app.swipeUp()
         app.buttons["plans.addAssignment"].firstMatch.tap()
         XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10))
@@ -23,10 +26,10 @@ final class PlanUITests: XCTestCase {
         app.segmentedControls.buttons["Scripture"].tap()
         app.buttons["plans.addScripture"].tap()
         app.buttons["Close"].tap() // Flushes automatically; never tap Save.
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
-        let item = app.buttons["collections.open.Autosaved Plan"]
+        assertMaterialPickerClosed(app)
+        let item = app.buttons["collections.open.Sample Plan"]
         XCTAssertTrue(item.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["collections.folder.Autosaved Plan"].exists, "Every Plan has a dedicated folder")
+        XCTAssertTrue(app.buttons["collections.folder.Sample Plan"].exists, "Every Plan has a dedicated folder")
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20)); openFolder(app)
         XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
@@ -44,7 +47,7 @@ final class PlanUITests: XCTestCase {
         let title = app.textFields["plans.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Inline Plan", into: title)
         app.buttons["plans.save"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        assertMaterialPickerClosed(app)
         app.buttons["collections.open.Inline Plan"].tap()
         XCTAssertTrue(app.buttons["plans.edit"].waitForExistence(timeout: 5)); app.buttons["plans.edit"].tap()
         XCTAssertTrue(title.waitForExistence(timeout: 5))
@@ -86,7 +89,7 @@ final class PlanUITests: XCTestCase {
         let title = app.textFields["plans.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Section Plan", into: title)
         app.buttons["plans.save"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        assertMaterialPickerClosed(app)
         app.buttons["collections.open.Section Plan"].tap()
         XCTAssertTrue(app.buttons["plans.edit"].waitForExistence(timeout: 5)); app.buttons["plans.edit"].tap()
         let assignmentButton = app.buttons["plans.addAssignment"].firstMatch
@@ -142,9 +145,10 @@ final class PlanUITests: XCTestCase {
         }
         XCTAssertTrue(app.steppers.matching(NSPredicate(format: "label CONTAINS 'First verse'")).firstMatch.waitForExistence(timeout: 5))
         scripture.tap()
+        scrollTo(app.staticTexts["Genesis 1:1"], app: app)
         XCTAssertTrue(app.staticTexts["Genesis 1:1"].waitForExistence(timeout: 5))
         app.buttons["plans.save"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        assertMaterialPickerClosed(app)
         let item = app.buttons["collections.open.My Reading Plan"]
         XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
         XCTAssertTrue(app.staticTexts["Genesis 1:1"].waitForExistence(timeout: 5))
@@ -155,6 +159,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["plans.next"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["plans.addNote"].exists)
         XCTAssertTrue(app.buttons["plans.addLink"].exists)
+        XCTAssertTrue(app.buttons["plans.newConversation"].exists)
         XCTAssertTrue(app.buttons["plans.music"].exists)
         let fullscreen = XCTAttachment(screenshot: app.screenshot()); fullscreen.name = "Fullscreen Plan reader"; fullscreen.lifetime = .keepAlways; add(fullscreen)
         app.buttons["plans.addNote"].tap()
@@ -178,7 +183,10 @@ final class PlanUITests: XCTestCase {
         app.buttons["plans.next"].tap()
         XCTAssertTrue(app.staticTexts["Study source"].waitForExistence(timeout: 5))
         app.buttons["plans.next"].tap()
-        XCTAssertTrue(app.staticTexts["Section complete"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Plan complete"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Congratulations!"].exists)
+        app.buttons["plans.completion.done"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Plan authoring"; screenshot.lifetime = .keepAlways; add(screenshot)
         app.terminate(); app.launch()
         XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20)); openFolder(app)
@@ -191,11 +199,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(body.waitForExistence(timeout: 10))
         XCTAssertTrue((body.value as? String)?.contains("My reflection stays inside the Plan.") == true)
         app.buttons["plans.note.back"].tap()
-        app.buttons["plans.start"].tap()
-        XCTAssertTrue(app.staticTexts["Section complete"].waitForExistence(timeout: 5))
-        app.buttons["plans.next"].tap()
-        XCTAssertTrue(app.staticTexts["Plan complete"].waitForExistence(timeout: 5))
-        app.buttons["plans.next"].tap()
+        XCTAssertFalse(app.buttons["plans.start"].isEnabled, "Completed Plans require explicit reset before replay")
         app.buttons["plans.edit"].tap()
         XCTAssertTrue(app.textFields["plans.title"].waitForExistence(timeout: 5))
         app.swipeUp()
@@ -259,7 +263,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Manage section"].firstMatch.waitForExistence(timeout: 5))
         title.tap(); title.typeText("Deletion regression")
         app.buttons["plans.save"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        assertMaterialPickerClosed(app)
         let item = app.buttons["collections.open.Deletion regression"]
         XCTAssertTrue(item.waitForExistence(timeout: 5)); item.tap()
         app.buttons["plans.edit"].tap()
@@ -290,7 +294,7 @@ final class PlanUITests: XCTestCase {
             let title = app.textFields["plans.title"]
             XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText(name, into: title)
             app.buttons["plans.save"].tap()
-            XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+            assertMaterialPickerClosed(app)
         }
         create("Delete by Plan")
         app.buttons["collections.open.Delete by Plan"].tap()
@@ -346,7 +350,7 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(addAssignment.waitForExistence(timeout: 5)); addAssignment.tap()
         XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10)); app.buttons["plans.addScripture"].tap()
         app.buttons["plans.save"].tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5)); app.buttons["Done"].tap()
+        assertMaterialPickerClosed(app)
         app.buttons["collections.open.Editable Scripture"].tap()
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plans.assignment.'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
@@ -376,6 +380,123 @@ final class PlanUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Edit Scripture assignment"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["Genesis 3"].waitForExistence(timeout: 5))
+    }
+    func testOneDayPlaybackStrictScheduleCompletionAndActivityHistory() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["SP009_TEST_STORE"] = UUID().uuidString
+        app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20)); openFolder(app)
+        app.buttons["collections.addMaterial"].tap(); app.buttons["collections.newPlan"].tap()
+        let title = app.textFields["plans.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Daily Gospel", into: title)
+        let strict = app.switches["plans.strictMode"]
+        scrollTo(strict, app: app)
+        strict.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        let firstAssignment = app.buttons["plans.addAssignment"].firstMatch
+        scrollTo(firstAssignment, app: app); firstAssignment.tap()
+        XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10)); app.buttons["plans.addScripture"].tap()
+        let addSection = app.buttons["plans.addSection"]
+        scrollTo(addSection, app: app); addSection.tap()
+        let secondAssignment = app.buttons.matching(NSPredicate(format: "identifier == 'plans.addAssignment' AND label == 'Add assignment to Day 2'")).firstMatch
+        scrollTo(secondAssignment, app: app); secondAssignment.tap()
+        XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10))
+        app.steppers["plans.assignment.chapter"].buttons["plans.assignment.chapter-Increment"].tap()
+        app.buttons["plans.addScripture"].tap()
+        app.buttons["plans.save"].tap()
+        assertMaterialPickerClosed(app)
+        let item = app.buttons["collections.open.Daily Gospel"]
+        XCTAssertTrue(item.waitForExistence(timeout: 10)); item.tap()
+        XCTAssertTrue(app.buttons["plans.playDay.2"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["plans.playDay.2"].label, "Day 2")
+        XCTAssertFalse(app.staticTexts["plans.dates"].exists)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'plans.dayDates.'")).count, 2)
+        app.buttons["plans.playDay.2"].tap()
+        XCTAssertTrue(app.textViews["scripture.text"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Genesis 2"].exists)
+        XCTAssertTrue(app.buttons["plans.newConversation"].exists)
+        let link = app.buttons["plans.addLink"].frame.midX
+        let chat = app.buttons["plans.newConversation"].frame.midX
+        let music = app.buttons["plans.music"].frame.midX
+        XCTAssertGreaterThan(chat, link); XCTAssertLessThan(chat, music)
+        app.buttons["plans.newConversation"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Configure a provider'")).firstMatch.waitForExistence(timeout: 5))
+        app.buttons["plans.next"].tap()
+        XCTAssertTrue(app.staticTexts["Section complete"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Congratulations!"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = "Day completion celebration"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.buttons["plans.completion.done"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 10)); item.tap()
+        XCTAssertTrue(app.staticTexts["1 of 2 completed"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["plans.playDay.1"].label, "Day 1")
+        XCTAssertFalse(app.staticTexts["plans.dates"].exists)
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH 'plans.dayDates.'")).count, 2)
+        app.buttons["plans.edit"].tap()
+        let dates = app.staticTexts["plans.edit.dates"]
+        scrollTo(dates, app: app)
+        XCTAssertTrue(dates.label.contains("Due date:")); XCTAssertTrue(dates.label.contains("Completion date:"))
+        XCTAssertFalse(app.switches["Custom due date"].exists)
+        XCTAssertFalse(app.buttons["plans.catchUp"].exists, "A current schedule needs no catch up")
+        app.buttons["plans.finishEditing"].tap()
+        app.buttons["plans.playDay.1"].tap()
+        XCTAssertTrue(app.textViews["scripture.text"].waitForExistence(timeout: 15))
+        app.buttons["plans.next"].tap()
+        XCTAssertTrue(app.staticTexts["Plan complete"].waitForExistence(timeout: 10))
+        app.buttons["plans.completion.done"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20))
+        let reveal = app.buttons["navigation.showTabs"]
+        if reveal.exists && reveal.isHittable { reveal.tap() }
+        app.buttons["tab.activity"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["Daily Gospel - Day 1"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Daily Gospel - Day 2"].exists)
+    }
+    func testHalfFinishedDayKeepsChecksAndHasNoHistoryAfterRelaunch() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication(); app.launchEnvironment["SP009_TEST_STORE"] = UUID().uuidString; app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20)); openFolder(app)
+        app.buttons["collections.addMaterial"].tap(); app.buttons["collections.newPlan"].tap()
+        let title = app.textFields["plans.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Partial Plan", into: title)
+        for _ in 0..<2 {
+            let assignment = app.buttons["plans.addAssignment"].firstMatch
+            scrollTo(assignment, app: app); assignment.tap()
+            XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10)); app.buttons["plans.addScripture"].tap()
+        }
+        app.buttons["plans.save"].tap(); assertMaterialPickerClosed(app)
+        let item = app.buttons["collections.open.Partial Plan"]
+        XCTAssertTrue(item.waitForExistence(timeout: 10)); item.tap()
+        app.buttons["plans.start"].tap()
+        XCTAssertTrue(app.textViews["scripture.text"].waitForExistence(timeout: 15))
+        app.buttons["plans.next"].tap()
+        XCTAssertTrue(app.buttons["plans.exit"].waitForExistence(timeout: 5)); app.buttons["plans.exit"].tap()
+        XCTAssertTrue(item.waitForExistence(timeout: 10))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 20)); openFolder(app); item.tap()
+        let checked = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'plans.assignment.' AND value == 'Completed'"))
+        XCTAssertEqual(checked.count, 1)
+        XCTAssertTrue(app.staticTexts["0 of 1 completed"].exists)
+        app.buttons["plans.exit"].tap()
+        let reveal = app.buttons["navigation.showTabs"]
+        if reveal.exists && reveal.isHittable { reveal.tap() }
+        app.buttons["tab.activity"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(app.staticTexts["No activities recorded yet."].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'activity.record.'")).count, 0)
+    }
+    private func assertMaterialPickerClosed(_ app: XCUIApplication) {
+        let closed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.navigationBars["Add Items"])
+        XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed)
+        XCTAssertFalse(app.buttons["collections.newPlan"].exists)
+    }
+    private func scrollTo(_ element: XCUIElement, app: XCUIApplication) {
+        for _ in 0..<7 {
+            if element.exists && element.isHittable { return }
+            app.swipeUp()
+        }
+        XCTAssertTrue(element.exists && element.isHittable)
     }
     private func enterText(_ text: String, into field: XCUIElement) {
         let focused = NSPredicate(format: "hasKeyboardFocus == true")

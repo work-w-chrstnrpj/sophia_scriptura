@@ -1457,3 +1457,52 @@ prefilled passage editor. Save validates the range and expected Plan revision th
 PlanCommandService/CollectionsStore; both presentations observe the same assignment ID.
 Changed selections reopen completion; unchanged selections preserve it. Folder actions
 retain Read Scripture. No copied scripture text, provider or schema changes.
+
+### Daily Plan playback and Activity — SP-054, 2026-10-30
+
+Owner selected one-day/section playback sessions. The last assignment commits a section
+summary, finishes its Activity timer, and shows a congratulations modal whose Done exits.
+Another Play/Resume starts the next unfinished section; Previous never crosses days.
+Completed Plans require explicit reset. PlanDetailView reuses the root Companion session
+for New conversation between Link and Music; creation never sends automatically.
+
+PlanPlaybackService coordinates Collections progress and ActivityStore's awaited writer
+with a stable cursor activitySessionID. Activity draft/record optional planID/planSectionID
+retain ownership; unrelated timers cannot be replaced. Early exit/background pauses and
+Resume keeps elapsed intervals. Final progress saves before History; failed History saves
+retain the summary/timer for retry. SP-055 owner correction: stopping through Activity
+pauses the Plan draft without History or checking remaining work. Only a completed
+section may commit History. Existing Notes save guards remain.
+Activity History uses `Plan title - section title` and the chosen activity type; missing
+Plan activityModeID defaults to Reading. System timer projections still omit study titles.
+
+Optional PlanSchedule enables Strict plan mode. Its startDate is chosen or set at first
+Play, with a stored Gregorian calendar/time zone and one calendar date per section.
+SP-055 removes manual per-section due-date controls. An explicit Catch up action in Edit
+appears when unfinished assignments are overdue and rebases all unfinished days from today,
+in order, preserving completed dates/checks. Saved section dueDate values retain legacy
+compatibility and store catch-up results. SP-056 keeps dates only in captions below each
+Day's assignments; contents/reading headings are plain titles. Contents omits the redundant
+aggregate footer; Edit retains its Plan-level summary and per-Day captions. Dates do
+not block overdue reading. All new persisted fields are optional and existing schemas,
+backups and Plans remain readable without a transformation/reset. See SP-054 for evidence.
+
+### Plan creation and Prayer refinements — SP-055, 2026-10-30
+
+CollectionsStore synchronizes the managed Plan root name on every Plan save, including
+partial-title autosaves. Generated descriptions follow the title; custom descriptions,
+folder identity, parent location and contents remain. Accessible startup/foreground adoption
+repairs mismatched root names through the same checked writer. CollectionArtifactPicker
+closes both its nested Plan editor and Add Items after a saved creation finishes; empty
+cancellation keeps the picker. Prayer's existing confirmed Clear action is available only
+inside More actions. No persistence schema or source-release change is introduced.
+
+### Direct Plan Day playback — SP-056, 2026-10-30
+
+A Day heading uses the shared Play/Resume command with its stable section ID. It resumes
+that Day's cursor/first unchecked assignment; a completed Day may be reread without resetting
+checks/dates. The completion-only Activity/History boundary is unchanged. Switching Days
+within the same Plan atomically retains the outgoing paused draft and restores the selected
+Day's timer; unrelated active activities still block. ActivitySnapshot.pausedPlanDrafts is
+optional for existing stores/backups, validates paused identities, and participates in mode
+canonicalization, overlap guards and Delete All Activity. No new store/schema version.

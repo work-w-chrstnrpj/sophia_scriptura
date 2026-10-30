@@ -263,8 +263,10 @@ struct CollectionsView: View {
             Spacer(minLength: 12)
 
             ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
+                .padding(.trailing, 12)
 
-            Button { showArchivedPlans = true } label: { Image(systemName: "list.bullet.rectangle") }
+            Button { showArchivedPlans = true } label: { LibraryHeaderIcon(systemImage: "list.bullet.rectangle") }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Archived Plans")
             Button { showArchivedCollections = true } label: {
                 LibraryHeaderIcon(systemImage: "archivebox")

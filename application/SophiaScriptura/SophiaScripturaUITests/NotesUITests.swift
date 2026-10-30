@@ -256,6 +256,20 @@ final class NotesUITests: XCTestCase {
         capture.name = "Page status toolbar choices"; capture.lifetime = .keepAlways; add(capture)
     }
 
+    func testPrayerClearIsOnlyInMoreActionsAndKeepsItsConfirmation() {
+        let app = launch(); notes(app)
+        newNote(app, kind: "prayer")
+        XCTAssertTrue(app.buttons["notes.prayer.status"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["notes.prayer.clear"].exists)
+        app.buttons["notes.prayer.more"].tap()
+        XCTAssertTrue(app.buttons["notes.prayer.clear"].waitForExistence(timeout: 5))
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = "Prayer Clear in More actions"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["notes.prayer.clear"].tap()
+        XCTAssertTrue(app.alerts["Clear prayer?"].waitForExistence(timeout: 5))
+        app.alerts.buttons["Cancel"].tap()
+        XCTAssertFalse(app.buttons["notes.prayer.clear"].exists)
+    }
+
     func testPrayerStatusStampsAndJournalStateIcons() {
         let app = launch(); notes(app)
         newNote(app, kind: "prayer")

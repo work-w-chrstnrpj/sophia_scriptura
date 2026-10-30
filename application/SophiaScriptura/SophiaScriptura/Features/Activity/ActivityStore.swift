@@ -31,6 +31,7 @@ import Combine
 
     var records: [ActivityRecord] { snapshot.records.sorted { $0.activityDate > $1.activityDate } }
     var draft: ActivityDraft? { snapshot.draft }
+    private var unrecordedDrafts: [ActivityDraft] { [snapshot.draft].compactMap { $0 } + (snapshot.pausedPlanDrafts ?? []) }
     var goalMinutes: Int { snapshot.dailyGoalMinutes }
     func goalMinutes(for modeID: String) -> Int { snapshot.dailyGoalMinutesByMode?[modeID] ?? 0 }
     var reminders: [ActivityReminder] { (snapshot.reminders ?? []).sorted { $0.date < $1.date } }
@@ -88,10 +89,10 @@ import Combine
         }
         let overlaps = snapshot.records.contains { record in
             record.intervals.contains { $0.start < endedAt && startedAt < $0.end }
-        } || (snapshot.draft.map { draft in
+        } || unrecordedDrafts.contains { draft in
             draft.intervals.contains { $0.start < endedAt && startedAt < $0.end }
                 || (draft.runningSince.map { $0 < endedAt && startedAt < Date() } ?? false)
-        } ?? false)
+        }
         guard !overlaps else { return .rejected(.invalidArguments) }
         var candidate = snapshot
         let interval = ActivityInterval(start: startedAt, end: endedAt)
@@ -220,6 +221,91 @@ import Combine
         persist()
     }
 
+    func draftForPlan(_ planID: UUID, sectionID: UUID) -> ActivityDraft? {
+        if let draft, draft.planID == planID, draft.planSectionID == sectionID { return draft }
+        return snapshot.pausedPlanDrafts?.first { $0.planID == planID && $0.planSectionID == sectionID }
+    }
+
+    /// Awaited Plan commands publish only durable snapshots, and never replace another timer.
+    func startPlanSession(id: UUID, planID: UUID, sectionID: UUID, title: String,
+                          modeID: String, now: Date = Date()) async -> Bool {
+        guard loaded, !rejectWhileSophyCommits() else { return false }
+        sophyCommitInFlight = true; defer { sophyCommitInFlight = false }
+        await flush()
+        if snapshot.records.contains(where: { $0.id == id }) { return false }
+        var candidate = snapshot
+        if var previous = candidate.draft, previous.planID == planID, previous.planSectionID != sectionID {
+            previous.pause(at: now)
+            var paused = candidate.pausedPlanDrafts ?? []
+            guard paused.count < 20_000 else { errorMessage = "Too many paused Plan days to save another."; return false }
+            paused.removeAll { $0.id == previous.id }
+            paused.append(previous); candidate.pausedPlanDrafts = paused; candidate.draft = nil
+        }
+        if var draft = candidate.draft {
+            guard draft.id == id, draft.planID == planID, draft.planSectionID == sectionID else {
+                errorMessage = "Finish the current activity before playing this Plan."; return false
+            }
+            if draft.runningSince == nil { draft.runningSince = now }
+            candidate.draft = draft
+        } else if let index = candidate.pausedPlanDrafts?.firstIndex(where: {
+            $0.id == id && $0.planID == planID && $0.planSectionID == sectionID
+        }), var draft = candidate.pausedPlanDrafts?.remove(at: index) {
+            draft.runningSince = now; candidate.draft = draft
+        } else {
+            guard let mode = modeIncludingArchived(modeID) else {
+                errorMessage = "Choose an available activity type in Edit Plan."; return false
+            }
+            candidate.draft = ActivityDraft(id: id, title: title, modeID: mode.id, modeLabel: mode.name,
+                startedAt: now, runningSince: now, intervals: [], description: "", editionID: nil,
+                guidedWorkflow: false, planID: planID, planSectionID: sectionID)
+        }
+        return await commitPlanActivity(candidate)
+    }
+
+    func finishPlanSession(id: UUID, now: Date = Date()) async -> Bool {
+        guard loaded, !rejectWhileSophyCommits() else { return false }
+        sophyCommitInFlight = true; defer { sophyCommitInFlight = false }
+        await flush()
+        // An ordinary Finish publishes optimistically. Re-save on retry so a failed
+        // ordinary write cannot be mistaken for a committed History record.
+        if snapshot.records.contains(where: { $0.id == id }) { return await commitPlanActivity(snapshot) }
+        guard var draft = snapshot.draft, draft.id == id, draft.planID != nil else {
+            errorMessage = "The Plan activity is unavailable. Resume the Plan to start a new activity."; return false
+        }
+        draft.pause(at: now)
+        guard draft.activeSeconds(at: now) > 0 else {
+            errorMessage = "Activity duration must be greater than zero."; return false
+        }
+        var candidate = snapshot
+        candidate.records.append(ActivityRecord(id: id, title: draft.title, modeID: draft.modeID,
+            modeLabel: draft.modeLabel, activityDate: draft.startedAt, activeSeconds: draft.activeSeconds(at: now),
+            source: "timer", timeZoneID: TimeZone.current.identifier, intervals: draft.intervals,
+            description: draft.description, readingRange: nil, editionID: draft.editionID, quizSessionID: nil,
+            planID: draft.planID, planSectionID: draft.planSectionID, createdAt: draft.startedAt, updatedAt: now))
+        candidate.draft = nil
+        return await commitPlanActivity(candidate)
+    }
+
+    func pausePlanSession(id: UUID, now: Date = Date()) async -> Bool {
+        guard loaded, !rejectWhileSophyCommits() else { return false }
+        sophyCommitInFlight = true; defer { sophyCommitInFlight = false }
+        await flush()
+        guard snapshot.draft?.id == id else { return true }
+        var candidate = snapshot; candidate.draft?.pause(at: now)
+        return await commitPlanActivity(candidate)
+    }
+
+    private func commitPlanActivity(_ candidate: ActivitySnapshot) async -> Bool {
+        do {
+            try await repository.save(candidate)
+            snapshot = candidate; saveRevision += 1
+            acknowledgeCommitted(candidate, revision: saveRevision); errorMessage = nil
+            return true
+        } catch {
+            errorMessage = "Plan activity could not be saved. Retry before continuing."; return false
+        }
+    }
+
     func pause(now: Date = Date()) {
         guard !rejectWhileSophyCommits() else { return }
 
@@ -241,6 +327,11 @@ import Combine
 
         guard var draft = snapshot.draft else { return }
         errorMessage = nil
+        if draft.planID != nil {
+            // A stopped Plan day is a resumable draft, never a partial History record.
+            // Only PlanPlaybackService may finish it after all assignments are checked.
+            draft.pause(at: now); snapshot.draft = draft; persist(); return
+        }
         if let readingStart { draft.readingStart = readingStart }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { errorMessage = "Enter an activity title."; return }
@@ -255,10 +346,11 @@ import Combine
         draft.pause(at: now)
         guard draft.activeSeconds(at: now) > 0 else { errorMessage = "Activity duration must be greater than zero."; return }
         let range = draft.readingStart.flatMap { start in readingEnd.map { PassageRange(start: start, end: $0) } }
-        let record = ActivityRecord(id: draft.id, title: cleaned, modeID: draft.modeID, modeLabel: draft.modeLabel,
+        var record = ActivityRecord(id: draft.id, title: cleaned, modeID: draft.modeID, modeLabel: draft.modeLabel,
             activityDate: draft.startedAt, activeSeconds: draft.activeSeconds(at: now), source: "timer", timeZoneID: TimeZone.current.identifier,
             intervals: draft.intervals, description: description, readingRange: range,
             editionID: draft.editionID, quizSessionID: nil, createdAt: draft.startedAt, updatedAt: now)
+        record.planID = draft.planID; record.planSectionID = draft.planSectionID
         snapshot.records.append(record)
         snapshot.draft = nil
         persist()
@@ -289,10 +381,10 @@ import Combine
         let interval = ActivityInterval(start: startedAt, end: finalEnd)
         let overlaps = snapshot.records.filter { $0.id != id }.contains { record in
             record.intervals.contains { $0.start < finalEnd && startedAt < $0.end }
-        } || (snapshot.draft.map { draft in
+        } || unrecordedDrafts.contains { draft in
             draft.intervals.contains { $0.start < finalEnd && startedAt < $0.end }
             || (draft.runningSince.map { $0 < finalEnd && startedAt < Date() } ?? false)
-        } ?? false)
+        }
         guard !overlaps else { errorMessage = "This time overlaps another saved activity. Correct the existing record first."; return }
         let now = Date()
         let previous = previousIndex.map { snapshot.records[$0] }
@@ -401,7 +493,7 @@ import Combine
 
         guard loaded else { return }
         snapshot.records.removeAll()
-        snapshot.draft = nil
+        snapshot.draft = nil; snapshot.pausedPlanDrafts = nil
         persist()
     }
 
@@ -481,10 +573,10 @@ import Combine
                 changed = true
                 continue
             }
-            let intersectsTimer = snapshot.draft.map { draft in
+            let intersectsTimer = unrecordedDrafts.contains { draft in
                 draft.intervals.contains { $0.start < link.endedAt && link.startedAt < $0.end }
                 || (draft.runningSince.map { $0 < link.endedAt && link.startedAt < Date() } ?? false)
-            } ?? false
+            }
             let intersectsRecord = snapshot.records.contains { record in
                 record.intervals.contains { $0.start < link.endedAt && link.startedAt < $0.end }
                 || (record.intervals.isEmpty && record.source == "manual" && Calendar.current.isDate(record.activityDate, inSameDayAs: link.startedAt))

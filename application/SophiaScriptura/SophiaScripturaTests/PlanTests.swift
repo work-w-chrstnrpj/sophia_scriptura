@@ -346,8 +346,8 @@ extension PlanTests {
         XCTAssertTrue(store.collectionIDs(containing: saved.id).contains(folderID))
         saved.title = "Renamed"
         _ = await store.submit(.init(expectedPlanRevision: saved.revision, intent: .savePlan(saved, collectionID: parent)))
-        XCTAssertEqual(store.collection(id: folderID)?.name, "My Plan")
-        XCTAssertEqual(store.collection(id: folderID)?.detail, "This folder contains the study materials for the Plan ‘My Plan’.")
+        XCTAssertEqual(store.collection(id: folderID)?.name, "Renamed")
+        XCTAssertEqual(store.collection(id: folderID)?.detail, "This folder contains the study materials for the Plan ‘Renamed’.")
         XCTAssertTrue(store.moveCollection(id: folderID, to: original))
         await store.flush()
         var movedPlan = try XCTUnwrap(store.plans.first)
@@ -477,5 +477,32 @@ extension PlanTests {
         XCTAssertEqual(result, .rejected(.accessDenied))
         XCTAssertEqual(locked.collection(id: childID)?.name, "Day 1")
         XCTAssertNil(locked.plans.first?.sections.first?.title)
+    }
+}
+
+
+extension PlanTests {
+    func testIncrementalCreationTitleUpdatesSameFolderAndRepairsOldTruncation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await store.load()
+        let model = PlanEditorDraft(plan: plan(title: "Sam"))
+        let first = await model.persist(store: store, collectionID: StudyCollection.unfiledID); XCTAssertTrue(first)
+        let folderID = try XCTUnwrap(model.draft.materialsFolderID)
+        XCTAssertEqual(store.collection(id: folderID)?.name, "Sam")
+        model.draft.title = "Sample Plan"
+        let final = await model.persist(store: store, collectionID: StudyCollection.unfiledID); XCTAssertTrue(final)
+        XCTAssertEqual(store.collection(id: folderID)?.name, "Sample Plan")
+        XCTAssertEqual(model.draft.materialsFolderID, folderID)
+        // Simulate a pre-fix saved folder while retaining its identity/materials.
+        var old = try store.exportBackupSnapshot()
+        let f = try XCTUnwrap(old.collections.firstIndex(where: { $0.id == folderID }))
+        old.collections[f].name = "Sam"
+        let restored = await store.restoreBackupSnapshot(old); XCTAssertTrue(restored)
+        await store.adoptMandatoryPlanFolders()
+        XCTAssertEqual(store.collection(id: folderID)?.name, "Sample Plan")
+        let reopened = CollectionsStore(repository: CollectionsFileRepository(directory: directory)); await reopened.load()
+        XCTAssertEqual(reopened.collection(id: folderID)?.name, "Sample Plan")
+        XCTAssertEqual(reopened.plans[0].materialsFolderID, folderID)
     }
 }

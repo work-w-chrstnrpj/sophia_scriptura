@@ -244,6 +244,8 @@ struct RootTabView: View {
         .environment(notes)
         .environmentObject(userProfile)
         .environmentObject(music)
+        .environmentObject(activity)
+        .environmentObject(companion)
     }
 
     private var studyLifecycleContent: some View {

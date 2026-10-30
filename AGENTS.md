@@ -425,3 +425,29 @@ folder picker is removed. Progress captions count completed Days/Sections.
 SP-053 Scripture editing: PlanScriptureAssignmentEditor.swift is shared by Plan and
 section-folder projections. PlanAssignmentPicker seeds the current passage;
 PlanCommandService.replaceScripture checks revision/access and uses the existing writer.
+
+## SP-054 structure update
+
+`Core/Plans/PlanSchedule.swift` owns optional strict dates and start-cursor derivation.
+`Features/Plans/PlanPlaybackService.swift` coordinates one-day playback through the
+existing Collections and Activity writers, with optional cursor session and Activity
+Plan/section IDs for retry/relaunch. PlanDetailView owns completion/exit and reuses root
+Companion/Activity environment objects. PlanEditorView exposes activity type and optional
+dates. Current schemas remain unchanged; missing fields preserve legacy defaults.
+
+## SP-055 structure update
+
+CollectionsStore synchronizes managed Plan root names during saves/adoption while preserving
+custom descriptions/location. CollectionArtifactPicker owns closing Add Items after saved
+Plan creation. PlanSchedule owns explicit optional Catch up and shared date captions;
+PlanEditorDraft/View own its edit/autosave action. PlanPlaybackService checks section
+completion before Activity History; ordinary Activity stop only pauses Plan drafts.
+NotePrayerEditorView exposes confirmed Clear only in More. Existing schemas/keys remain.
+
+## SP-056 structure update
+
+PlanDetailView Day headings call shared playback with a section ID; dates appear only once
+below each Day. PlanSchedule resolves targeted/resumed/replayed cursors. ActivityStore
+retains switched-out Day timers in optional ActivitySnapshot.pausedPlanDrafts; repository
+validation, mode canonicalization, overlap detection, backups and Activity clearing include
+them. Existing stored formats remain readable without a conversion or schema bump.

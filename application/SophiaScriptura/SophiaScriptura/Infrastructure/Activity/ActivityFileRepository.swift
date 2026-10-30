@@ -114,6 +114,22 @@ actor ActivityFileRepository {
               snapshot.records.count <= 100_000, snapshot.customModes.count <= 1_000,
               (snapshot.reminders?.count ?? 0) <= 100,
               Set(snapshot.records.map(\.id)).count == snapshot.records.count else { throw CocoaError(.coderInvalidValue) }
+        let paused = snapshot.pausedPlanDrafts ?? []
+        var sessionIDs = Set(snapshot.records.map(\.id))
+        if let draft = snapshot.draft { sessionIDs.insert(draft.id) }
+        var dayKeys: Set<String> = []
+        if let draft = snapshot.draft, let planID = draft.planID, let sectionID = draft.planSectionID {
+            dayKeys.insert(planID.uuidString + sectionID.uuidString)
+        }
+        guard paused.count <= 20_000 else { throw CocoaError(.coderInvalidValue) }
+        for draft in paused {
+            guard let planID = draft.planID, let sectionID = draft.planSectionID,
+                  draft.runningSince == nil, sessionIDs.insert(draft.id).inserted,
+                  dayKeys.insert(planID.uuidString + sectionID.uuidString).inserted,
+                  !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !draft.modeID.isEmpty, !draft.modeLabel.isEmpty,
+                  draft.intervals.allSatisfy({ $0.start <= $0.end && $0.seconds.isFinite }) else { throw CocoaError(.coderInvalidValue) }
+        }
         if let goals = snapshot.dailyGoalMinutesByMode {
             let activeModeIDs = Set(ActivityModeID.allCases.map(\.id) + ["reviewing"]
                 + snapshot.customModes.filter { !$0.archived }.map(\.id))

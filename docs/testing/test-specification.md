@@ -1129,3 +1129,72 @@ passed all Plan/folder confirmation, Cancel/delete and section-progress checks.
 Evidence: `build/v1.5.0-release/verification.log` and `lifecycle-ui.log`, with matching
 result bundles. App product source did not change between these runs. Signed iPad
 build, install, launch and device version query passed. Physical acceptance remains open.
+
+## SP-054 daily Plan sessions — 2026-10-30
+
+`PlanPlaybackTests` covers one-day boundaries, explicit next-day Resume, named History,
+pause/reopen/repeated Resume, unrelated timer preservation, exact-session external Finish,
+reset isolation, failed History/ordinary-Finish writes, summary recovery, selected activity
+type, first-Play date anchoring, seven-day date captions/overrides, DST and absent-key
+compatibility. The full native unit suite passed **491 tests, zero failures/skips** in
+`build/sp054/final-r2.xcresult`. A preceding 489-test run and the first expanded 491-test
+run also passed. **Both focused Plan UI journeys also passed** in that same bundle, for 493 total
+passing tests. Evidence and remaining acceptance are maintained in SP-054.
+
+The first combined UI attempt exposed an offscreen assignment assertion after adding
+settings and a shared Companion notice whose offscreen tab alert displaced fullscreen
+Plans. The former now scrolls to the assignment; the latter copies and clears the shared
+notice synchronously to retain an in-Plan error. New day-assignment accessibility labels
+identify their section. Two focused UI journeys verify the connected flows after correction.
+Physical app build/install/launch passed; UI-runner provisioning is blocked by missing
+Xcode account/profile, not a physical test failure. Owner/provider acceptance remains open.
+
+## SP-055 Plan/Prayer corrections — 2026-10-30
+
+The full native unit suite passed **494 tests, zero failures/skips** in
+`build/sp055/final.xcresult`. All **four focused UI journeys also passed**, for 498 total
+passing tests, zero failures/skips (`build/sp055/summary.json`). Coverage includes partial title
+saves/root repair/reopen, preserved custom root descriptions, optional ordered Catch up
+with interleaved completed days, checked-item/date preservation, incomplete finish rejection,
+and paused partial-day reopen/Resume without History. The first unit run caught custom
+description replacement and was corrected before this pass.
+
+Focused UI covers staged Sam → Sample Plan creation and automatic Add Items dismissal,
+partial-day checks/no History after relaunch, complete-day History and Edit date captions,
+and Clear only inside Prayer More with its existing confirmation. Device signed build,
+identity checks, in-place install and normal launch passed under the owner's existing
+physical-test authorization; physical UI automation remains blocked by Xcode account/profile
+setup recorded under SP-054. No live provider or personal-data deletion is part of testing.
+
+## SP-056 selected Day playback and dates — 2026-10-30
+
+The full native unit suite passed **499 tests, zero failures/skips** in
+`build/sp056/final.xcresult`; both focused UI journeys also passed, for **501 total tests**
+with zero failures/skips. Details are in SP-056. New cases select Day 2
+before Day 1, switch Days and reopen while retaining per-Day time/checks/session IDs, replay
+a completed Day without resetting its dates, reject invalid/empty targets and validate
+legacy/new paused-draft archives. Activity clearing also removes retained drafts.
+
+UI asserts plain Day button labels, exactly one date caption per Day, no aggregate contents
+footer, selected Day 2's Genesis 2 chapter and both completed History names. The partial-day
+relaunch/no History journey remains required. Owner-authorized signed in-place iPad install
+and normal launch passed; physical interaction/accessibility/landscape acceptance remains
+separate from simulator evidence.
+
+
+## v1.6.0 / build 30 release candidate — 2026-10-30
+
+Final versioned candidate passed **499 unit tests plus four simulator UI journeys**,
+zero failures/skips (`build/v1.6.0-release/final.xcresult`, `final.log`). UI selection:
+PlanUITests/testAutosaveCloseReopenAndProminentAssignmentActions,
+PlanUITests/testHalfFinishedDayKeepsChecksAndHasNoHistoryAfterRelaunch,
+PlanUITests/testOneDayPlaybackStrictScheduleCompletionAndActivityHistory, and
+NotesUITests/testPrayerClearIsOnlyInMoreActionsAndKeepsItsConfirmation.
+Signed device build, strict signature/identity checks, in-place install, normal launch and
+the device version/build query passed. Physical owner/accessibility/landscape/provider
+acceptance remains open. GitHub's Release workflow separately verifies/publishes the merge.
+
+The result-bundle summary confirms **503/503 passed**, zero failures/skips. Optional
+post-test `simctl diagnose` collection stalled after tests exited normally; only that
+child collection process was stopped. xcodebuild finalized its bundle and returned
+TEST SUCCEEDED. No test case was interrupted.

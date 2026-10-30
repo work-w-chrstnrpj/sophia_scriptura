@@ -14,6 +14,7 @@ struct NoteEditorView: View {
     @State private var title = ""
     @State private var gallery: String?
     @State private var showDetails = false
+    @State private var showMetadata = false
     @State private var importing = false
     @State private var linkPrompt = false
     @State private var link = "https://"
@@ -32,10 +33,13 @@ struct NoteEditorView: View {
             if session.note == nil {
                 ContentUnavailableView("Note unavailable or locked", systemImage: "lock.fill")
             } else if session.note?.kind == .prayer {
-                NotePrayerEditorView(session: session, reader: reader, addToCollection: { showCollectionPicker = true })
+                NotePrayerEditorView(session: session, reader: reader, addToCollection: { showCollectionPicker = true }, editMetadata: openMetadata)
             } else {
                 pageOrJournalEditor
             }
+        }
+        .sheet(isPresented: $showMetadata) {
+            if let note = session.note { NoteEditorSheet(noteID: note.id, session: session) }
         }
         .sheet(isPresented: $showCollectionPicker) {
             if let note = session.note {
@@ -126,6 +130,8 @@ struct NoteEditorView: View {
     }
     private var optionsMenu: some View {
             Menu {
+                Button(session.note?.kind.editTitle ?? "Edit Note", systemImage: "pencil", action: openMetadata)
+                    .accessibilityIdentifier("notes.editor.edit")
                 Menu("Paper", systemImage: "square.grid.3x3") {
                     ForEach(NoteDocument.Paper.allCases, id: \.self) { paper in
                         Button { changePaper(paper) } label: {
@@ -172,6 +178,10 @@ struct NoteEditorView: View {
                 }
                 Button(session.status, systemImage: session.dirty ? "arrow.clockwise" : "checkmark.circle") { Task { await session.save() } }
             } label: { Image(systemName: "ellipsis.circle") }.accessibilityLabel("Note options").accessibilityIdentifier("notes.options")
+    }
+    private func openMetadata() {
+        session.flushSurface?()
+        showMetadata = true
     }
     /// Glyph only. A title string in a toolbar button becomes a separate word control and splits the row.
     @ViewBuilder

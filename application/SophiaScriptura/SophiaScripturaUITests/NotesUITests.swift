@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class NotesUITests: XCTestCase {
     private func launch(fingerInk: Bool = false) -> XCUIApplication {
@@ -256,6 +257,100 @@ final class NotesUITests: XCTestCase {
         capture.name = "Page status toolbar choices"; capture.lifetime = .keepAlways; add(capture)
     }
 
+    func testEveryNoteKindCanEditColorFromInsideTheEditor() {
+        let app = launch(); notes(app)
+        for (kind, label) in [("page", "Edit Note"), ("canvas", "Edit Canvas"), ("journal", "Edit Journal"), ("prayer", "Edit Prayer")] {
+            newNote(app, kind: kind)
+            let menu = app.buttons[kind == "prayer" ? "notes.prayer.more" : "notes.options"]
+            XCTAssertTrue(menu.waitForExistence(timeout: 10)); menu.tap()
+            let edit = app.buttons["notes.editor.edit"]
+            XCTAssertTrue(edit.waitForExistence(timeout: 5)); XCTAssertEqual(edit.label, label); edit.tap()
+            XCTAssertTrue(app.navigationBars[label].waitForExistence(timeout: 5))
+            let sage = app.buttons["collections.color.sage"]
+            if !sage.isHittable { app.swipeUp() }
+            XCTAssertTrue(sage.isHittable); sage.tap(); app.buttons["notes.edit.save"].tap()
+            menu.tap(); app.buttons["notes.editor.edit"].tap()
+            XCTAssertTrue(sage.waitForExistence(timeout: 5)); XCTAssertTrue(sage.isSelected)
+            app.buttons["Cancel"].tap()
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+        }
+    }
+
+    func testPrayerPreviewTextAndDashedGuidesInPortraitAndLandscape() {
+        let app = launch()
+        let settings = app.buttons["tab.settings"]
+        if !settings.isHittable { app.buttons["navigation.showTabs"].tap() }
+        settings.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let form = app.descendants(matching: .any).matching(identifier: "settings.content").firstMatch
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        let appearance = app.segmentedControls["settings.theme"]
+        for _ in 0..<4 where !appearance.isHittable { form.swipeUp() }
+        appearance.buttons["Dark"].tap()
+        notes(app); newNote(app, kind: "prayer")
+        let maximize = app.buttons["notes.prayer.maximize"]
+        XCTAssertTrue(maximize.waitForExistence(timeout: 10)); maximize.tap()
+        let body = app.textViews["notes.body"]
+        XCTAssertTrue(body.waitForExistence(timeout: 10))
+        let text = "Prayer beginning.\n" + String(repeating: "Keep every word visible with balanced margins in this prayer.\n", count: 18) + "Prayer ending."
+        body.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.05)).tap(); body.typeText(text)
+        XCTAssertTrue((body.value as? String)?.contains("Prayer ending.") == true)
+        let guides = app.otherElements["notes.prayer.boundaries"]
+        XCTAssertTrue(guides.exists)
+        // Dismiss the text keyboard before checking both orientations.
+        app.buttons["notes.prayer.writing.tools"].tap()
+        app.buttons["notes.prayer.writing.tools"].tap()
+        for orientation in [UIDeviceOrientation.portrait, .landscapeLeft] {
+            XCUIDevice.shared.orientation = orientation
+            let rotated = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                let size = app.frame.size
+                return orientation == .portrait ? size.height > size.width : size.width > size.height
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [rotated], timeout: 10), .completed)
+            XCTAssertTrue(app.buttons["notes.prayer.minimize"].waitForExistence(timeout: 5))
+            // Let UIKit finish the sheet's rotation before inspecting its viewport.
+            Thread.sleep(forTimeInterval: 2)
+            let large = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); large.name = "Prayer dashed boundaries \(orientation == .portrait ? "portrait" : "landscape")"; large.lifetime = .keepAlways; add(large)
+            app.buttons["notes.prayer.minimize"].tap()
+            XCTAssertTrue(maximize.waitForExistence(timeout: 10))
+            let tools = app.buttons["notes.prayer.tools"]
+            if tools.label == "Hide Pencil tools" { tools.tap() }
+            XCTAssertFalse(guides.exists)
+            XCTAssertTrue((app.textViews["notes.body"].value as? String)?.contains("Prayer ending.") == true)
+            let viewport = app.scrollViews["notes.viewport"]
+            XCTAssertTrue(viewport.exists)
+            XCTAssertGreaterThanOrEqual(viewport.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(viewport.frame.maxX, app.frame.maxX)
+            let textFrame = app.textViews["notes.body"].frame
+            XCTAssertGreaterThan(textFrame.minX - viewport.frame.minX, 10)
+            XCTAssertGreaterThan(viewport.frame.maxX - textFrame.maxX, 10)
+            XCTAssertEqual(textFrame.minX - viewport.frame.minX, viewport.frame.maxX - textFrame.maxX, accuracy: 3)
+            let small = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); small.name = "Prayer balanced preview \(orientation == .portrait ? "portrait" : "landscape")"; small.lifetime = .keepAlways; add(small)
+            maximize.tap()
+        }
+        app.buttons["notes.prayer.minimize"].tap()
+        app.terminate(); app.launch(); XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30)); notes(app)
+        app.staticTexts["Untitled Prayer"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["notes.prayer.maximize"].waitForExistence(timeout: 10))
+        XCTAssertTrue((app.textViews["notes.body"].value as? String)?.contains("Prayer ending.") == true)
+    }
+    func testPrayerInkSurvivesMaximizeMinimizeAndRotation() {
+        let app = launch(fingerInk: true); notes(app); newNote(app, kind: "prayer")
+        XCTAssertTrue(app.buttons["notes.prayer.maximize"].waitForExistence(timeout: 10)); app.buttons["notes.prayer.maximize"].tap()
+        let viewport = app.scrollViews["notes.viewport"]
+        XCTAssertTrue(viewport.waitForExistence(timeout: 10))
+        viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.25)).press(forDuration: 0.1,
+            thenDragTo: viewport.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.35)))
+        let hasInk = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS '1 strokes'"), object: viewport)
+        XCTAssertEqual(XCTWaiter.wait(for: [hasInk], timeout: 10), .completed)
+        app.buttons["notes.prayer.minimize"].tap()
+        XCTAssertTrue(app.buttons["notes.prayer.maximize"].waitForExistence(timeout: 10))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue((viewport.value as? String)?.contains("1 strokes") == true)
+        app.buttons["notes.prayer.maximize"].tap()
+        XCTAssertTrue(app.buttons["notes.prayer.minimize"].waitForExistence(timeout: 10))
+        XCTAssertTrue((viewport.value as? String)?.contains("1 strokes") == true)
+    }
+
     func testPrayerClearIsOnlyInMoreActionsAndKeepsItsConfirmation() {
         let app = launch(); notes(app)
         newNote(app, kind: "prayer")
@@ -366,18 +461,18 @@ final class NotesUITests: XCTestCase {
         let text = app.textViews["notes.body"]
         XCTAssertTrue(text.waitForExistence(timeout: 5)); text.tap(); text.typeText("Grace and truth")
         app.buttons["notes.options"].tap()
-        app.buttons["Note details"].tap()
-        let title = app.textFields["notes.title"]; XCTAssertTrue(title.waitForExistence(timeout: 5))
-        title.tap(); title.press(forDuration: 1)
-        if app.menuItems["Select All"].exists { app.menuItems["Select All"].tap(); title.typeText("Morning study") }
-        else { title.typeText(" morning study") }
-        app.buttons["Save"].tap()
+        app.buttons["notes.editor.edit"].tap()
+        let title = app.textFields["notes.edit.title"]; XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: (title.value as? String ?? "").count))
+        title.typeText("Morning study")
+        app.buttons["notes.edit.save"].tap()
         app.buttons["notes.options"].tap()
         let saved = app.buttons["Saved"]
         XCTAssertTrue(saved.waitForExistence(timeout: 10)); saved.tap()
         let screen = XCTAttachment(screenshot: app.screenshot()); screen.name = "SP013 direct text"; screen.lifetime = .keepAlways; add(screen)
         app.terminate(); app.launch(); XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30)); notes(app)
-        let note = app.buttons.containing(.staticText, identifier: "Grace and truth").firstMatch
+        let note = app.staticTexts["Morning study"].firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: 10)); note.tap()
         XCTAssertEqual(app.textViews["notes.body"].value as? String, "Grace and truth")
     }

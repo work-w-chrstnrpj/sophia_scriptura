@@ -872,3 +872,7 @@ outside the release. Versioned candidate: **499 unit tests and four UI journeys 
 zero failures/skips. Signed in-place iPad installation and normal launch passed; device
 query confirms 1.6.0/build 30. Hosted publication follows the development → main merge.
 Physical owner/provider acceptance remains separate. See [release notes](../releases/v1.6.0.md).
+
+## SP-057 — owner-selected Prayer layout and in-note editing, 2026-10-30
+
+[SP-057](../../tickets/SP-057-prayer-layout-and-in-note-metadata.md) covers balanced compact Prayer margins and complete text/ink reach in portrait/landscape, gray dashed maximized boundaries, and contextual in-note metadata/color editing for Page, Canvas, Journal and Prayer through Notes and Collections. Implemented and verified for owner-authorized v1.6.1/build 31: 502 unit tests and six UI journeys passed across the combined run and a corrected Page-selector rerun, zero skips/no remaining failed check. Dark portrait/landscape screenshot review and signed in-place iPad install/normal launch passed; the device confirms version/build. Physical owner/Pencil acceptance remains open. No persistence migration or reset is selected.

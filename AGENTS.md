@@ -451,3 +451,7 @@ below each Day. PlanSchedule resolves targeted/resumed/replayed cursors. Activit
 retains switched-out Day timers in optional ActivitySnapshot.pausedPlanDrafts; repository
 validation, mode canonicalization, overlap detection, backups and Activity clearing include
 them. Existing stored formats remain readable without a conversion or schema bump.
+
+## SP-057 structure update
+
+`Features/Notes/Editor/PrayerPageLayout.swift` shares the compact Prayer writing region and maximized gray dashed guide geometry. NotePageController retains canonical text/ink coordinates while fitting the preview to its actual width. NoteEditorView presents the existing NoteEditorSheet from every kind's More menu, shared by Notes and Collections entry routes.

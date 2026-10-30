@@ -1506,3 +1506,7 @@ within the same Plan atomically retains the outgoing paused draft and restores t
 Day's timer; unrelated active activities still block. ActivitySnapshot.pausedPlanDrafts is
 optional for existing stores/backups, validates paused identities, and participates in mode
 canonicalization, overlap guards and Delete All Activity. No new store/schema version.
+
+### Prayer layout and editor metadata — SP-057, 2026-10-30
+
+Compact Prayer uses its container width to balance text margins and preserve vertical access to long text/ink in portrait and landscape. Maximized Prayer shows noninteractive gray dashed writing-column boundaries matching the compact horizontal preview, without moving saved text or Pencil coordinates. Every note kind exposes the shared metadata/color editor in More, including direct Collections entry: Edit Note, Edit Canvas, Edit Journal and Edit Prayer. See [SP-057](../../tickets/SP-057-prayer-layout-and-in-note-metadata.md) and the [Notes contract](../data/notes-contract.md). No schema or data conversion is required.

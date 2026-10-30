@@ -24,24 +24,24 @@ struct NotePageSurface: UIViewControllerRepresentable {
     var allowsHorizontalPan = false
     /// When true (Prayer card preview), fits the writing column to the board width with modest margins.
     var prayerPreviewFitsContent = false
-    var prayerPreviewHorizontalMargin: CGFloat = 16
+    var showsPrayerBoundaries = false
     var openCitation: (NoteQuote) -> Void
     func makeUIViewController(context: Context) -> NotePageController {
         let controller = NotePageController(session: session, openCitation: openCitation)
         controller.allowsHorizontalPan = allowsHorizontalPan
         controller.prayerPreviewFitsContent = prayerPreviewFitsContent
-        controller.prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+        controller.showsPrayerBoundaries = showsPrayerBoundaries
         return controller
     }
     func updateUIViewController(_ controller: NotePageController, context: Context) {
         let theme = theme
         let allowsHorizontalPan = allowsHorizontalPan
         let prayerPreviewFitsContent = prayerPreviewFitsContent
-        let prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+        let showsPrayerBoundaries = showsPrayerBoundaries
         DispatchQueue.main.async { [weak controller] in
             controller?.allowsHorizontalPan = allowsHorizontalPan
             controller?.prayerPreviewFitsContent = prayerPreviewFitsContent
-            controller?.prayerPreviewHorizontalMargin = prayerPreviewHorizontalMargin
+            controller?.showsPrayerBoundaries = showsPrayerBoundaries
             controller?.setTheme(theme)
             controller?.apply()
         }
@@ -87,6 +87,10 @@ private final class NoteInkCanvas: PKCanvasView {
     private let scroll = UIScrollView(), paper = NotePaperView(), bodyText = UITextView(), quoteBars = NoteBlockQuoteBarView()
     private let ink = NoteInkCanvas()
     private let placeholder = UILabel()
+    private let prayerBoundaries = PrayerBoundaryView()
+    private var previewScale: CGFloat?
+    private var previewOffset = CGPoint.zero
+    private var adjustingPrayerLayout = false
     private let picker: PKToolPicker
     private lazy var strokeRefiner = PencilStrokeRefiner(canvas: ink)
     private var objects: [UUID: UIView] = [:]
@@ -119,7 +123,7 @@ private final class NoteInkCanvas: PKCanvasView {
     private var loadedPageInk: Data?
     var allowsHorizontalPan = false
     var prayerPreviewFitsContent = false
-    var prayerPreviewHorizontalMargin: CGFloat = 16
+    var showsPrayerBoundaries = false
     private var appliedHorizontalPan: Bool?
     private var audioPlayer: AVAudioPlayer?
     private let palette = UIStackView()
@@ -171,6 +175,7 @@ private final class NoteInkCanvas: PKCanvasView {
         placeholder.text = "Start your study…"; placeholder.font = .systemFont(ofSize: 22)
         placeholder.textColor = .placeholderText; placeholder.isUserInteractionEnabled = false
         paper.addSubview(placeholder)
+        paper.addSubview(prayerBoundaries)
         ink.delegate = self; ink.backgroundColor = .clear; ink.isOpaque = false
         ink.isScrollEnabled = false; ink.drawingPolicy = .pencilOnly
         ink.tool = PKInkingTool(.pen, color: .label, width: 3)
@@ -243,7 +248,7 @@ private final class NoteInkCanvas: PKCanvasView {
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         // PKCanvasView is also a UIScrollView. Its synchronized viewport must never
         // drive the document viewport back through this delegate.
-        guard scrollView === scroll else { return }
+        guard scrollView === scroll, !adjustingPrayerLayout else { return }
         guard isCanvas else {
             if usesPrayerPreviewFit, let page = session.note?.page {
                 layoutFixedPagePaperFrame()
@@ -258,7 +263,7 @@ private final class NoteInkCanvas: PKCanvasView {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         // See scrollViewDidZoom(_:). Without this identity check, setting the live
         // ink viewport's contentOffset recurses through UIScrollView callbacks.
-        guard scrollView === scroll else { return }
+        guard scrollView === scroll, !adjustingPrayerLayout else { return }
         if !isCanvas, !allowsHorizontalPan {
             let locked: CGFloat
             if usesPrayerPreviewFit, let page = session.note?.page {
@@ -304,44 +309,36 @@ private final class NoteInkCanvas: PKCanvasView {
         prayerPreviewFitsContent && session.note?.kind == .prayer
     }
 
-    private func prayerContentMaxY(on page: NotePage) -> CGFloat {
-        var maxY = NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: false)
-        if !ink.drawing.bounds.isNull {
-            maxY = max(maxY, ink.drawing.bounds.maxY + 32)
-        }
-        return maxY
-    }
-
     private func prayerPreviewLockedOffsetX(for page: NotePage) -> CGFloat {
-        let columnX = (page.width - NotePage.columnWidth) / 2
-        return columnX * scroll.zoomScale
+        PrayerPageLayout.offset(pageWidth: page.width, scale: scroll.zoomScale).x
     }
 
     private func layoutPrayerPreviewFit(page: NotePage) {
+        guard !adjustingPrayerLayout, scroll.bounds.width > 0, scroll.bounds.height > 0 else { return }
+        adjustingPrayerLayout = true; defer { adjustingPrayerLayout = false }
+        let relativeY = previewScale.map { max(0, (scroll.contentOffset.y - previewOffset.y) / $0) } ?? 0
+        let scale = PrayerPageLayout.scale(for: scroll.bounds.width)
+        let offset = PrayerPageLayout.offset(pageWidth: page.width, scale: scale)
+        let bottom = NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: true)
+        let region = PrayerPageLayout.writingBounds(pageWidth: page.width, bottom: bottom)
         scroll.pinchGestureRecognizer?.isEnabled = false
-        scroll.bouncesZoom = false
-        scroll.isScrollEnabled = true
-        scroll.alwaysBounceVertical = true
-        scroll.alwaysBounceHorizontal = false
-        scroll.showsHorizontalScrollIndicator = false
-        scroll.showsVerticalScrollIndicator = true
-        guard scroll.bounds.width > 0, scroll.bounds.height > 0 else { return }
-        let margin = prayerPreviewHorizontalMargin
-        let scale = max(0.2, (scroll.bounds.width - margin * 2) / NotePage.columnWidth)
-        scroll.minimumZoomScale = scale
-        scroll.maximumZoomScale = scale
+        scroll.bouncesZoom = false; scroll.isScrollEnabled = true
+        scroll.alwaysBounceVertical = true; scroll.alwaysBounceHorizontal = false
+        scroll.showsHorizontalScrollIndicator = false; scroll.showsVerticalScrollIndicator = true
+        scroll.minimumZoomScale = scale; scroll.maximumZoomScale = scale
         if abs(scroll.zoomScale - scale) > 0.001 { scroll.setZoomScale(scale, animated: false) }
-        ink.minimumZoomScale = scale
-        ink.maximumZoomScale = scale
+        ink.minimumZoomScale = scale; ink.maximumZoomScale = scale
         layoutFixedPagePaperFrame()
-        scroll.contentInset = .zero
-        let lockedX = prayerPreviewLockedOffsetX(for: page)
-        let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
-        let lockedY = min(max(scroll.contentOffset.y, 0), maxY)
-        scroll.contentOffset = CGPoint(x: lockedX, y: lockedY)
+        // Exclude the blank page above the writing region, keeping equal screen padding.
+        scroll.contentInset.top = -offset.y
+        scroll.contentSize.height = max(region.maxY * scale + PrayerPageLayout.boardPadding,
+                                        offset.y + scroll.bounds.height)
+        let maxY = max(offset.y, scroll.contentSize.height - scroll.bounds.height + scroll.contentInset.bottom)
+        let next = CGPoint(x: offset.x, y: min(maxY, offset.y + relativeY * scale))
+        if scroll.contentOffset != next { scroll.contentOffset = next }
+        previewScale = scale; previewOffset = offset
         session.zoom = scale
-        scroll.backgroundColor = theme.palette.paper
-        view.backgroundColor = theme.palette.paper
+        scroll.backgroundColor = theme.palette.paper; view.backgroundColor = theme.palette.paper
     }
 
     private func layoutFixedPagePaperFrame() {
@@ -362,6 +359,10 @@ private final class NoteInkCanvas: PKCanvasView {
         if usesPrayerPreviewFit, let page = session.note?.page {
             layoutPrayerPreviewFit(page: page)
             return
+        }
+        if previewScale != nil {
+            scroll.contentInset.top = 0
+            previewScale = nil
         }
         scroll.isScrollEnabled = true
         scroll.alwaysBounceVertical = true
@@ -527,6 +528,7 @@ private final class NoteInkCanvas: PKCanvasView {
             if noteID != note.id { fitted = false }
             if noteID != note.id { rasters.removeAllObjects() }
             noteID = note.id; generation = session.surfaceGeneration
+            previewScale = nil
             objects.values.forEach { $0.removeFromSuperview() }; objects = [:]; represented = [:]
             renderedPage = nil; loadedPageInk = nil
             lastInk = Data([0]) // Force restoration, including an empty drawing after undo.
@@ -579,6 +581,8 @@ private final class NoteInkCanvas: PKCanvasView {
         paper.bounds.size = size
         paper.frame = CGRect(origin: .zero, size: CGSize(width: size.width * scroll.zoomScale, height: size.height * scroll.zoomScale))
         scroll.contentSize = paper.frame.size
+        prayerBoundaries.isHidden = note.kind != .prayer || !showsPrayerBoundaries || usesPrayerPreviewFit
+        prayerBoundaries.frame = PrayerPageLayout.writingBounds(pageWidth: page.width, bottom: size.height - 16)
         updateInkViewport()
         if !usingPencil {
             if isCanvas {
@@ -1229,5 +1233,29 @@ private final class NotePaperView: UIView {
         }
         if paper == .grid { for x in stride(from: floor(rect.minX / 32) * 32, through: rect.maxX, by: 32) { path.move(to: CGPoint(x: x, y: rect.minY)); path.addLine(to: CGPoint(x: x, y: rect.maxY)) } }
         CATransaction.begin(); CATransaction.setDisableActions(true); grid.path = path; CATransaction.commit()
+    }
+}
+
+
+/// Presentation-only guide in the same document coordinates as text and Pencil ink.
+private final class PrayerBoundaryView: UIView {
+    private let lines = CAShapeLayer()
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false; isAccessibilityElement = true
+        accessibilityIdentifier = "notes.prayer.boundaries"
+        accessibilityLabel = "Dashed annotation boundaries for minimized prayer"
+        lines.fillColor = nil; lines.lineWidth = 1.5; lines.lineDashPattern = [8, 6]; lines.lineCap = .butt
+        layer.addSublayer(lines)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        lines.frame = bounds
+        lines.strokeColor = UIColor.systemGray.withAlphaComponent(0.75).resolvedColor(with: traitCollection).cgColor
+        lines.path = UIBezierPath(rect: bounds.insetBy(dx: 0.75, dy: 0.75)).cgPath
+    }
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection); setNeedsLayout()
     }
 }

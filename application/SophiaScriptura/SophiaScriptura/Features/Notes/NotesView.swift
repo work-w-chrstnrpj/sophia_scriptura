@@ -592,7 +592,7 @@ struct NotesView: View {
                 }
                 Button("Duplicate Note", systemImage: "doc.on.doc") { session.duplicate(note.id) }
                     .accessibilityIdentifier("notes.duplicate")
-                Button("Edit Note", systemImage: "pencil") { editingNote = note }
+                Button(note.kind.editTitle, systemImage: "pencil") { editingNote = note }
                     .accessibilityIdentifier("notes.editNote")
             }
             Button("Archive note", systemImage: "archivebox") { session.archive(note.id) }

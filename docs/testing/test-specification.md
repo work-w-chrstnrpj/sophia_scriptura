@@ -1198,3 +1198,30 @@ The result-bundle summary confirms **503/503 passed**, zero failures/skips. Opti
 post-test `simctl diagnose` collection stalled after tests exited normally; only that
 child collection process was stopped. xcodebuild finalized its bundle and returned
 TEST SUCCEEDED. No test case was interrupted.
+
+## SP-057 / v1.6.1 Prayer layout and in-note metadata — 2026-10-31
+
+Full versioned native unit suite: **502 passed, zero failures**, including three new real-UIKit Prayer layout tests. They verify balanced native text bounds across narrow/portrait/landscape widths, last-line scrolling, guide-to-preview geometry and unchanged Pencil bytes through maximize/rotation/save/reopen. Focused earlier UI checks passed for all note kinds' metadata/color menu, Collections Canvas editing, dark Prayer portrait/landscape text and guides, and ink retention. Final combined result and screenshot review follow in the ticket.
+
+Reproducible final command (the selected UI paths are recorded in `build/sp057/final.log`):
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
+  -project application/SophiaScriptura/SophiaScriptura.xcodeproj \
+  -scheme SophiaScriptura \
+  -destination 'platform=iOS Simulator,id=7252B257-288A-4AEA-BE6B-17BD5FD95B54' \
+  -derivedDataPath build/sp054/DerivedData \
+  -resultBundlePath build/sp057/final.xcresult \
+  -parallel-testing-enabled NO -only-testing:SophiaScripturaTests \
+  -only-testing:SophiaScripturaUITests/NotesUITests/testEveryNoteKindCanEditColorFromInsideTheEditor \
+  -only-testing:SophiaScripturaUITests/NotesUITests/testPrayerPreviewTextAndDashedGuidesInPortraitAndLandscape \
+  -only-testing:SophiaScripturaUITests/NotesUITests/testPrayerInkSurvivesMaximizeMinimizeAndRotation \
+  -only-testing:SophiaScripturaUITests/CollectionsUITests/testCollectionNoteCanEditMetadataAndColorInsideTheEditor \
+  -only-testing:SophiaScripturaUITests/NotesUITests/testBlankNoteDirectTextMetadataAndRelaunch \
+  -only-testing:SophiaScripturaUITests/NotesUITests/testDuplicateNoteRetractableToolsAndJournalType \
+  CODE_SIGNING_ALLOWED=NO
+```
+
+Tests use isolated stores and synthetic prayer text. No personal study data is reset or included in evidence. Physical Pencil/owner acceptance remains separate.
+
+SP-057 final evidence: **502 unit tests + six UI journeys passed** across `build/sp057/final.xcresult` and `page-retry.xcresult`. The combined run reported 507 passes/one failure/zero skips; the sole failure used an obsolete card-preview child lookup. Updating that Page test to use More → Edit Note and reopen by the saved title passed its focused rerun (1/1, zero failures/skips), confirming body retention after relaunch. The other five UI journeys passed in the combined run. No app source changed for the test correction. Four dark Prayer screenshots were visually reviewed: compact/maximized, portrait/landscape. Signed iPad delivery/version-query evidence is in the deployment guide. Physical Pencil/owner acceptance remains open.

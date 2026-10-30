@@ -1,4 +1,5 @@
 import UIKit
+import PencilKit
 
 /// Shared measurement keeps the saved body within the rendered growing page.
 @MainActor enum NotePageTypography {
@@ -17,11 +18,12 @@ import UIKit
                           options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height
     }
 
-    /// Top rule through text (and optional ink) used to size the Prayer card board.
+    /// Canonical document bottom, including real saved ink bounds rather than a fixed guess.
     static func prayerBoardContentHeight(for page: NotePage, includesInkPadding: Bool) -> CGFloat {
-        let textBlock = height(of: page)
-        var maxY = 64 + max(textBlock, 36) + 32
-        if includesInkPadding, !page.ink.isEmpty { maxY += 96 }
-        return max(maxY, 120)
+        var bottom = PrayerPageLayout.textTop + max(ceil(height(of: page)), 36) + 16
+        if includesInkPadding, let drawing = try? PKDrawing(data: page.ink), !drawing.bounds.isNull {
+            bottom = max(bottom, drawing.bounds.maxY + 16)
+        }
+        return bottom
     }
 }

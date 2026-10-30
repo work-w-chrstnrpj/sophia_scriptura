@@ -242,6 +242,26 @@ final class CollectionsUITests: XCTestCase {
         XCTAssertTrue(a.waitForExistence(timeout: 5))
     }
 
+    func testCollectionNoteCanEditMetadataAndColorInsideTheEditor() {
+        let app = launch(); openCollections(app)
+        createCollection("Editor metadata", in: app)
+        app.buttons["collections.folder.Editor metadata"].tap()
+        app.buttons["collections.addMaterialEmpty"].tap(); app.buttons["collections.newNote"].tap()
+        app.textFields["notes.new.title"].tap(); app.textFields["notes.new.title"].typeText("Collection canvas")
+        app.buttons["notes.new.canvas"].tap(); app.buttons["notes.new.create"].tap()
+        let menu = app.buttons["notes.options"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10)); menu.tap(); app.buttons["notes.editor.edit"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Canvas"].waitForExistence(timeout: 5))
+        let sage = app.buttons["collections.color.sage"]
+        if !sage.isHittable { app.swipeUp() }
+        sage.tap(); app.buttons["notes.edit.save"].tap(); back(app)
+        let material = app.buttons["collections.open.Collection canvas"]
+        XCTAssertTrue(material.waitForExistence(timeout: 5)); material.tap()
+        menu.tap(); app.buttons["notes.editor.edit"].tap()
+        XCTAssertTrue(sage.waitForExistence(timeout: 5)); XCTAssertTrue(sage.isSelected)
+        app.buttons["Cancel"].tap()
+    }
+
     func testAddMaterialCreatesNoteInCollection() {
         let app = launch()
         openCollections(app)

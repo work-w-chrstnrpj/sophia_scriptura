@@ -6,6 +6,7 @@ struct NotePrayerEditorView: View {
     @Bindable var session: NotesSession
     var reader: ReaderSession
     var addToCollection: () -> Void = {}
+    var editMetadata: () -> Void = {}
     @State private var rename = false
     @State private var title = ""
     @State private var newUpdate = ""
@@ -18,17 +19,16 @@ struct NotePrayerEditorView: View {
     @State private var showWritingPage = false
     private var prayer: PrayerContent? { session.note?.prayerContent }
 
-    /// 1.5 inches at 72 pt per inch (matches typographic inch margins).
-    private static let horizontalMargin: CGFloat = 108
-
     var body: some View {
-        VStack(spacing: 0) {
+        GeometryReader { geometry in
+            let margin = PrayerPageLayout.outerMargin(for: geometry.size.width)
+            let boardWidth = max(1, geometry.size.width - margin * 2 - 36)
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    mainPrayerPost
+                    mainPrayerPost(boardWidth: boardWidth)
                     updatesSection
                 }
-                .padding(.horizontal, Self.horizontalMargin)
+                .padding(.horizontal, margin)
                 .padding(.vertical, 16)
                 .padding(.bottom, 32)
             }
@@ -42,6 +42,8 @@ struct NotePrayerEditorView: View {
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo)
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo)
                 Menu {
+                    Button("Edit Prayer", systemImage: "pencil", action: editMetadata)
+                        .accessibilityIdentifier("notes.editor.edit")
                     Button { confirmClear = true } label: { Label("Clear", systemImage: "eraser") }
                         .accessibilityIdentifier("notes.prayer.clear")
                     Button {
@@ -151,25 +153,13 @@ struct NotePrayerEditorView: View {
         .onDisappear { session.flushSurface?(); Task { await session.save() } }
     }
 
-    private var surfaceToken: String {
-        "\(session.renderRevision)|\(session.surfaceGeneration)|\(session.active)|\(session.toolsVisible)|\(session.toolsRequest)|\(showWritingPage)|\(Int(previewWritingHeight))"
+    private func surfaceToken(boardWidth: CGFloat) -> String {
+        "\(session.renderRevision)|\(session.surfaceGeneration)|\(session.active)|\(session.toolsVisible)|\(session.toolsRequest)|\(showWritingPage)|\(Int(boardWidth))"
     }
-
-    private static let previewBoardMargin: CGFloat = 16
-    private static let previewMinHeight: CGFloat = 360
-    private static let previewMaxHeight: CGFloat = 960
-    private static let previewExtraVerticalPadding: CGFloat = 96
-
-    private var previewBoardWidth: CGFloat {
-        max(280, UIScreen.main.bounds.width - Self.horizontalMargin * 2 - 36)
-    }
-
-    private var previewWritingHeight: CGFloat {
-        guard let page = session.note?.page else { return Self.previewMinHeight }
-        let widthScale = max(0.25, (previewBoardWidth - Self.previewBoardMargin * 2) / NotePage.columnWidth)
-        let content = NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: true)
-        let natural = content * widthScale + Self.previewBoardMargin * 2 + Self.previewExtraVerticalPadding
-        return min(Self.previewMaxHeight, max(Self.previewMinHeight, natural))
+    private func previewWritingHeight(boardWidth: CGFloat) -> CGFloat {
+        guard let page = session.note?.page else { return PrayerPageLayout.minimumHeight }
+        return PrayerPageLayout.boardHeight(width: boardWidth,
+            contentBottom: NotePageTypography.prayerBoardContentHeight(for: page, includesInkPadding: true))
     }
 
     private var titleButton: some View {
@@ -194,7 +184,7 @@ struct NotePrayerEditorView: View {
         .accessibilityIdentifier("notes.prayer.tools")
     }
 
-    private var mainPrayerPost: some View {
+    private func mainPrayerPost(boardWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -245,15 +235,14 @@ struct NotePrayerEditorView: View {
                 NotePageSurface(
                     session: session,
                     active: session.active,
-                    stateToken: surfaceToken,
+                    stateToken: surfaceToken(boardWidth: boardWidth),
                     prayerPreviewFitsContent: true,
-                    prayerPreviewHorizontalMargin: Self.previewBoardMargin,
                     openCitation: { _ in }
                 )
-                    .frame(height: previewWritingHeight)
+                    .frame(height: previewWritingHeight(boardWidth: boardWidth))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             } else {
-                prayerWritingPreviewPlaceholder
+                prayerWritingPreviewPlaceholder(height: previewWritingHeight(boardWidth: boardWidth))
             }
 
             prayerActionRow
@@ -264,7 +253,7 @@ struct NotePrayerEditorView: View {
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Color(theme.palette.rule), lineWidth: 1))
     }
 
-    private var prayerWritingPreviewPlaceholder: some View {
+    private func prayerWritingPreviewPlaceholder(height: CGFloat) -> some View {
         VStack(spacing: 10) {
             Image(systemName: "pencil.and.scribble")
                 .font(.title2)
@@ -276,7 +265,7 @@ struct NotePrayerEditorView: View {
                 .buttonStyle(CollectionSecondaryButtonStyle())
         }
         .frame(maxWidth: .infinity)
-        .frame(height: previewWritingHeight)
+        .frame(height: height)
         .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color(theme.palette.rule), lineWidth: 1))
     }
@@ -409,7 +398,11 @@ private struct PrayerWritingPage: View {
                 .padding(.horizontal, 24)
                 .background(Color(theme.palette.paper))
 
-                NotePageSurface(session: session, active: session.active, stateToken: surfaceToken, openCitation: { _ in })
+                Text("Keep annotations inside the dashed margins to see them when minimized. Scroll vertically for the rest of your prayer.")
+                    .font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                    .padding(.horizontal, 24).padding(.bottom, 8)
+                NotePageSurface(session: session, active: session.active, stateToken: surfaceToken,
+                    showsPrayerBoundaries: true, openCitation: { _ in })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .appSurface()

@@ -291,8 +291,10 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.6.0](docs/releases/v1.6.0.md), build 30**, dated
-**2026-10-30**. Plans support one-Day playback, direct Day selection, automatic Activity
+The current release is **[v1.6.1](docs/releases/v1.6.1.md), build 31**, dated
+**2026-10-31**. Prayer has balanced compact margins in portrait/landscape and gray dashed
+annotation boundaries when maximized. Every note kind exposes its metadata/color editor
+in More from Notes or Collections, including Edit Canvas. Plans support one-Day playback, direct Day selection, automatic Activity
 timing with History only on completion, retained paused time between Days, New Conversation,
 and optional strict schedules with explicit Catch up. Folder names follow full Plan titles;
 saving a new Plan closes Add Items. Dates appear once below each Day. Prayer Clear lives

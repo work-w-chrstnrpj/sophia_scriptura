@@ -809,3 +809,7 @@ instruction. Built bundle metadata confirms 1.6.0/build 30. Logs:
 `build/v1.6.0-release/device-install.log`, `device-launch.log`, and the device app query.
 No uninstall/reset or explicit translation sync occurred. Installation/launch remains
 separate from physical feature acceptance and the UI-runner provisioning limitation.
+
+## v1.6.1 / build 31 signed device delivery — 2026-10-31
+
+The owner authorized release of SP-057's Prayer layout and in-note metadata changes. Signed Debug build, strict signature/identity checks and in-place installation on `iPad ni Paj` passed (`build/sp057/device-install.log`). Normal launch passed (`device-launch.log`); the device app query confirms `com.personal.SophiaScriptura`, version **1.6.1**, build **31** (`device-apps.json`). No uninstall, store reset or data transformation occurred. This establishes delivery, with physical Prayer/Pencil interaction acceptance still open. The existing missing Xcode account/test-runner provisioning limitation is not treated as a device UI pass. Source publication follows the development → main merge and hosted Release verification.

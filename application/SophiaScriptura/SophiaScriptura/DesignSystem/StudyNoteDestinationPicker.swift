@@ -264,7 +264,7 @@ struct NoteEditorSheet: View {
                 .listRowBackground(Color(theme.palette.soft))
             }
             .appSurface()
-            .navigationTitle("Edit Note")
+            .navigationTitle(kind.editTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -304,6 +304,17 @@ struct NoteEditorSheet: View {
         session.updateNote(id: noteID, title: title, tags: tags, paper: paper, color: color)
         Task { await session.save() }
         dismiss()
+    }
+}
+
+extension NoteKind {
+    var editTitle: String {
+        switch self {
+        case .canvas: "Edit Canvas"
+        case .prayer: "Edit Prayer"
+        case .journal: "Edit Journal"
+        case .page: "Edit Note"
+        }
     }
 }
 

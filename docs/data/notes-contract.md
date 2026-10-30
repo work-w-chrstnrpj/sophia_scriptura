@@ -216,3 +216,9 @@ Plan callback uses createPlanNote and typed Collections attachment; Notes valida
 and generation ownership are unchanged. A transient Plan presentation flag prevents
 parallel editor hosts. Existing note content is previewed/edited by the same editor,
 with accepted edits flushed before returning. No new Notes wire fields or version bump.
+
+## SP-057 Prayer viewport and in-note metadata
+
+Compact Prayer fits the fixed text column plus a 16-document-point writing margin within balanced 16-screen-point board padding. The viewport trims the empty canonical page top, recalculates against its actual width after rotation, and scrolls vertically to all text and saved ink. PrayerPageLayout shares this region with the gray dashed boundary in maximized Prayer. Guides are noninteractive presentation; stored text, ink coordinates/bytes and Notes schemas remain unchanged. Marks outside the guide can remain in the full page but may be outside the compact horizontal preview.
+
+Every note's More menu presents the existing guarded NoteEditorSheet after flushing the surface: Edit Note (Page), Edit Canvas, Edit Journal or Edit Prayer. This is shared by Notes and Collections navigation. Title/tags/paper/color use the same NotesSession.updateNote command as the library editor. Color changes the library/card accent; the writing surface retains the appearance theme. Cancel does not commit sheet changes.

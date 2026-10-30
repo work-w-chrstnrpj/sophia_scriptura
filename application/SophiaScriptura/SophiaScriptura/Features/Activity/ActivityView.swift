@@ -757,8 +757,12 @@ struct ActivityView: View {
     private var finishSheet: some View {
         NavigationStack {
             Form {
-                TextField("Title", text: $title)
-                TextField("Description", text: $details)
+                if let draft = store.draft, draft.planID != nil {
+                    Text(draft.title).font(.headline)
+                } else {
+                    TextField("Title", text: $title)
+                    TextField("Description", text: $details)
+                }
                 if store.draft?.readingStart != nil {
                     let edition = store.draft?.editionID
                     Section {
@@ -770,12 +774,16 @@ struct ActivityView: View {
                                     selectedEditionID: edition, loadError: $finishEndVerseError)
                     } header: { readingSectionHeader("End") }
                 }
+                if store.draft?.planID != nil {
+                    Text("Stopping pauses this Plan activity without adding History. Checked assignments stay saved. Finish the day in the Plan to record its activity.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Button("Discard Activity", role: .destructive) { store.discardDraft(); showingFinish = false }
-            }.navigationTitle("Finish Activity")
+            }.navigationTitle(store.draft?.planID == nil ? "Finish Activity" : "Stop Plan Activity")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Keep Session") { showingFinish = false } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
+                        Button(store.draft?.planID == nil ? "Save" : "Pause Plan") {
                             guard let draft = store.draft else { return }
                             let systemID = draft.readingStart?.referenceSystemID ?? referenceSystemID
                             let start = draft.readingStart == nil

@@ -41,6 +41,8 @@ struct ActivityRecord: Codable, Identifiable, Equatable {
     var readingRange: PassageRange?
     var editionID: String?
     var quizSessionID: UUID?
+    var planID: UUID? = nil
+    var planSectionID: UUID? = nil
     var createdAt: Date
     var updatedAt: Date
 }
@@ -57,6 +59,8 @@ struct ActivityDraft: Codable, Equatable {
     var readingStart: VerseID?
     var editionID: String?
     var guidedWorkflow: Bool? = nil
+    var planID: UUID? = nil
+    var planSectionID: UUID? = nil
 
     func activeSeconds(at now: Date) -> TimeInterval {
         intervals.reduce(0) { $0 + $1.seconds } + (runningSince.map { max(0, now.timeIntervalSince($0)) } ?? 0)
@@ -100,6 +104,7 @@ struct ActivitySnapshot: Codable {
     var records: [ActivityRecord] = []
     var customModes: [ActivityMode] = []
     var draft: ActivityDraft?
+    var pausedPlanDrafts: [ActivityDraft]? // Optional for existing Activity stores/backups.
     var dailyGoalMinutes = 10
     // Optional so existing Activity generations migrate their total goal to Reading.
     var dailyGoalMinutesByMode: [String: Int]?
@@ -125,6 +130,13 @@ extension ActivitySnapshot {
         if var value = draft {
             value.modeLabel = label(value.modeID, fallback: value.modeLabel)
             value.modeID = canonical(value.modeID); draft = value
+        }
+        if var values = pausedPlanDrafts {
+            for i in values.indices {
+                values[i].modeLabel = label(values[i].modeID, fallback: values[i].modeLabel)
+                values[i].modeID = canonical(values[i].modeID)
+            }
+            pausedPlanDrafts = values
         }
         if var values = reminders {
             for i in values.indices {

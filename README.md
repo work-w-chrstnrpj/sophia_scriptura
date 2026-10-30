@@ -291,13 +291,15 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.5.0](docs/releases/v1.5.0.md), build 29**, dated
-**2026-10-25**. Plans edit inline with autosave, organize assignments in mandatory
-Plan/Day folders, and support editing Scripture from either the Plan or its folder.
-Deleting a Plan or its folder moves the pair to Trash while preserving shared items.
-Notes and Collections editors also autosave. Complete reader lifecycle, Plan Pencil
-layers and embedded Companion integration remain SP-050/051 acceptance scope.
-See the release notes and tickets for verification limits.
+The current release is **[v1.6.0](docs/releases/v1.6.0.md), build 30**, dated
+**2026-10-30**. Plans support one-Day playback, direct Day selection, automatic Activity
+timing with History only on completion, retained paused time between Days, New Conversation,
+and optional strict schedules with explicit Catch up. Folder names follow full Plan titles;
+saving a new Plan closes Add Items. Dates appear once below each Day. Prayer Clear lives
+inside More actions with its existing confirmation. Plans still edit inline with autosave,
+managed Plan/Day folders, paired recoverable Trash and shared Scripture editing. Complete
+reader lifecycle and Plan Pencil layers remain SP-050/051 acceptance scope; physical and
+live-provider acceptance remain separate. See the release notes and tickets for evidence.
 
 The project has executable unit/integration and UI tests, signed iPad installation evidence
 and owner-device walkthroughs. Passing simulator tests or installation does not close all

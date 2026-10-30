@@ -395,3 +395,21 @@ replacement command. CollectionArtifactRow retains explicit Read Scripture actio
 Nested CollectionDetailView destinations pass the shared ReaderSession recursively,
 so Scripture editing and other reader-dependent Plan controls remain available inside
 all Day/Section folder depths.
+
+SP-054 daily playback: Core/Plans/PlanSchedule.swift owns optional strict calendar dates
+and start cursor derivation. Features/Plans/PlanPlaybackService.swift coordinates existing
+Collections/Activity writers using durable session identity; ActivityStore retains timers
+and History. PlanDetailView owns single-day presentation/completion and uses shared root
+Companion/Activity environment objects. PlanEditorView owns activity/date input. No new
+store or backend is introduced.
+
+SP-055 reuses existing modules: CollectionsStore synchronizes owned root names on checked
+save/adoption; CollectionArtifactPicker closes the parent creation flow. PlanSchedule owns
+catch-up/date captions; PlanEditorDraft/View expose the optional Edit action. ActivityStore
+pauses ordinary Plan stop commands; PlanPlaybackService records completed sections only.
+Prayer Clear moves inside NotePrayerEditorView's existing More menu. No new store/schema.
+
+SP-056 uses PlanDetailView plain Day buttons and one caption per Day. PlanSchedule and
+PlanPlaybackService share targeted playback with main Play/Resume. Core/Activity's optional
+pausedPlanDrafts and the existing Activity writer/repository retain same-Plan Day timers
+across switches/relaunch, with single-running-draft validation and existing backup support.

@@ -7,6 +7,7 @@ struct CollectionArtifactPicker: View {
     var notes: NotesSession
     var reader: ReaderSession? = nil
     @State private var creatingPlan: PlanEditorDraft?
+    @State private var finishAfterPlan = false
     var annotationSnapshot: AnnotationSnapshot?
     var bookTitleForCode: (String) -> String = { $0 }
     var openNote: (UUID) -> Void = { _ in }
@@ -48,6 +49,7 @@ struct CollectionArtifactPicker: View {
             List {
                 Section {
                     Button("New Plan", systemImage: "list.bullet.rectangle") {
+                        finishAfterPlan = false
                         creatingPlan = PlanEditorDraft(plan: StudyPlan(title: "", preferredEditionID: reader?.edition?.id ?? ScriptureReferenceIdentity.bundledEditionID,
                             referenceSystemID: reader?.edition?.referenceSystemID ?? "org.sophia.web.engwebp", sections: [.init()]))
                     }
@@ -126,8 +128,14 @@ struct CollectionArtifactPicker: View {
                 .accessibilityValue(included ? "Included" : "Not included")
                 }
             }
-            .sheet(item: $creatingPlan) { model in
-                PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID, model: model)
+            .sheet(item: $creatingPlan, onDismiss: {
+                if finishAfterPlan { dismiss() }
+            }) { model in
+                PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID, model: model,
+                    onFinish: {
+                        finishAfterPlan = store.plans.contains { $0.id == model.id }
+                        creatingPlan = nil
+                    })
             }
             .sheet(isPresented: $creatingPoint) {
                 PointToPonderCreatorSheet(store: store, collectionID: collectionID)

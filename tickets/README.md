@@ -98,3 +98,19 @@ full D4 lifecycle/focus and SP-051/052 acceptance remain open. See SP-049 eviden
 2026-10-25 owner selected [SP-053](SP-053-plan-autosave-and-materials-folders.md):
 Plan editing/autosave, shared linked folders, Notes/Collections editor autosave and
 personal-iPad delivery. Folder location remains independent of the Plan's memberships.
+
+2026-10-30 owner selected [SP-054](SP-054-plan-daily-playback-activity-and-schedule.md):
+one-day Plan playback, Activity/History, New conversation, optional strict dates and
+Collections header spacing. Implemented; 491 units/two UI journeys passed, signed
+iPad install/launch verified, physical acceptance open. The owner subsequently authorized
+iPad testing; no release selected.
+
+2026-10-30 owner selected [SP-055](SP-055-plan-creation-catch-up-and-prayer-actions.md):
+Plan creation/naming, optional overdue Catch up and Edit dates, completion-only Activity
+History and Prayer Clear in More. Implemented; 494 unit tests/four UI journeys passed,
+signed iPad install/launch verified; physical owner acceptance open.
+
+2026-10-30 owner selected [SP-056](SP-056-plan-day-selection-and-date-presentation.md):
+one date caption per Day, plain titles and direct Day playback with preserved paused time.
+499 unit tests and two UI journeys passed; signed iPad install/launch verified.
+Physical owner acceptance remains open.

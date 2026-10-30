@@ -829,3 +829,46 @@ deletion preserving shared items, section-based progress, and Scripture editing
 from Plans and folders. See [release notes](../releases/v1.5.0.md) and
 [SP-053](../../tickets/SP-053-plan-autosave-and-materials-folders.md). Automated
 release verification is separate from remaining physical owner acceptance.
+
+## SP-054 — owner-selected daily Plan sessions, 2026-10-30
+
+[SP-054](../../tickets/SP-054-plan-daily-playback-activity-and-schedule.md) covers Collections
+header spacing, an archive-behavior answer, embedded New conversation, one-day/section
+playback with congratulations/exit, automatic named Activity timers/History, and optional
+strict calendar dates. Existing Plans default to Reading with dates off. Final-source
+verification passed **491 unit tests and two Plan UI journeys** with zero
+failures/skips. Signed in-place iPad install and normal launch passed; physical owner
+acceptance remains open.
+No release, destructive conversion or individual material archive feature is selected.
+The owner subsequently authorized iPad testing; provisioning evidence is in SP-054.
+Full SP-050/051/052 acceptance remains separate.
+
+## SP-055 — owner-selected Plan/Prayer corrections, 2026-10-30
+
+[SP-055](../../tickets/SP-055-plan-creation-catch-up-and-prayer-actions.md) synchronizes
+Plan folder names during autosave and repairs existing mismatches, closes Add Items after
+Plan creation, replaces manual due-date controls with optional Catch up for overdue Plans,
+shows Edit date captions, moves Prayer Clear into More, and restricts History to completed
+Plan days while preserving partial checks. **494 unit tests and four UI journeys passed**,
+zero failures/skips. Signed in-place iPad install and normal launch passed. No schema change,
+destructive conversion or release selected. Physical owner acceptance remains open.
+
+## SP-056 — owner-selected Day playback and date cleanup, 2026-10-30
+
+[SP-056](../../tickets/SP-056-plan-day-selection-and-date-presentation.md) removes the duplicate
+last-Day footer/date suffixes and makes Day titles start/resume that Day through the shared
+completion-only Activity flow. Switching Days retains paused time and checks. Implemented
+and verified: **499 unit tests and two UI journeys passed**, zero failures/skips. Signed
+in-place iPad install and normal launch passed. No release or user-data reset selected;
+physical owner acceptance remains open.
+
+## v1.6.0 / build 30 — owner-selected publication, 2026-10-30
+
+Owner authorized commit, push, merge and source release of all SP-054–056 Plan,
+Collections and Prayer fixes. Release scope includes daily Activity/playback, selected
+Days/retained time, optional Catch up, creation/naming, date cleanup, conversation/header
+controls and Prayer Clear in More. Bravado assets/skill and unrelated icon source remain
+outside the release. Versioned candidate: **499 unit tests and four UI journeys passed**,
+zero failures/skips. Signed in-place iPad installation and normal launch passed; device
+query confirms 1.6.0/build 30. Hosted publication follows the development → main merge.
+Physical owner/provider acceptance remains separate. See [release notes](../releases/v1.6.0.md).

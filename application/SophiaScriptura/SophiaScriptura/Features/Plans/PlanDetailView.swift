@@ -4,6 +4,8 @@ import SwiftUI
 struct PlanDetailView: View {
     @Environment(\.appTheme) private var theme
     @EnvironmentObject private var music: MusicSession
+    @EnvironmentObject private var activity: ActivityStore
+    @EnvironmentObject private var companion: CompanionSession
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var store: CollectionsStore
@@ -24,9 +26,12 @@ struct PlanDetailView: View {
     @State private var reflection: PlanReflectionDraft?
     @State private var pendingNoteID: UUID?
     @State private var previewNoteID: UUID?
+    @State private var showingConversation = false
+    @State private var showingCompletion = false
     @State private var showingMusic = false
     @State private var showingMusicLibrary = false
 
+    private var playback: PlanPlaybackService { .init(store: store, activity: activity) }
     private var plan: StudyPlan? { store.plans.first { $0.id == planID && $0.trashedAt == nil } }
     private var permitted: Bool { plan.map { store.planAccessAllowed($0) } ?? false }
     private var cursor: PlanCursor? { plan?.cursor }
@@ -70,6 +75,18 @@ struct PlanDetailView: View {
                     if reading, permitted, let plan { readingControls(plan) }
                 }.background(Color(theme.palette.paper))
             }
+            .sheet(isPresented: $showingConversation) {
+                CompanionView(session: companion, openNote: { id in
+                    showingConversation = false; previewNote(id)
+                })
+                .safeAreaInset(edge: .top) {
+                    HStack { Text("Plan conversation").font(.headline); Spacer(); Button("Back to Plan") { showingConversation = false } }
+                        .padding().background(Color(theme.palette.paper))
+                }
+            }
+            .sheet(isPresented: $showingCompletion, onDismiss: { Task { await closePlan() } }) {
+                completionContent
+            }
             .sheet(item: $scriptureEdit) { target in
                 PlanScriptureAssignmentEditor(store: store, notes: notes, reader: reader, target: target)
             }
@@ -99,15 +116,21 @@ struct PlanDetailView: View {
                 } else { ContentUnavailableView("Note unavailable", systemImage: "lock") }
             }
             .onAppear { notes.planPresentationActive = true; music.load() }
-            .task { await reader?.start() }
+            .task { await activity.load(); await reader?.start() }
+            .onChange(of: activity.draft?.id) { _, _ in
+                guard reading, !transitioning else { return }
+                Task { await reconcileActivityEnd() }
+            }
             .onChange(of: permitted) { _, allowed in
                 if !allowed {
                     notes.flushSurface?(); notes.selectedNoteID = nil; notes.active = false
+                    Task { _ = await playback.pause(planID) }
+                    showingCompletion = false; showingConversation = false
                     reading = false; editing = nil; scriptureEdit = nil; linkID = nil; reflection = nil; previewNoteID = nil; showingMusic = false
                 }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { notes.flushSurface?(); Task { await notes.save() }; reading = false; linkID = nil; showingMusic = false }
+                if phase != .active { notes.flushSurface?(); Task { await notes.save(); _ = await playback.pause(planID) }; reading = false; linkID = nil; showingMusic = false; showingConversation = false }
             }
         }
         .interactiveDismissDisabled()
@@ -148,14 +171,20 @@ struct PlanDetailView: View {
                         Spacer()
                         Button(plan.cursor == nil ? "Start" : "Resume", systemImage: "play.fill") { Task { await start(plan) } }
                             .buttonStyle(CollectionProminentButtonStyle())
-                            .disabled(plan.items.isEmpty || reader == nil || saving || plan.archivedAt != nil)
+                            .disabled((plan.playbackStartCursor == nil && !(plan.cursor?.kind == .sectionSummary && plan.cursor?.activitySessionID != nil && activity.draft?.id == plan.cursor?.activitySessionID)) || reader == nil || saving || transitioning || plan.archivedAt != nil)
                             .accessibilityIdentifier("plans.start")
                     }
                     ProgressView(value: Double(plan.completedSectionCount), total: Double(max(1, plan.sections.count))).tint(Color(theme.palette.accent))
                 }
                 ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(plan.sectionTitle(index)).font(.system(.title2, design: .serif).weight(.semibold))
+                        Button { Task { await start(plan, sectionID: section.id) } } label: {
+                            Text(plan.sectionTitle(index)).font(.system(.title2, design: .serif).weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                            .disabled(section.items.isEmpty || reader == nil || saving || transitioning || plan.archivedAt != nil)
+                            .accessibilityHint("Start or resume this day")
+                            .accessibilityIdentifier("plans.playDay.\(index + 1)")
                         VStack(spacing: 0) {
                             if section.items.isEmpty { Text("No assignments").foregroundStyle(Color(theme.palette.secondary)).padding(20) }
                             ForEach(section.items) { item in
@@ -164,6 +193,10 @@ struct PlanDetailView: View {
                             }
                         }.background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22))
                             .overlay { RoundedRectangle(cornerRadius: 22).stroke(Color(theme.palette.rule), lineWidth: 1) }
+                        if let caption = plan.scheduleCaption(for: index) {
+                            Text(caption).font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                                .accessibilityIdentifier("plans.dayDates.\(index + 1)")
+                        }
                     }
                 }
             }.padding(28).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .top)
@@ -194,6 +227,7 @@ struct PlanDetailView: View {
                     .foregroundStyle(Color(theme.palette.secondary))
             }.padding(20).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("plans.assignment.\(item.id)")
+            .accessibilityValue(item.completedAt == nil ? "Not completed" : "Completed")
     }
 
     @ViewBuilder private func readingContent(_ plan: StudyPlan) -> some View {
@@ -207,7 +241,7 @@ struct PlanDetailView: View {
             }.padding(.top, 20).padding(.horizontal)
             if loading { ProgressView("Loading assignment…").frame(maxHeight: .infinity) }
             else if cursor?.kind == .sectionSummary {
-                ContentUnavailableView("Section complete", systemImage: "checkmark.circle", description: Text("Pause here, or continue when you are ready."))
+                ContentUnavailableView("Section complete", systemImage: "checkmark.circle", description: Text("Finish this day to save its activity and exit."))
             } else if cursor?.kind == .planSummary {
                 ContentUnavailableView("Plan complete", systemImage: "checkmark.seal", description: Text("Your progress is saved."))
             } else if let item {
@@ -252,6 +286,19 @@ struct PlanDetailView: View {
             Spacer(minLength: 0)
             Button("Add new note", systemImage: "square.and.pencil") { beginReflection(.note, plan: plan) }.disabled(cursor?.sectionID == nil).accessibilityIdentifier("plans.addNote")
             Button("Add new link", systemImage: "link.badge.plus") { beginReflection(.link, plan: plan) }.disabled(cursor?.sectionID == nil).accessibilityIdentifier("plans.addLink")
+            Button("New conversation", systemImage: "bubble.left.and.bubble.right") {
+                Task {
+                    await companion.load()
+                    if companion.createConversation() != nil { showingConversation = true }
+                    else {
+                        message = companion.notice
+                        // The mounted Companion tab observes this shared notice. Keep
+                        // a Plan creation failure local so its alert cannot replace
+                        // the fullscreen Plan presentation.
+                        companion.clearNotice()
+                    }
+                }
+            }.accessibilityIdentifier("plans.newConversation")
             Button("Background music", systemImage: "music.note") { showingMusic = true }.accessibilityIdentifier("plans.music")
                 .popover(isPresented: $showingMusic) {
                     NavigationStack {
@@ -267,7 +314,7 @@ struct PlanDetailView: View {
                     }.frame(width: 380, height: 460).presentationCompactAdaptation(.popover)
                 }
             Spacer(minLength: 0)
-            Button(cursor?.kind == .planSummary ? "Done" : "Next", systemImage: cursor?.kind == .planSummary ? "checkmark" : "chevron.right") { Task { await next(plan) } }
+            Button(cursor?.kind == .sectionSummary ? "Finish day" : "Next", systemImage: cursor?.kind == .sectionSummary ? "checkmark" : "chevron.right") { Task { await next(plan) } }
                 .disabled(!assignmentReady).accessibilityIdentifier("plans.next")
         }
         .labelStyle(.iconOnly).buttonStyle(PlanControlStyle())
@@ -303,13 +350,15 @@ struct PlanDetailView: View {
         self.editing = nil
     }
     private func closePlan() async {
-        guard !saving, reflection?.saving != true else { return }
+        guard !saving, !transitioning, reflection?.saving != true else { return }
         if let editing, permitted {
             guard await editing.persist(store: store, collectionID: collectionID) else { return }
             self.editing = nil
         }
         notes.flushSurface?(); await notes.save()
         guard !notes.dirty else { message = "The note could not be saved. Retry before exiting."; return }
+        guard await playback.pause(planID) else { message = activity.errorMessage; return }
+        notes.planPresentationActive = false
         notes.selectedNoteID = nil; notes.active = false; reading = false; dismiss()
     }
 
@@ -327,16 +376,47 @@ struct PlanDetailView: View {
     private func itemCursor(_ plan: StudyPlan, _ section: PlanSection, _ item: PlanItem) -> PlanCursor {
         .init(kind: .item, sectionID: section.id, itemID: item.id, editionID: plan.preferredEditionID)
     }
-    private func firstCursor(_ plan: StudyPlan) -> PlanCursor? {
-        for section in plan.sections {
-            if let item = section.items.first(where: { $0.completedAt == nil }) { return itemCursor(plan, section, item) }
-        }
-        return plan.sections.first(where: { !$0.items.isEmpty }).flatMap { section in section.items.first.map { itemCursor(plan, section, $0) } }
+    private func start(_ plan: StudyPlan, sectionID: UUID? = nil) async {
+        guard !transitioning, permitted else { return }; transitioning = true; defer { transitioning = false }
+        do {
+            let started = try await playback.start(plan.id, sectionID: sectionID)
+            message = nil
+            if started {
+                guard permitted, scenePhase == .active else { _ = await playback.pause(planID); return }
+                reading = true; await loadAssignment()
+            }
+            else { reading = false; showingCompletion = true }
+        } catch { message = error.localizedDescription }
     }
-    private func start(_ plan: StudyPlan) async {
-        guard !transitioning else { return }; transitioning = true; defer { transitioning = false }
-        guard permitted, let target = plan.cursor ?? firstCursor(plan) else { return }
-        if await commit(plan, cursor: target) { reading = true; await loadAssignment() }
+    private func reconcileActivityEnd() async {
+        guard !transitioning, permitted else { return }; transitioning = true; defer { transitioning = false }
+        if let noteID = notes.selectedNoteID, item?.payload.kind == .note {
+            let result = await notes.commitPlanEdits(noteID: noteID, operationID: UUID())
+            guard case .committed = result else { message = "Save the note before finishing this day."; return }
+        }
+        do {
+            if try await playback.reconcileFinishedActivity(planID) {
+                notes.flushSurface?(); await notes.save()
+                reading = false; showingConversation = false; showingCompletion = true
+            }
+        } catch { message = error.localizedDescription }
+    }
+    private var completionContent: some View {
+        VStack(spacing: 20) {
+            Image(systemName: plan?.isComplete == true ? "checkmark.seal.fill" : "sun.max.fill")
+                .font(.system(size: 64)).foregroundStyle(Color(theme.palette.accent))
+            Text("Congratulations!").font(.system(.largeTitle, design: .serif).weight(.semibold))
+            Text(plan?.isComplete == true ? "Plan complete" : "Section complete")
+                .font(.title2.weight(.semibold))
+            if let plan, let s = plan.sections.firstIndex(where: { $0.id == cursor?.sectionID }) {
+                Text("\(plan.title) — \(plan.sectionTitle(s))").font(.headline)
+            }
+            Text("Your progress and activity are saved. Take a moment to carry what you have learned into your day.")
+                .multilineTextAlignment(.center).foregroundStyle(Color(theme.palette.secondary))
+            Button("Done", systemImage: "checkmark") { showingCompletion = false }
+                .buttonStyle(CollectionProminentButtonStyle()).accessibilityIdentifier("plans.completion.done")
+        }.padding(36).frame(maxWidth: .infinity, maxHeight: .infinity).appSurface()
+            .presentationDetents([.height(540)]).interactiveDismissDisabled()
     }
     private func commit(_ original: StudyPlan, cursor: PlanCursor?, completing: UUID? = nil) async -> Bool {
         guard permitted, !saving else { return false }
@@ -357,28 +437,20 @@ struct PlanDetailView: View {
             let result = await notes.commitPlanEdits(noteID: noteID, operationID: UUID())
             guard case .committed = result else { message = "Save the note before continuing."; return }
         }
-        if cursor?.kind == .planSummary { reading = false; return }
-        guard let s = plan.sections.firstIndex(where: { $0.id == cursor?.sectionID }) else { return }
-        let section = plan.sections[s]
-        let target: PlanCursor
-        if cursor?.kind == .sectionSummary {
-            if let nextSection = plan.sections.dropFirst(s + 1).first(where: { !$0.items.isEmpty }), let nextItem = nextSection.items.first {
-                target = itemCursor(plan, nextSection, nextItem)
-            } else { target = .init(kind: .planSummary) }
-        } else if let i = section.items.firstIndex(where: { $0.id == cursor?.itemID }), i + 1 < section.items.count {
-            target = itemCursor(plan, section, section.items[i + 1])
-        } else { target = .init(kind: .sectionSummary, sectionID: section.id) }
-        if await commit(plan, cursor: target, completing: cursor?.kind == .item ? cursor?.itemID : nil) { await loadAssignment() }
+        do {
+            let completed = try await playback.advance(plan.id)
+            message = nil
+            if completed { reading = false; showingCompletion = true }
+            else { await loadAssignment() }
+        } catch { message = error.localizedDescription }
     }
     private func previousCursor(_ plan: StudyPlan) -> PlanCursor? {
-        if cursor?.kind == .planSummary {
-            return plan.sections.last(where: { !$0.items.isEmpty }).map { .init(kind: .sectionSummary, sectionID: $0.id) }
-        }
-        guard let s = plan.sections.firstIndex(where: { $0.id == cursor?.sectionID }) else { return nil }
-        let section = plan.sections[s]
-        if cursor?.kind == .sectionSummary, let last = section.items.last { return itemCursor(plan, section, last) }
-        if let i = section.items.firstIndex(where: { $0.id == cursor?.itemID }), i > 0 { return itemCursor(plan, section, section.items[i - 1]) }
-        return plan.sections.prefix(s).last(where: { !$0.items.isEmpty }).map { .init(kind: .sectionSummary, sectionID: $0.id) }
+        guard let section = plan.sections.first(where: { $0.id == cursor?.sectionID }),
+              cursor?.kind == .item,
+              let i = section.items.firstIndex(where: { $0.id == cursor?.itemID }), i > 0 else { return nil }
+        var target = itemCursor(plan, section, section.items[i - 1])
+        target.activitySessionID = cursor?.activitySessionID
+        return target
     }
     private func previous(_ plan: StudyPlan) async {
         guard !transitioning else { return }; transitioning = true; defer { transitioning = false }

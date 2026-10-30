@@ -763,3 +763,49 @@ in-place installation and normal launch on iPad ni Paj. A subsequent device app
 query confirms `com.personal.SophiaScriptura`, version 1.5.0, build 29. Evidence:
 `build/v1.5.0-release/ipad-install.log` and `device-apps.json`. No uninstall/reset
 was performed. Physical feature acceptance remains open.
+
+## SP-054 daily Plan sessions — 2026-10-30
+
+Owner authorized iPad testing during implementation. The paired, unlocked `iPad ni Paj`
+passed the signed app build, strict signature/bundle checks and in-place install through
+`./scripts/install-ipad.sh --device 00008120-0014354C112B601E --no-launch`.
+Normal launch then passed with only `SOPHIA_LAUNCH=user` in the supplied environment.
+No uninstall, data reset, explicit content sync or version bump occurred. Evidence:
+`build/sp054/device-install.log`, `device-launch.log` and the installer logs referenced
+there. This delivers the local SP-054 changes at the existing 1.5.0/build 29 identity.
+
+Physical UI automation could not build: Xcode has no signed-in account and no profile
+for `com.personal.SophiaScripturaUITests.xctrunner` (`build/sp054/device-build.log`).
+App-only signing succeeded with the existing profiles. Device installation/launch is
+verified; physical Plan interactions, configured-provider conversation and owner acceptance
+remain open. Sign into Xcode Settings → Accounts with the existing Personal Team before
+retrying device UI tests; do not delete Sophia to address test-runner signing.
+
+## SP-055 Plan/Prayer corrections — 2026-10-30
+
+Under the owner's existing iPad-test authorization, final local source passed the signed
+Debug build, strict signature/bundle checks, in-place install and normal launch on
+`iPad ni Paj`. Evidence: `build/sp055/device-install.log` and `device-launch.log`.
+No uninstall/reset, version bump, release or explicit translation sync occurred.
+Existing accessible partial-name Plan roots reconcile through the checked startup writer.
+Physical UI-runner account/profile setup remains the separate SP-054 limitation; signed
+installation and launch do not establish physical feature acceptance.
+
+## SP-056 selected Plan Day playback — 2026-10-30
+
+Final local source passed signed Debug build, strict signature/identity checks, in-place
+install and normal launch on `iPad ni Paj` under this chat's owner-authorized iPad testing.
+Evidence: `build/sp056/device-install.log` and `device-launch.log`. Existing version/build
+and app identity remain unchanged; no uninstall/reset, explicit content sync or release.
+Physical UI automation retains the separate Xcode account/profile limitation recorded in
+SP-054; owner feature acceptance remains open.
+
+
+## v1.6.0 / build 30 release candidate — 2026-10-30
+
+The standard installer passed signed Debug build, strict signature/identity validation,
+in-place installation and normal launch on `iPad ni Paj` under the owner's release
+instruction. Built bundle metadata confirms 1.6.0/build 30. Logs:
+`build/v1.6.0-release/device-install.log`, `device-launch.log`, and the device app query.
+No uninstall/reset or explicit translation sync occurred. Installation/launch remains
+separate from physical feature acceptance and the UI-runner provisioning limitation.

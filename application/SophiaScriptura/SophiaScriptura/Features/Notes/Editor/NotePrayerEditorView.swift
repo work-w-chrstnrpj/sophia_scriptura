@@ -42,6 +42,8 @@ struct NotePrayerEditorView: View {
                 Button("Undo", systemImage: "arrow.uturn.backward") { session.undo() }.disabled(!session.canUndo)
                 Button("Redo", systemImage: "arrow.uturn.forward") { session.redo() }.disabled(!session.canRedo)
                 Menu {
+                    Button { confirmClear = true } label: { Label("Clear", systemImage: "eraser") }
+                        .accessibilityIdentifier("notes.prayer.clear")
                     Button {
                         session.archiveCurrentNote()
                         dismiss()
@@ -307,11 +309,7 @@ struct NotePrayerEditorView: View {
                     .buttonStyle(CollectionSecondaryButtonStyle())
                     .accessibilityIdentifier("notes.prayer.status")
 
-                    Button { confirmClear = true } label: {
-                        Label("Clear", systemImage: "eraser")
-                    }
-                    .buttonStyle(CollectionSecondaryButtonStyle())
-                    .accessibilityIdentifier("notes.prayer.clear")
+
                 }
             }
 

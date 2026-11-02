@@ -69,12 +69,30 @@ struct ReaderPalette {
     var secondary: UIColor { ink.withAlphaComponent(0.72) }
     var rule: UIColor { ink.withAlphaComponent(0.16) }
     var soft: UIColor { ink.withAlphaComponent(0.07) }
+    /// Opaque card surface: the page tone nudged toward ink, so shadows never bleed through.
+    var card: UIColor { paper.blended(with: ink, amount: isDarkPaper ? 0.06 : 0.025) }
+    private var isDarkPaper: Bool {
+        var white: CGFloat = 0
+        paper.getWhite(&white, alpha: nil)
+        return white < 0.5
+    }
     init(_ paper: UInt32, _ ink: UInt32, _ accent: UInt32) {
         func color(_ value: UInt32) -> UIColor {
             UIColor(red:CGFloat((value >> 16) & 255)/255, green:CGFloat((value >> 8) & 255)/255,
                     blue:CGFloat(value & 255)/255, alpha:1)
         }
         self.paper = color(paper); self.ink = color(ink); self.accent = color(accent)
+    }
+}
+
+private extension UIColor {
+    func blended(with other: UIColor, amount: CGFloat) -> UIColor {
+        var (r1, g1, b1, a1): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+        var (r2, g2, b2, a2): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        return UIColor(red: r1 + (r2 - r1) * amount, green: g1 + (g2 - g1) * amount,
+                       blue: b1 + (b2 - b1) * amount, alpha: 1)
     }
 }
 

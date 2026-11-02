@@ -508,7 +508,7 @@ struct RootTabView: View {
             .padding(6).frame(maxWidth: Self.tabDockMaxWidth)
             .background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:28,style:.continuous))
             .overlay(RoundedRectangle(cornerRadius:28,style:.continuous).stroke(Color(palette.ink).opacity(0.18),lineWidth:1))
-            .shadow(color:.black.opacity(0.06),radius:12,y:4)
+            .shadow(color:.black.opacity(0.10),radius:18,y:6)
             .padding(.horizontal, Self.tabDockHorizontalInset).padding(.vertical, 10)
             .opacity(chrome.isVisible ? 1 : 0)
             .offset(y:reduceMotion || chrome.isVisible ? 0 : 22)
@@ -518,8 +518,13 @@ struct RootTabView: View {
 
             if !chrome.isVisible {
                 Button { chrome.reveal() } label: {
-                    Capsule().fill(Color(palette.secondary).opacity(0.65))
-                        .frame(width:28,height:4).frame(width:64,height:44)
+                    Image(systemName: "chevron.compact.up")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color(palette.secondary))
+                        .frame(width:56,height:28)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color(palette.rule), lineWidth: 1))
+                        .frame(width:72,height:44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -564,9 +569,15 @@ struct RootTabView: View {
                     }
                 } label: {
                     VStack(spacing:4) {
-                        Image(systemName:tab.icon).font(.system(size:20))
-                            .shadow(color:Color(palette.accent).opacity(selection == tab && !reduceMotion ? 0.3 : 0),radius:5)
-                        if !compact { Text(tab.rawValue).font(.caption).lineLimit(1).fixedSize() }
+                        // A fixed icon box keeps every label on one baseline whatever the glyph's height.
+                        Image(systemName:tab.icon).font(.system(size:20, weight: selection == tab ? .semibold : .regular))
+                            .symbolVariant(selection == tab ? .fill : .none)
+                            .foregroundStyle(selection == tab ? Color(palette.accent) : Color(palette.secondary))
+                            .frame(width:32,height:24)
+                        if !compact {
+                            Text(tab.rawValue).font(.caption.weight(selection == tab ? .semibold : .regular))
+                                .lineLimit(1).fixedSize()
+                        }
                     }.frame(maxWidth:.infinity,minHeight:44).padding(.horizontal,compact ? 4 : 12)
                     .contentShape(Rectangle())
                     .padding(.vertical,4)

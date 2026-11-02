@@ -262,33 +262,38 @@ struct CollectionsView: View {
 
             Spacer(minLength: 12)
 
-            ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
-                .padding(.trailing, 12)
-
-            Button { showArchivedPlans = true } label: { LibraryHeaderIcon(systemImage: "list.bullet.rectangle") }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Archived Plans")
-            Button { showArchivedCollections = true } label: {
-                LibraryHeaderIcon(systemImage: "archivebox")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Archived collections")
-            .accessibilityIdentifier("collections.archive")
-
             if searchPresented {
                 searchField
                     .frame(minWidth: 180, idealWidth: 280, maxWidth: 340)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                Button { searchPresented = true } label: {
-                    LibraryHeaderIcon(systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Search collections")
-                .accessibilityIdentifier("collections.searchButton")
             }
 
-            libraryControls
+            HStack(spacing: 0) {
+                ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
+
+                Button { showArchivedPlans = true } label: { LibraryHeaderIcon(systemImage: "list.bullet.rectangle") }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Archived Plans")
+                Button { showArchivedCollections = true } label: {
+                    LibraryHeaderIcon(systemImage: "archivebox")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Archived collections")
+                .accessibilityIdentifier("collections.archive")
+
+                if !searchPresented {
+                    Button { searchPresented = true } label: {
+                        LibraryHeaderIcon(systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Search collections")
+                    .accessibilityIdentifier("collections.searchButton")
+                }
+
+                libraryControls
+            }
+            .libraryCommandCluster()
         }
         .animation(.easeInOut(duration: 0.2), value: searchPresented)
     }

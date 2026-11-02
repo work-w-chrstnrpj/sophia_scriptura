@@ -50,7 +50,7 @@ struct NoteLibraryCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: noteCardHeight, maxHeight: noteCardHeight, alignment: .top)
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Color(theme.palette.card), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(alignment: .top) {
             UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22, style: .continuous)
                 .fill(tint)

@@ -66,7 +66,9 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // Keep cards at a comfortable reading measure on large iPads.
+                .frame(maxWidth: 860, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("settings.content")
             .appSurface()
@@ -298,6 +300,7 @@ struct SettingsView: View {
     private var ladyWisdomSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: 14) {
+                sectionHeading("Companion character")
                 Toggle("Turn on Companion Character", isOn: Binding(
                     get: { sophy.preferences.enabled },
                     set: { sophy.setEnabled($0) }
@@ -525,10 +528,39 @@ struct SettingsView: View {
     }
 
     private func sectionHeading(_ title: String) -> some View {
-        Text(title)
-            .font(.system(.title3, design: .serif).weight(.semibold))
-            .foregroundStyle(Color(theme.palette.ink))
+        HStack(spacing: 10) {
+            if let symbol = Self.sectionSymbols[title] {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(theme.palette.accent))
+                    .frame(width: 30, height: 30)
+                    .background(Color(theme.palette.accent).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(.system(.title3, design: .serif).weight(.semibold))
+                .foregroundStyle(Color(theme.palette.ink))
+        }
     }
+
+    /// Leading glyphs give the long settings scroll recognizable landmarks.
+    private static let sectionSymbols: [String: String] = [
+        "Companion character": "sparkles",
+        "Appearance presets": "paintpalette",
+        "Reading": "textformat.size",
+        "Offline Bible": "arrow.down.circle",
+        "Scripture audio (BSB)": "headphones",
+        "Translations": "character.book.closed",
+        "Provider keys": "key",
+        "Background music": "music.note",
+        "Floating Player": "pip",
+        "Tab shortcuts": "rectangle.bottomthird.inset.filled",
+        "Protection": "lock",
+        "Archive": "archivebox",
+        "Trash": "trash",
+        "Backup data": "externaldrive",
+        "About": "info.circle",
+    ]
 
     private func settingsLinkRow(_ title: String) -> some View {
         HStack {
@@ -546,8 +578,6 @@ struct SettingsView: View {
         content()
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color(theme.palette.rule), lineWidth: 1))
+            .studyCard()
     }
 }

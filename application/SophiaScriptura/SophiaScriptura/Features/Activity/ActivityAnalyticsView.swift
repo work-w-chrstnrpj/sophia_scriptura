@@ -107,9 +107,7 @@ struct ActivityAnalyticsView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .stroke(Color(theme.palette.rule), lineWidth: 1))
+        .studyCard()
         .frame(width: exporting ? exportWidth : nil)
         .background(exporting ? Color(theme.palette.paper) : Color.clear)
         .sheet(isPresented: $showingDatePicker) {

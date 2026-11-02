@@ -144,3 +144,69 @@ final class SophyStateTests: XCTestCase {
         XCTAssertEqual(SophyReconciler.disposition(entry: committed, presentResultIDs: [], featureRecoveredOlderGeneration: false), .terminal)
     }
 }
+
+final class SophyPlanResponseTests: XCTestCase {
+    private var plan: StudyPlan {
+        .init(title: "Shared study", preferredEditionID: ScriptureReferenceIdentity.bundledEditionID,
+            referenceSystemID: "org.sophia.web.engwebp", sections: [.init(items: [
+                .init(payload: .scripture(referenceSystemID: "org.sophia.web.engwebp", book: "JHN", chapter: 1), completedAt: Date())])])
+    }
+    private func parse(_ arguments: String, shared: StudyPlan? = nil) throws -> SophyActionDraft {
+        let raw = "{\"version\":1,\"kind\":\"plan\",\"message\":\"Review\",\"questions\":[],\"actions\":[{\"type\":\"updatePlan\",\"arguments\":" + arguments + "}],\"sourceHandles\":[]}"
+        let response = try SophyResponseValidator.validate(Data(raw.utf8), context: .init(sharedPlan: shared,
+            chapterCounts: ["GEN": 50, "1KI": 22], bookIDs: ["GEN", "1KI"],
+            bookIDByTitle: ["genesis": "GEN", "1 kings": "1KI"]))
+        return try XCTUnwrap(response.actions.first)
+    }
+    func testAdditiveAndTotalCountsPreserveExistingContentAndCompletion() throws {
+        let before = plan
+        for (arguments, count) in [(#"{"addSections":15}"#, 16), (#"{"totalSections":60}"#, 60)] {
+            guard case .updatePlan(let original, let after) = try parse(arguments, shared: before) else { return XCTFail() }
+            XCTAssertEqual(original, before); XCTAssertEqual(after.sections.count, count)
+            XCTAssertEqual(after.sections.first, before.sections.first)
+            XCTAssertEqual(Set(after.sections.map(\.id)).count, count)
+            XCTAssertEqual(after.revision, before.revision)
+        }
+    }
+    func testMultipleReferencesTargetExplicitSectionsIncludingNewDays() throws {
+        let before = plan
+        let arguments = #"{"addSections":2,"assignments":[{"sectionNumber":1,"book":"Genesis","chapter":1,"startVerse":1},{"sectionNumber":3,"book":"1 Kings","chapter":1,"startVerse":1,"endVerse":3}]}"#
+        guard case .updatePlan(_, let after) = try parse(arguments, shared: before) else { return XCTFail() }
+        XCTAssertEqual(after.sections[0].items[0], before.sections[0].items[0])
+        XCTAssertEqual(after.sections[0].items.last?.payload.referenceLabel, "GEN 1:1")
+        XCTAssertEqual(after.sections[2].items.last?.payload.referenceLabel, "1KI 1:1–3")
+        XCTAssertTrue(after.sections[1].items.isEmpty)
+    }
+    func testAddingToFinishedSectionPreservesItsActivitySessionAndOpensNewItem() throws {
+        var before = plan
+        let sessionID = UUID()
+        before.cursor = .init(kind: .sectionSummary, sectionID: before.sections[0].id, activitySessionID: sessionID)
+        guard case .updatePlan(_, let after) = try parse(#"{"assignments":[{"sectionNumber":1,"book":"GEN","chapter":1,"startVerse":1}]}"#, shared: before) else { return XCTFail() }
+        XCTAssertEqual(after.cursor?.kind, .item)
+        XCTAssertEqual(after.cursor?.itemID, after.items.last?.id)
+        XCTAssertEqual(after.cursor?.activitySessionID, sessionID)
+        XCTAssertTrue(SophyPlanEdit.isAdditive(before: before, after: after))
+        var destructive = after; destructive.sections[0].items.removeFirst()
+        XCTAssertFalse(SophyPlanEdit.isAdditive(before: before, after: destructive))
+        destructive = after; destructive.title = "Injected rename"
+        XCTAssertFalse(SophyPlanEdit.isAdditive(before: before, after: destructive))
+    }
+
+    func testInvalidOrUnsharedRequestsFailClosed() throws {
+        XCTAssertThrowsError(try parse(#"{"addSections":1}"#))
+        var empty = plan; empty.sections = []
+        XCTAssertThrowsError(try parse(#"{"assignments":[{"sectionNumber":1,"book":"GEN","chapter":1}]}"#, shared: empty))
+        var protected = plan; protected.access.notesCredentialIDs.insert(UUID())
+        XCTAssertThrowsError(try parse(#"{"addSections":1}"#, shared: protected))
+        for arguments in [#"{"addSections":0}"#, #"{"addSections":-1}"#, #"{"totalSections":0}"#,
+            #"{"totalSections":201}"#, #"{"addSections":200}"#, #"{"addSections":2,"totalSections":5}"#,
+            #"{"assignments":[{"book":"GEN","chapter":1}]}"#,
+            #"{"assignments":[{"sectionNumber":2,"book":"GEN","chapter":1}]}"#,
+            #"{"assignments":[{"sectionNumber":1,"book":"GEN","chapter":51}]}"#,
+            #"{"assignments":[{"sectionNumber":1,"book":"unknown","chapter":1}]}"#,
+            #"{"assignments":[{"sectionNumber":1,"book":"GEN","chapter":1,"startVerse":4,"endVerse":1}]}"#,
+            #"{"deleteSections":1}"#, #"{}"#] {
+            XCTAssertThrowsError(try parse(arguments, shared: plan), arguments)
+        }
+    }
+}

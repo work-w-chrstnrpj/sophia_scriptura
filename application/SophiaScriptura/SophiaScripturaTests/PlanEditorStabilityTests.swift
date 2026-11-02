@@ -214,3 +214,41 @@ import XCTest
         }
     }
 }
+
+@MainActor final class PlanBulkSectionTests: XCTestCase {
+    func testBulkAddIsAtomicAtCapacityAndPreservesExistingSections() {
+        let plan = StudyPlan(title: "Bulk", preferredEditionID: "WEB", referenceSystemID: "test", sections: [.init(title: "Existing")])
+        let model = PlanEditorDraft(plan: plan)
+        model.addSections(6)
+        XCTAssertEqual(model.draft.sections.count, 7)
+        XCTAssertEqual(model.draft.sections[0], plan.sections[0])
+        let unchanged = model.draft
+        model.addSections(0); XCTAssertEqual(model.draft, unchanged)
+        model.addSections(-1); XCTAssertEqual(model.draft, unchanged)
+        model.addSections(194); XCTAssertEqual(model.draft, unchanged)
+        model.addSections(193); XCTAssertEqual(model.draft.sections.count, 200)
+        model.addSections(1); XCTAssertEqual(model.draft.sections.count, 200)
+        XCTAssertEqual(Set(model.draft.sections.map(\.id)).count, 200)
+    }
+}
+
+extension PlanBulkSectionTests {
+    func testBulkDraftAutosaveAndExplicitSaveRetainAllNewSections() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = CollectionsFileRepository(directory: directory)
+        let store = CollectionsStore(repository: repository); await store.load()
+        let model = PlanEditorDraft(plan: .init(title: "Batch", preferredEditionID: ScriptureReferenceIdentity.bundledEditionID,
+            referenceSystemID: "org.sophia.web.engwebp", sections: [.init()]))
+        let initial = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(initial)
+        model.addSections(6)
+        model.scheduleAutosave(store: store, collectionID: StudyCollection.unfiledID)
+        let saved = await model.persist(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.draft.sections.count, 7)
+        XCTAssertEqual(store.plans.first?.sections.count, 7)
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        XCTAssertEqual(reopened.plans.first?.sections.count, 7)
+    }
+}

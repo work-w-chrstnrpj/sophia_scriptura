@@ -1772,3 +1772,14 @@ extension CollectionsStore {
         for i in snapshot.plans.indices where planIDs.contains(snapshot.plans[i].id) { snapshot.plans[i].trashedAt = now; snapshot.plans[i].revision += 1 }
     }
 }
+
+
+extension CollectionsStore {
+    func sophyCanSharePlan(_ plan: StudyPlan) -> Bool {
+        guard plan.isActive, plan.access.isEmpty, planAccessAllowed(plan),
+              let folderID = plan.materialsFolderID, !sophyFolderIsProtected(folderID),
+              !collectionIDs(containing: plan.id).contains(where: sophyFolderIsProtected),
+              !plan.sections.compactMap(\.materialsFolderID).contains(where: sophyFolderIsProtected) else { return false }
+        return plans.first(where: { $0.id == plan.id }) == plan
+    }
+}

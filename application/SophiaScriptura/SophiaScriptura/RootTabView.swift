@@ -177,22 +177,24 @@ struct RootTabView: View {
             }
         }
         .overlay {
-            SophyChrome(
-                sophy: sophy,
-                companion: companion,
-                collections: collections,
-                activity: activity,
-                music: music,
-                notes: notes,
-                books: reader.books,
-                referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
-                editionID: reader.edition?.id,
-                editionCatalog: sophyEditionCatalog(for: reader),
-                scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
-            )
+            if !notes.planPresentationActive {
+                SophyChrome(
+                    sophy: sophy,
+                    companion: companion,
+                    collections: collections,
+                    activity: activity,
+                    music: music,
+                    notes: notes,
+                    books: reader.books,
+                    referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
+                    editionID: reader.edition?.id,
+                    editionCatalog: sophyEditionCatalog(for: reader),
+                    scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
+                )
+            }
         }
         .overlay {
-            if let draft = activity.draft {
+            if !notes.planPresentationActive, let draft = activity.draft {
                 ActivityFloatingRecorder(
                     draft: draft,
                     fabEngagedUntil: $shellFABEngagedUntil,
@@ -246,6 +248,7 @@ struct RootTabView: View {
         .environmentObject(music)
         .environmentObject(activity)
         .environmentObject(companion)
+        .environmentObject(sophy)
     }
 
     private var studyLifecycleContent: some View {

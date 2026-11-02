@@ -4,6 +4,8 @@ struct PlanEditorView: View {
     @EnvironmentObject private var activity: ActivityStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmDeletePlan = false
+    @State private var sectionCount = "1"
+    @State private var showingSectionCount = false
     @State private var editMode: EditMode = .inactive
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var store: CollectionsStore
@@ -78,7 +80,17 @@ struct PlanEditorView: View {
             .confirmationDialog(model.resetSection == nil ? "Reset the whole Plan?" : "Reset this section?", isPresented: $model.confirmReset, titleVisibility: .visible) {
                 Button("Reset progress", role: .destructive) { model.resetProgress(sectionID: resetTarget) }
             } message: { Text("Notes, links and Pencil drawings are kept.") }
-            .onChange(of: permitted) { _, allowed in if !allowed { model.closeAssignmentPicker(); model.confirmReset = false; confirmDeletePlan = false } }
+            .alert("Add Days/Sections", isPresented: $showingSectionCount) {
+                TextField("Number of Days/Sections", text: $sectionCount)
+                    .keyboardType(.numberPad).accessibilityIdentifier("plans.sectionCount")
+                Button("Cancel", role: .cancel) {}
+                Button("Add sections") {
+                    let count = Int(sectionCount.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                    model.addSections(count)
+                }
+                    .disabled(Int(sectionCount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 > 0 && $0 <= 200 - model.draft.sections.count } != true)
+            } message: { Text("How many more? You can add up to \(200 - model.draft.sections.count) Days/Sections.") }
+            .onChange(of: permitted) { _, allowed in if !allowed { model.closeAssignmentPicker(); model.confirmReset = false; confirmDeletePlan = false; showingSectionCount = false } }
     }
     private var editor: some View {
         let sections = model.draft.sections
@@ -197,6 +209,9 @@ struct PlanEditorView: View {
             Section {
                 Button("Add section", systemImage: "plus.rectangle.on.rectangle") { model.addSection() }
                     .accessibilityIdentifier("plans.addSection")
+                Button("Add multiple sections…", systemImage: "plus.rectangle.on.rectangle") {
+                    sectionCount = "1"; showingSectionCount = true
+                }.accessibilityIdentifier("plans.addMultipleSections")
                 Button("Reset whole Plan", systemImage: "arrow.counterclockwise") { model.resetSection = nil; model.confirmReset = true }
                 if model.expectedRevision != nil {
                     Button("Duplicate Plan", systemImage: "doc.on.doc") { Task { await duplicate() } }.disabled(model.saving)

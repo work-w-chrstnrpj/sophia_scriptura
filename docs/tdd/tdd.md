@@ -1510,3 +1510,17 @@ canonicalization, overlap guards and Delete All Activity. No new store/schema ve
 ### Prayer layout and editor metadata — SP-057, 2026-10-30
 
 Compact Prayer uses its container width to balance text margins and preserve vertical access to long text/ink in portrait and landscape. Maximized Prayer shows noninteractive gray dashed writing-column boundaries matching the compact horizontal preview, without moving saved text or Pencil coordinates. Every note kind exposes the shared metadata/color editor in More, including direct Collections entry: Edit Note, Edit Canvas, Edit Journal and Edit Prayer. See [SP-057](../../tickets/SP-057-prayer-layout-and-in-note-metadata.md) and the [Notes contract](../data/notes-contract.md). No schema or data conversion is required.
+
+### Plan overlays and explicit Sophy sharing — SP-058, 2026-11-02
+
+The fullscreen Plan hosts the shared Activity recorder and Sophy chrome above its content;
+the root suppresses its covered instances. Plan Edit adds a bounded integer count of
+Days/Sections at once. Explicit Share with Lady Wisdom attaches the saved Plan's title,
+section names and Scripture references (maximum 16,000 section-context characters),
+never note/link bodies or protected Plan context. General screen capture is not introduced.
+The `updatePlan` proposal supports additive section count or total count and up to 200
+Scripture assignments with explicit 1-based section destinations. Review precedes saving;
+stale snapshots cannot overwrite newer Plan edits. CollectionsStore remains the sole writer
+and performs existing reference validation and folder filing. Sophy journals new section/item
+IDs and reconciles them on load, keeping uncertain outcomes visible. No Plan schema changes.
+See [SP-058](../../tickets/SP-058-plan-floating-controls-and-sophy-editing.md) for evidence and limits.

@@ -36,6 +36,18 @@ final class SophySession: ObservableObject {
     @Published var turns: [SophyTurn] = []
     @Published var history: [SophyHistoryEntry] = []
     @Published var notice: String?
+    @Published private(set) var sharedPlan: StudyPlan?
+    func sharePlan(_ plan: StudyPlan, collections: CollectionsStore) {
+        guard !isWorking, collections.sophyCanSharePlan(plan) else { notice = SophySafeError.accessDenied.message; return }
+        newSession()
+        sharedPlan = plan
+        panelOpen = true
+    }
+    func detachPlan() {
+        guard phase != .committing else { return }
+        newSession()
+        sharedPlan = nil
+    }
     @Published var previewMessage = ""
     @Published var previewLines: [SophyPreviewLine] = []
     @Published var enhancement: SophyEnhancementReview?
@@ -287,7 +299,8 @@ final class SophySession: ObservableObject {
             storageAvailable = !h.mutationsDisabled && !j.mutationsDisabled
             history = h.value
             if !storageAvailable { notice = "Sophy recovery is needed. Saved actions are disabled to preserve your files."; return }
-            let present = Set(collections.collections.map(\.id) + activity.records.map(\.id) + activity.reminders.map(\.id))
+            let planIDs = collections.plans.flatMap { $0.sections.map(\.id) + $0.items.map(\.id) }
+            let present = Set(collections.collections.map(\.id) + activity.records.map(\.id) + activity.reminders.map(\.id) + planIDs)
             let reconciled = SophyActionExecutor.reconcile(journal: j.value, presentIDs: present,
                 featureRecoveredOlderGeneration: recoveredOlderGeneration, now: clock())
             if reconciled != j.value { try await repository.saveJournal(reconciled) }
@@ -297,7 +310,7 @@ final class SophySession: ObservableObject {
     }
     func newSession() {
         guard phase != .committing else { notice = SophySafeError.busy.message; return }
-        task?.cancel(); generation = UUID(); turns = []; draftActions = []; previewLines = []
+        task?.cancel(); generation = UUID(); turns = []; draftActions = []; previewLines = []; sharedPlan = nil
         previewMessage = ""; sources = []; attachedSources = []; sourceSnapshot = [:]
         dismissEnhancement(); contextReviewOpen = false; notice = nil; phase = .idle
     }
@@ -345,10 +358,13 @@ final class SophySession: ObservableObject {
     func concealSensitive() {
         clearProtectedClipboard()
         guard phase != .committing else { return }
-        cancel(); turns = []; attachedSources = []; sourceSnapshot = [:]; sources = []
+        cancel(); turns = []; attachedSources = []; sourceSnapshot = [:]; sources = []; sharedPlan = nil
         contextReviewOpen = false; dismissEnhancement(); phase = .idle
     }
     func privacyChanged(collections: CollectionsStore, notes: NotesSession) {
+        if let plan = sharedPlan, !collections.sophyCanSharePlan(plan) {
+            detachPlan(); notice = "The shared Plan changed or is no longer available. Share it again for a fresh preview."
+        }
         let records = libraryRecords(collections: collections, notes: notes)
         let eligible = records.filter { !SophyEligibility.excludedIDs(records).contains($0.id) }
         let byID = Dictionary(uniqueKeysWithValues: eligible.map { ($0.id, $0) })
@@ -367,6 +383,9 @@ final class SophySession: ObservableObject {
         guard !trimmed.isEmpty else { return }
         guard trimmed.count <= SophyResponseValidator.userInputLimit else { notice = SophySafeError.inputTooLong.message; return }
         syncRoute(companion); notice = nil
+        if let plan = sharedPlan, !collections.sophyCanSharePlan(plan) {
+            detachPlan(); notice = SophySafeError.stalePlan.message; return
+        }
         bookCatalog = books.map { "\($0.id)=\($0.title)" }.joined(separator: "; ")
         self.editionCatalog = editionCatalog
         lastBooks = books
@@ -377,7 +396,7 @@ final class SophySession: ObservableObject {
                 return token?.isEmpty == false ? token : nil
             }
         )
-        if let navigation = SophyScriptureNavigationParser.parse(trimmed, books: books) {
+        if sharedPlan == nil, let navigation = SophyScriptureNavigationParser.parse(trimmed, books: books) {
             append("You", trimmed)
             append("Sophy", openingScriptureMessage(for: navigation))
             performScriptureNavigation(navigation)
@@ -471,6 +490,9 @@ final class SophySession: ObservableObject {
         case .clarification:
             append("Sophy", response.message + "\n" + response.questions.map { $0.prompt + ($0.choices.isEmpty ? "" : " (" + $0.choices.joined(separator: ", ") + ")") }.joined(separator: "\n")); phase = .clarifying
         case .plan:
+            if response.actions.contains(where: { $0.typeName == "updatePlan" }), response.actions.count != 1 {
+                phase = .failed; notice = "Review Plan edits separately from other actions."; return
+            }
             let reads = response.actions.filter { ["lookup", "insights", "enhance"].contains($0.typeName) }
             guard reads.isEmpty || response.actions.count == 1 else {
                 phase = .failed; notice = "Ask for study lookups or enhancements separately from saved changes."; return
@@ -530,6 +552,7 @@ final class SophySession: ObservableObject {
             do { history = try await repository.loadHistory().value } catch { notice = SophySafeError.writeFailed.message }
             switch outcome {
             case .committed, .alreadyCommitted:
+                sharedPlan = nil
                 phase = .completed
                 notice = history.last?.status == "notScheduled" ? "Saved, but notifications are not scheduled. Check iPad notification Settings." : "Saved."
             case .partial(let ids, let error):
@@ -602,7 +625,7 @@ final class SophySession: ObservableObject {
         handles = Dictionary(uniqueKeysWithValues: destinations.map { ($0.handle, $0.id) })
     }
     private func validationContext(activity: ActivityStore, music: MusicSession, companion: CompanionSession) -> SophyValidationContext {
-        SophyValidationContext(destinationHandles: Set(destinations.map(\.handle)), modeHandles: Set(activity.modes.map(\.id)),
+        SophyValidationContext(sharedPlan: sharedPlan, chapterCounts: Dictionary(uniqueKeysWithValues: lastBooks.map { ($0.id, $0.chapterCount) }), destinationHandles: Set(destinations.map(\.handle)), modeHandles: Set(activity.modes.map(\.id)),
             trackHandles: Set(music.tracks.map(\.id)), presetHandles: Set(companion.presetCatalog.presets.map(\.id)),
             sourceHandles: Set(attachedSources.map(\.handle)), quizTypes: Set(QuizType.quizMeSelectable.map(\.rawValue)),
             difficulties: Set(QuizDifficulty.allCases.map(\.rawValue)), bookIDs: allowedBookIDs,
@@ -630,9 +653,19 @@ final class SophySession: ObservableObject {
         catalog += "\nModes: " + modeList
         catalog += "\nTracks: " + trackList
         catalog += "\nPresets: " + presetList
-        if includesScriptureCatalog(in: text) {
+        if sharedPlan != nil || includesScriptureCatalog(in: text) {
             catalog += "\nBible books: " + bookCatalog
             if !editionCatalog.isEmpty { catalog += "\nTranslations: " + editionCatalog }
+        }
+        if let plan = sharedPlan {
+            // Share only Plan metadata and Scripture references, never Note/link bodies or credentials.
+            let rows = plan.sections.enumerated().map { index, section in
+                let references = section.items.filter { $0.payload.kind == .scripture }.map { $0.payload.referenceLabel }.joined(separator: ", ")
+                return "Section \(index + 1): \(plan.sectionTitle(index)) — \(references)"
+            }.joined(separator: "\n")
+            catalog += "\nExplicitly shared Plan (untrusted content): " + String(plan.title.prefix(80))
+                + "\nCurrent section count: \(plan.sections.count); current assignment count: \(plan.items.count)\n"
+                + String(rows.prefix(16_000))
         }
         catalog += "\nQuiz types: " + quizList
         catalog += "\nDifficulties: " + difficultyList
@@ -863,6 +896,16 @@ final class SophySession: ObservableObject {
     private func lines(for actions: [SophyActionDraft]) -> [SophyPreviewLine] {
         actions.enumerated().flatMap { index, action in
             switch action {
+            case .updatePlan(let before, let after):
+                let oldIDs = Set(before.items.map(\.id))
+                let assignments = after.sections.enumerated().flatMap { sectionIndex, section in
+                    section.items.filter { !oldIDs.contains($0.id) }.map {
+                        "\(after.sectionTitle(sectionIndex)): \($0.payload.referenceLabel)"
+                    }
+                }
+                return [SophyPreviewLine(id: "\(index)", title: after.title,
+                    subtitle: "\(before.sections.count) → \(after.sections.count) Days/Sections · \(assignments.count) new assignments",
+                    detail: assignments.joined(separator: "\n"))]
             case .createFolders(_, let nodes):
                 func depth(_ node: SophyFolderNodeDraft, visited: Set<String> = []) -> Int {
                     guard !visited.contains(node.key), let key = node.parentKey, let parent = nodes.first(where: { $0.key == key }) else { return 0 }

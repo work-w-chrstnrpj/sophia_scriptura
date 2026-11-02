@@ -876,3 +876,13 @@ Physical owner/provider acceptance remains separate. See [release notes](../rele
 ## SP-057 — owner-selected Prayer layout and in-note editing, 2026-10-30
 
 [SP-057](../../tickets/SP-057-prayer-layout-and-in-note-metadata.md) covers balanced compact Prayer margins and complete text/ink reach in portrait/landscape, gray dashed maximized boundaries, and contextual in-note metadata/color editing for Page, Canvas, Journal and Prayer through Notes and Collections. Implemented and verified for owner-authorized v1.6.1/build 31: 502 unit tests and six UI journeys passed across the combined run and a corrected Page-selector rerun, zero skips/no remaining failed check. Dark portrait/landscape screenshot review and signed in-place iPad install/normal launch passed; the device confirms version/build. Physical owner/Pencil acceptance remains open. No persistence migration or reset is selected.
+
+## SP-058 — owner-selected Plan contextual editing, 2026-11-02
+
+[SP-058](../../tickets/SP-058-plan-floating-controls-and-sophy-editing.md) implements
+floating Activity/Lady Wisdom above fullscreen Plans, Add multiple sections with a native
+count dialog, and explicit Plan sharing with reviewed additive section/Scripture changes.
+510-test unit regression and two focused batch checks passed; the final Plan UI journey
+and existing daily playback/History journey passed across recorded runs. Final signed
+in-place iPad installation and normal launch passed. Physical owner and live-provider
+acceptance remain open. No source release or data reset selected.

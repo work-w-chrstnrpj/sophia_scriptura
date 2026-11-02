@@ -114,3 +114,9 @@ signed iPad install/launch verified; physical owner acceptance open.
 one date caption per Day, plain titles and direct Day playback with preserved paused time.
 499 unit tests and two UI journeys passed; signed iPad install/launch verified.
 Physical owner acceptance remains open.
+
+2026-11-02 owner selected [SP-058](SP-058-plan-floating-controls-and-sophy-editing.md):
+Plan floating Activity/Lady Wisdom, numeric bulk Days/Sections, and explicit shared
+Plan context with reviewed additive section/Scripture changes. Unit regression, focused
+batch checks and Plan UI journeys passed; final signed iPad install/launch passed.
+Physical owner and real-provider acceptance remain open.

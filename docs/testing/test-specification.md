@@ -1225,3 +1225,29 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test \
 Tests use isolated stores and synthetic prayer text. No personal study data is reset or included in evidence. Physical Pencil/owner acceptance remains separate.
 
 SP-057 final evidence: **502 unit tests + six UI journeys passed** across `build/sp057/final.xcresult` and `page-retry.xcresult`. The combined run reported 507 passes/one failure/zero skips; the sole failure used an obsolete card-preview child lookup. Updating that Page test to use More → Edit Note and reopen by the saved title passed its focused rerun (1/1, zero failures/skips), confirming body retention after relaunch. The other five UI journeys passed in the combined run. No app source changed for the test correction. Four dark Prayer screenshots were visually reviewed: compact/maximized, portrait/landscape. Signed iPad delivery/version-query evidence is in the deployment guide. Physical Pencil/owner acceptance remains open.
+
+## SP-058 Plan overlays and contextual editing — 2026-11-02
+
+Full unit regression passed **510 tests, zero failures/skips** in
+`build/sp058/verified-retry.xcresult` (unit portion; its first UI attempt failed and was
+corrected). Two focused batch checks passed in the unit portion of
+`build/sp058/batch-dialog.xcresult`, including autosave/explicit-save/reopen durability.
+The final count-dialog UI journey passed in `build/sp058/dialog-touch-ui.xcresult`
+(**TEST SUCCEEDED**), covering six additional sections/seven after relaunch, explicit
+Plan sharing, visible/hittable Lady Wisdom and Activity overlays, pause, rotation and
+Stop Plan Activity. The existing daily playback/strict-date/History journey also passed
+in the earlier `build/sp058/final.log`; earlier combined bundles are not wholly green.
+
+Use the canonical native command with iPad (A16) Simulator
+`709D6F70-328D-4458-8F8A-B2C47A945A80`, `-only-testing:SophiaScripturaTests` for units,
+`-only-testing:SophiaScripturaTests/PlanBulkSectionTests` for batch checks, or
+`-only-testing:SophiaScripturaUITests/PlanUITests/testBulkSectionsAndFloatingControlsAbovePlanReading`
+for the new UI journey. Keep result bundles under ignored `build/` and disable parallel
+testing. The UI harness confirms only inside the native dialog and waits for dismissal;
+its final exact-count assertion guards against duplicate additions after keyboard movement.
+
+Signed in-place installation and normal launch of final source passed. See
+[SP-058](../../tickets/SP-058-plan-floating-controls-and-sophy-editing.md),
+[owner walkthrough](sp058-plan-context-guide.md) and
+[deployment](../deployment/deployment.md). Physical owner interaction/layout and
+real-provider interpretation quality remain open; fixtures do not establish those gates.

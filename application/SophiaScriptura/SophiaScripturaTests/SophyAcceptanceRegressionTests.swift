@@ -32,6 +32,70 @@ final class SophyAcceptanceRegressionTests: XCTestCase {
     }
     private var reply: String { #"{"version":1,"kind":"reply","message":"Hello","questions":[],"actions":[],"sourceHandles":[]}"# }
 
+    func testSharedPlanContextPreviewCancelAndChangedTarget() async throws {
+        let h = try await harness()
+        let noteID = try XCTUnwrap(h.notes.create(title: "Private body title"))
+        h.notes.replaceBody(NSRange(location: 0, length: 0), with: "NEVER-SHARE-NOTE-BODY")
+        h.collections.link(notes: h.notes.snapshot.notes)
+        let plan = StudyPlan(title: "Explicit shared Plan", preferredEditionID: ScriptureReferenceIdentity.bundledEditionID,
+            referenceSystemID: "org.sophia.web.engwebp", sections: [.init(title: "First day", items: [
+                .init(payload: .init(kind: .note, targetID: noteID)),
+                .init(payload: .scripture(referenceSystemID: "org.sophia.web.engwebp", book: "GEN", chapter: 1))])])
+        let result = await PlanCommandService(store: h.collections).save(plan)
+        XCTAssertNotNil(result.receipt)
+        let saved = try XCTUnwrap(h.collections.plans.first)
+        h.sophy.sharePlan(saved, collections: h.collections)
+        XCTAssertEqual(h.sophy.sharedPlan, saved)
+        h.sophy.completionOverride = { _, prompt in
+            XCTAssertTrue(prompt.contains("Explicit shared Plan"))
+            XCTAssertTrue(prompt.contains("First day")); XCTAssertTrue(prompt.contains("GEN 1"))
+            XCTAssertFalse(prompt.contains("NEVER-SHARE-NOTE-BODY")); XCTAssertFalse(prompt.contains("Private body title"))
+            return .success(#"{"version":1,"kind":"plan","message":"Review 15 added Days","questions":[],"actions":[{"type":"updatePlan","arguments":{"addSections":15}}],"sourceHandles":[]}"#)
+        }
+        await h.send("Add 15 more days to this Plan")
+        XCTAssertEqual(h.sophy.phase, .previewing)
+        XCTAssertTrue(h.sophy.previewLines.first?.subtitle.contains("1 → 16") == true)
+        XCTAssertEqual(h.collections.plans.first, saved)
+        h.sophy.cancelPreview()
+        XCTAssertEqual(h.collections.plans.first, saved)
+        await h.send("Add 15 more days to this Plan")
+        var newer = saved; newer.title = "Owner edit"
+        let edit = await PlanCommandService(store: h.collections).save(newer)
+        XCTAssertNotNil(edit.receipt)
+        await h.sophy.confirm(collections: h.collections, activity: h.activity, companion: h.companion, music: h.music)
+        XCTAssertEqual(h.sophy.phase, .failed)
+        XCTAssertEqual(h.collections.plans.first?.title, "Owner edit")
+        XCTAssertEqual(h.collections.plans.first?.sections.count, 1)
+        h.sophy.privacyChanged(collections: h.collections, notes: h.notes)
+        XCTAssertNil(h.sophy.sharedPlan)
+    }
+
+    func testSharedPlanScriptureRequestReachesPlannerInsteadOfNavigationShortcut() async throws {
+        let h = try await harness()
+        let plan = StudyPlan(title: "Scripture Plan", preferredEditionID: ScriptureReferenceIdentity.bundledEditionID,
+            referenceSystemID: "org.sophia.web.engwebp", sections: [.init()])
+        let saved = await PlanCommandService(store: h.collections).save(plan); XCTAssertNotNil(saved.receipt)
+        h.sophy.sharePlan(try XCTUnwrap(h.collections.plans.first), collections: h.collections)
+        var called = false, navigated = false
+        h.sophy.onOpenScripture = { _ in navigated = true }
+        h.sophy.completionOverride = { _, _ in
+            called = true
+            return .success(#"{"version":1,"kind":"plan","message":"Review assignments","questions":[],"actions":[{"type":"updatePlan","arguments":{"assignments":[{"sectionNumber":1,"book":"GEN","chapter":1,"startVerse":1},{"sectionNumber":1,"book":"1KI","chapter":1,"startVerse":1}]}}],"sourceHandles":[]}"#)
+        }
+        await h.sophy.send("Add scripture assignment to Day 1 of this plan: Genesis 1:1, 1 Kings 1:1",
+            companion: h.companion, collections: h.collections, notes: h.notes, activity: h.activity, music: h.music,
+            books: [ScriptureBook(id: "GEN", title: "Genesis", testament: "OT", order: 1, chapterCount: 50),
+                ScriptureBook(id: "1KI", title: "1 Kings", testament: "OT", order: 11, chapterCount: 22)])
+        XCTAssertTrue(called); XCTAssertFalse(navigated)
+        XCTAssertEqual(h.sophy.phase, .previewing)
+        XCTAssertTrue(h.sophy.previewLines.first?.detail.contains("GEN 1:1") == true)
+        XCTAssertTrue(h.sophy.previewLines.first?.detail.contains("1KI 1:1") == true)
+        await h.sophy.confirm(collections: h.collections, activity: h.activity, companion: h.companion, music: h.music)
+        XCTAssertEqual(h.sophy.phase, .completed)
+        XCTAssertEqual(h.collections.plans.first?.items.count, 2)
+        XCTAssertNil(h.sophy.sharedPlan)
+    }
+
     func testOrdinaryChatNeverAttachesNoteBodiesAndProvidesTheActionContract() async throws {
         let h = try await harness()
         _ = h.notes.create(title: "Private study title")

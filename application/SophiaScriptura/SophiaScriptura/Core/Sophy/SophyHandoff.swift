@@ -24,6 +24,8 @@ enum SophyPrompt {
     1–3 questions and no actions; plan has 1–10 actions and no questions. Each question has
     field:string,prompt:string,choices:[string]. Use only provided catalog handles, never invent IDs.
     Each action has exactly type:string,arguments:object. Allowed argument shapes:
+    updatePlan: {addSections?:int,totalSections?:int,assignments?:[{sectionNumber:int,book:string,chapter:int,startVerse?:int,endVerse?:int}]}
+    updatePlan only edits the explicitly shared Plan. Use addSections for "15 more days", totalSections for "60 total days". Never reduce sections. Maximum 200 sections and 2000 items. Section numbers are 1-based. For assignments ask which Day/Section if unclear; do not guess. One updatePlan action per response, without other actions. Preserve all existing content and progress.
     createFolders: {destinationHandle:string|null,nodes:[{key:string,parentKey:string|null,name:string,description:string}]}
     createReminder: {title:string,description?:string,modeHandle:string,localDate:"YYYY-MM-DD",localTime:"HH:mm",repeatRule:"once"|"daily"|"weekdays"|"weekends"|"weekly",deleteAfterFiring?:bool}
     createActivity: {title:string,description?:string,modeHandle:string,localDate:"YYYY-MM-DD",localStartTime:"HH:mm",localEndDate?:"YYYY-MM-DD",localEndTime?:"HH:mm",durationMinutes?:int}

@@ -28,6 +28,12 @@ struct SophyHistoryView: View {
                                 Button(record.title, systemImage: "chart.bar") { sophy.onOpenActivity?(); sophy.panelOpen = false }
                             } else if let reminder = activity.reminders.first(where: { $0.id == id }) {
                                 Button(reminder.title, systemImage: "bell") { sophy.onOpenActivity?(); sophy.panelOpen = false }
+                            } else if let plan = collections.plans.first(where: { $0.sections.contains(where: { $0.id == id }) || $0.items.contains(where: { $0.id == id }) }), collections.sophyCanSharePlan(plan) {
+                                if let index = plan.sections.firstIndex(where: { $0.id == id }) {
+                                    Text(plan.title + " · " + plan.sectionTitle(index))
+                                } else if let item = plan.items.first(where: { $0.id == id }) {
+                                    Text(plan.title + " · " + item.payload.referenceLabel)
+                                }
                             } else { Text("Item unavailable").foregroundStyle(.secondary) }
                         }
                         Text("This is a summary, not a saved conversation. Deleting it does not delete the created items.").font(.footnote).foregroundStyle(.secondary)
@@ -52,6 +58,7 @@ struct SophyHistoryView: View {
     }
     private func title(_ type: String) -> String {
         switch type {
+        case "updatePlan": "Updated Plan"
         case "createFolders": "Created folders"
         case "createReminder": "Created reminder"
         case "createActivity": "Recorded activity"

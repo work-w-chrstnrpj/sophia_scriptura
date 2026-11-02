@@ -118,9 +118,7 @@ struct SettingsDeleteDataHubView: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
-                .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color(theme.palette.rule), lineWidth: 1))
+                .studyCard()
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Delete all data")
@@ -137,9 +135,7 @@ struct SettingsDeleteDataHubView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color(theme.palette.rule), lineWidth: 1))
+                .studyCard()
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)

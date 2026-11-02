@@ -13,6 +13,7 @@ struct SophyChrome: View {
     var editionID: String?
     var editionCatalog: String
     var scriptureRepositoryProvider: (String?) async throws -> any ScriptureContentRepository
+    var planToShare: StudyPlan? = nil
     @Environment(\.appTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -217,6 +218,21 @@ struct SophyChrome: View {
     }
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let plan = sophy.sharedPlan {
+                HStack {
+                    Label("Shared Plan: " + plan.title, systemImage: "doc.badge.arrow.up").font(.caption).lineLimit(1)
+                    Spacer()
+                    Button("Remove") { sophy.detachPlan() }.disabled(sophy.isWorking)
+                }.accessibilityIdentifier("sophy.sharedPlan")
+                Text("Plan title, section names and Scripture references will be sent to your selected provider.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if let plan = planToShare, collections.sophyCanSharePlan(plan) {
+                Button("Share this Plan", systemImage: "doc.badge.arrow.up") {
+                    sophy.syncRoute(companion)
+                    sophy.sharePlan(plan, collections: collections)
+                }.font(.callout).disabled(sophy.isWorking)
+                    .accessibilityIdentifier("sophy.shareCurrentPlan")
+            }
             if sophy.composer.hasPrefix("/") {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {

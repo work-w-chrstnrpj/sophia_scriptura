@@ -1,6 +1,8 @@
 import Foundation
 
 struct SophyValidationContext: Equatable, Sendable {
+    var sharedPlan: StudyPlan? = nil
+    var chapterCounts: [String: Int] = [:]
     var destinationHandles: Set<String> = []
     var modeHandles: Set<String> = []
     var trackHandles: Set<String> = []
@@ -39,6 +41,7 @@ enum SophyResponseValidator {
         case .clarification:
             guard (1...3).contains(questions.count), actions.isEmpty else { throw SophySafeError.invalidArguments }
         case .plan:
+            guard !actions.contains(where: { $0.typeName == "updatePlan" }) || actions.count == 1 else { throw SophySafeError.invalidArguments }
             guard questions.isEmpty, (1...10).contains(actions.count) else { throw SophySafeError.invalidArguments }
         case .enhancement:
             throw SophySafeError.malformedPlan
@@ -107,6 +110,8 @@ enum SophyResponseValidator {
             throw SophySafeError.malformedPlan
         }
         switch type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "updateplan":
+            return try updatePlan(arguments, context: context)
         case "createfolders", "createfolder", "folders", "folder":
             return try folders(arguments, context: context)
         case "createreminder", "reminder":
@@ -134,6 +139,40 @@ enum SophyResponseValidator {
         default:
             throw SophySafeError.unknownAction
         }
+    }
+
+    private static func updatePlan(_ arguments: [String: Any], context: SophyValidationContext) throws -> SophyActionDraft {
+        guard let before = context.sharedPlan, before.isActive, before.access.isEmpty, (try? before.validate()) != nil else { throw SophySafeError.accessDenied }
+        guard Set(arguments.keys).isSubset(of: ["addSections", "totalSections", "assignments"]),
+              !(arguments["addSections"] != nil && arguments["totalSections"] != nil) else { throw SophySafeError.invalidArguments }
+        var after = before
+        let add = try optionalInt(arguments["addSections"])
+        let total = try optionalInt(arguments["totalSections"])
+        if let add, !(1...200).contains(add) { throw SophySafeError.invalidArguments }
+        if let total, !(before.sections.count...200).contains(total) { throw SophySafeError.invalidArguments }
+        let count = total ?? (before.sections.count + (add ?? 0))
+        guard count <= 200 else { throw SophySafeError.invalidArguments }
+        after.sections.append(contentsOf: (before.sections.count..<count).map { _ in PlanSection() })
+        if let raw = arguments["assignments"] {
+            guard let rows = raw as? [[String: Any]], (1...200).contains(rows.count) else { throw SophySafeError.invalidArguments }
+            for row in rows {
+                guard Set(row.keys).isSubset(of: ["sectionNumber", "book", "chapter", "startVerse", "endVerse"]),
+                      let section = jsonInt(row["sectionNumber"]), section > 0, section <= after.sections.count,
+                      let named = row["book"] as? String,
+                      let chapter = jsonInt(row["chapter"]) else { throw SophySafeError.invalidArguments }
+                let book = context.bookIDs.contains(named.uppercased()) ? named.uppercased() : context.bookIDByTitle[named.lowercased()]
+                guard let book, let chapters = context.chapterCounts[book], chapter > 0, chapter <= chapters else { throw SophySafeError.invalidArguments }
+                let start = try optionalInt(row["startVerse"]), end = try optionalInt(row["endVerse"])
+                guard end == nil || start != nil else { throw SophySafeError.invalidArguments }
+                let payload = PlanItemPayload.scripture(referenceSystemID: before.referenceSystemID, book: book, chapter: chapter, start: start, end: end)
+                do { try payload.validate() } catch { throw SophySafeError.invalidArguments }
+                after.sections[section - 1].items.append(.init(payload: payload))
+            }
+        }
+        guard after.sections != before.sections else { throw SophySafeError.invalidArguments }
+        after.cursor = SophyPlanEdit.updatedCursor(before: before, sections: after.sections)
+        do { try after.validate() } catch { throw SophySafeError.invalidArguments }
+        return .updatePlan(before: before, after: after)
     }
 
     private static func folders(_ arguments: [String: Any], context: SophyValidationContext) throws -> SophyActionDraft {

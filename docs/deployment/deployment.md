@@ -813,3 +813,22 @@ separate from physical feature acceptance and the UI-runner provisioning limitat
 ## v1.6.1 / build 31 signed device delivery — 2026-10-31
 
 The owner authorized release of SP-057's Prayer layout and in-note metadata changes. Signed Debug build, strict signature/identity checks and in-place installation on `iPad ni Paj` passed (`build/sp057/device-install.log`). Normal launch passed (`device-launch.log`); the device app query confirms `com.personal.SophiaScriptura`, version **1.6.1**, build **31** (`device-apps.json`). No uninstall, store reset or data transformation occurred. This establishes delivery, with physical Prayer/Pencil interaction acceptance still open. The existing missing Xcode account/test-runner provisioning limitation is not treated as a device UI pass. Source publication follows the development → main merge and hosted Release verification.
+
+## SP-058 Plan overlays/context — 2026-11-02
+
+Owner authorized signed in-place iPad delivery. Final source (including the native batch
+count dialog) passed the standard installer: signed Debug build, strict signature and
+bundle-identity checks, in-place install and normal launch on `iPad ni Paj`.
+Evidence: `build/sp058/ipad-install-final.log`; preliminary final-source build:
+`build/sp058/device-final-build.log`. Initial installation before the count-dialog
+refinement is superseded by this final delivery.
+
+The first signing attempt reported No Accounts and no development profile for the
+existing Live Activity extension (`build/sp058/device-build.log`). Owner-confirmed
+sign-in to the existing Personal Team resolved it. No uninstall, study-data reset,
+explicit translation sync, signing/bundle-ID change, version bump or source release
+occurred. Physical feature and real-provider acceptance remain separate from delivery.
+
+## v1.7.0 / build 32 source release — 2026-11-02
+
+The owner authorized push and release of SP-058 together with the UI/UX polish pass. The version was bumped to **1.7.0/build 32** after SP-058's signed device delivery (which ran at 1.6.1/build 31), so the device does not yet carry build 32. Source publication follows the development → main merge and hosted Release verification. No uninstall, data reset or signing change occurred.

@@ -212,11 +212,19 @@ struct CompanionView: View {
                     openNote: openNote
                 )
             } else {
-                ContentUnavailableView(
-                    "Choose or start a chat",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Add provider keys in Settings, pick a preset in the chat footer, then begin a study conversation.")
-                )
+                ContentUnavailableView {
+                    Label {
+                        Text("Choose or start a chat")
+                            .font(.system(.title3, design: .serif).weight(.semibold))
+                    } icon: {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.tint)
+                    }
+                } description: {
+                    Text("Add provider keys in Settings, pick a preset in the chat footer, then begin a study conversation.")
+                        .frame(maxWidth: 420)
+                }
                 .appSurface()
             }
         }

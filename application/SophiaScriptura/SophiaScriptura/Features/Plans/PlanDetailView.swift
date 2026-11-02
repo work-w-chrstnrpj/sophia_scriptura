@@ -6,6 +6,8 @@ struct PlanDetailView: View {
     @EnvironmentObject private var music: MusicSession
     @EnvironmentObject private var activity: ActivityStore
     @EnvironmentObject private var companion: CompanionSession
+    @EnvironmentObject private var sophy: SophySession
+    @State private var recorderEngagedUntil = Date.distantPast
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var store: CollectionsStore
@@ -133,6 +135,30 @@ struct PlanDetailView: View {
                 if phase != .active { notes.flushSurface?(); Task { await notes.save(); _ = await playback.pause(planID) }; reading = false; linkID = nil; showingMusic = false; showingConversation = false }
             }
         }
+        .overlay {
+            if let reader {
+                SophyChrome(sophy: sophy, companion: companion, collections: store, activity: activity,
+                    music: music, notes: notes, books: reader.books,
+                    referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
+                    editionID: reader.edition?.id, editionCatalog: "",
+                    scriptureRepositoryProvider: { id in try await reader.contentRepository(editionID: id) }, planToShare: editing == nil ? plan : nil)
+            }
+        }
+        .overlay {
+            if let draft = activity.draft {
+                ActivityFloatingRecorder(draft: draft, fabEngagedUntil: $recorderEngagedUntil,
+                    pauseOrResume: { if activity.draft?.runningSince == nil { activity.resume() } else { activity.pause() } },
+                    finish: { Task {
+                        await closePlan()
+                        if !notes.planPresentationActive { sophy.onOpenActivity?(); activity.requestFinish() }
+                    } })
+            }
+        }
+        .onChange(of: store.plans) { _, _ in sophy.privacyChanged(collections: store, notes: notes) }
+        .onChange(of: cursor) { old, new in
+            if reading, old?.kind == .sectionSummary, new?.kind == .item { Task { await loadAssignment() } }
+        }
+        .onDisappear { if sophy.sharedPlan?.id == planID { sophy.detachPlan() } }
         .interactiveDismissDisabled()
     }
 
@@ -145,6 +171,14 @@ struct PlanDetailView: View {
                 Text(permitted ? plan?.title ?? "Plan" : "Plan").font(.system(.title2, design: .serif).weight(.semibold)).lineLimit(1)
             }
             Spacer(minLength: 4)
+            if permitted, editing == nil, let plan, sophy.preferences.enabled {
+                Button("Share with " + sophy.character.displayName, systemImage: "bubble.left.and.bubble.right") {
+                    sophy.syncRoute(companion)
+                    sophy.sharePlan(plan, collections: store)
+                }.labelStyle(.iconOnly).buttonStyle(CollectionSecondaryButtonStyle())
+                    .disabled(!store.sophyCanSharePlan(plan) || sophy.isWorking)
+                    .accessibilityIdentifier("plans.shareWithSophy")
+            }
             if let editing, permitted {
                 Text(editing.saveStatus).font(.caption).foregroundStyle(Color(theme.palette.secondary))
                     .accessibilityIdentifier("plans.headerSaveStatus")

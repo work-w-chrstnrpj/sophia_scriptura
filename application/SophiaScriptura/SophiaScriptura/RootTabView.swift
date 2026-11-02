@@ -83,6 +83,14 @@ struct RootTabView: View {
         reduceMotion ? .easeOut(duration: 0.16) : .easeInOut(duration: 0.28)
     }
     private var editingNote: Bool { (selection == .notes || selection == .collections) && notes.selectedNoteID != nil }
+    /// Scripture, chat, and full-screen editing reclaim the bottom edge; library tabs keep the dock.
+    private var chromeAutoHides: Bool {
+        switch selection {
+        case .scripture, .companion: true
+        case .collections, .notes: editingNote || notes.planPresentationActive
+        case .activity, .settings: false
+        }
+    }
     private var sophyIdleQuotesSuspended: Bool {
         if editingNote { return true }
         if selection == .scripture, annotations.mode != .hidden { return true }
@@ -177,22 +185,24 @@ struct RootTabView: View {
             }
         }
         .overlay {
-            SophyChrome(
-                sophy: sophy,
-                companion: companion,
-                collections: collections,
-                activity: activity,
-                music: music,
-                notes: notes,
-                books: reader.books,
-                referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
-                editionID: reader.edition?.id,
-                editionCatalog: sophyEditionCatalog(for: reader),
-                scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
-            )
+            if !notes.planPresentationActive {
+                SophyChrome(
+                    sophy: sophy,
+                    companion: companion,
+                    collections: collections,
+                    activity: activity,
+                    music: music,
+                    notes: notes,
+                    books: reader.books,
+                    referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
+                    editionID: reader.edition?.id,
+                    editionCatalog: sophyEditionCatalog(for: reader),
+                    scriptureRepositoryProvider: { editionID in try await reader.contentRepository(editionID: editionID) }
+                )
+            }
         }
         .overlay {
-            if let draft = activity.draft {
+            if !notes.planPresentationActive, let draft = activity.draft {
                 ActivityFloatingRecorder(
                     draft: draft,
                     fabEngagedUntil: $shellFABEngagedUntil,
@@ -218,6 +228,8 @@ struct RootTabView: View {
             }
             .padding(.bottom, 12)
             .animation(shellChromeAnimation, value: chrome.isVisible)
+            // A pinned dock stays behind the keyboard instead of riding up over the field being edited.
+            .ignoresSafeArea(.keyboard)
         }
         .sheet(isPresented: $showMusicLibrary) {
             NavigationStack {
@@ -240,12 +252,14 @@ struct RootTabView: View {
         .tint(Color(palette.accent))
         .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
+        .environment(\.shellTabActionsVisible, shellPreferences.preferences.showTabActionButtons)
         .environment(\.studySwipeCoordinator, swipeActions)
         .environment(notes)
         .environmentObject(userProfile)
         .environmentObject(music)
         .environmentObject(activity)
         .environmentObject(companion)
+        .environmentObject(sophy)
     }
 
     private var studyLifecycleContent: some View {
@@ -387,7 +401,8 @@ struct RootTabView: View {
                 Task { await notes.save() }
             }
         }
-        .onAppear { chrome.reveal() }
+        .onAppear { chrome.autoHides = chromeAutoHides; chrome.reveal() }
+        .onChange(of: chromeAutoHides) { _, autoHides in chrome.autoHides = autoHides }
         .onDisappear { chrome.stop() }
         .onChange(of:scenePhase) { _, phase in
             protection.sceneActive(phase == .active, background: phase == .background)
@@ -406,7 +421,7 @@ struct RootTabView: View {
     @ViewBuilder
     private var shellFABRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if !editingNote && music.preferences.showFloatingControl {
+            if !editingNote && music.preferences.showFloatingControl && chrome.isVisible {
                 BackgroundMusicFloatingControl(session: music, showLibrary: $showMusicLibrary, fabEngagedUntil: $shellFABEngagedUntil)
                     .shellFABEngagementOpacity(engagedUntil: $shellFABEngagedUntil)
             }
@@ -427,11 +442,11 @@ struct RootTabView: View {
     private var tabSpecificShellFAB: some View {
         if editingNote || !shellPreferences.preferences.showTabActionButtons { EmptyView() }
         else if selection == .collections {
-            shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "shell.addCollection") {
+            shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "collections.newCollection") {
                 showShellNewCollection = true
             }
         } else if selection == .notes, notes.loaded {
-            shellCapsuleFAB(title: "Add Note", systemImage: "note.text.badge.plus", id: "shell.addNote") {
+            shellCapsuleFAB(title: "Add Note", systemImage: "note.text.badge.plus", id: "notes.newNotes") {
                 showShellNoteKindPicker = true
             }
         } else if selection == .companion, companion.activeConversations.isEmpty {
@@ -505,7 +520,7 @@ struct RootTabView: View {
             .padding(6).frame(maxWidth: Self.tabDockMaxWidth)
             .background(.ultraThinMaterial,in:RoundedRectangle(cornerRadius:28,style:.continuous))
             .overlay(RoundedRectangle(cornerRadius:28,style:.continuous).stroke(Color(palette.ink).opacity(0.18),lineWidth:1))
-            .shadow(color:.black.opacity(0.06),radius:12,y:4)
+            .shadow(color:.black.opacity(0.10),radius:18,y:6)
             .padding(.horizontal, Self.tabDockHorizontalInset).padding(.vertical, 10)
             .opacity(chrome.isVisible ? 1 : 0)
             .offset(y:reduceMotion || chrome.isVisible ? 0 : 22)
@@ -515,8 +530,13 @@ struct RootTabView: View {
 
             if !chrome.isVisible {
                 Button { chrome.reveal() } label: {
-                    Capsule().fill(Color(palette.secondary).opacity(0.65))
-                        .frame(width:28,height:4).frame(width:64,height:44)
+                    Image(systemName: "chevron.compact.up")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(Color(palette.secondary))
+                        .frame(width:56,height:28)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color(palette.rule), lineWidth: 1))
+                        .frame(width:72,height:44)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -549,21 +569,39 @@ struct RootTabView: View {
         HStack(spacing:0) {
             ForEach(Tab.allCases,id:\.self) { tab in
                 Button {
-                    Task {
-                        chrome.reveal()
-                        let leavingScripture = selection == .scripture && tab != .scripture
-                        if leavingScripture, annotations.loaded {
+                    chrome.reveal()
+                    let leavingScripture = selection == .scripture && tab != .scripture
+                    // Idle annotations save behind the slide; only a live stroke or save holds the tab.
+                    if leavingScripture, annotations.loaded, annotations.usingTool || annotations.saving {
+                        Task {
                             _ = await annotations.prepareForNavigation()
+                            reader.save()
+                            selection = tab
+                            annotations.active = false
                         }
+                    } else {
                         reader.save()
                         selection = tab
-                        annotations.active = tab == .scripture
+                        if leavingScripture, annotations.loaded {
+                            Task {
+                                _ = await annotations.prepareForNavigation()
+                                annotations.active = selection == .scripture
+                            }
+                        } else {
+                            annotations.active = tab == .scripture
+                        }
                     }
                 } label: {
                     VStack(spacing:4) {
-                        Image(systemName:tab.icon).font(.system(size:20))
-                            .shadow(color:Color(palette.accent).opacity(selection == tab && !reduceMotion ? 0.3 : 0),radius:5)
-                        if !compact { Text(tab.rawValue).font(.caption).lineLimit(1).fixedSize() }
+                        // A fixed icon box keeps every label on one baseline whatever the glyph's height.
+                        Image(systemName:tab.icon).font(.system(size:20, weight: selection == tab ? .semibold : .regular))
+                            .symbolVariant(selection == tab ? .fill : .none)
+                            .foregroundStyle(selection == tab ? Color(palette.accent) : Color(palette.secondary))
+                            .frame(width:32,height:24)
+                        if !compact {
+                            Text(tab.rawValue).font(.caption.weight(selection == tab ? .semibold : .regular))
+                                .lineLimit(1).fixedSize()
+                        }
                     }.frame(maxWidth:.infinity,minHeight:44).padding(.horizontal,compact ? 4 : 12)
                     .contentShape(Rectangle())
                     .padding(.vertical,4)

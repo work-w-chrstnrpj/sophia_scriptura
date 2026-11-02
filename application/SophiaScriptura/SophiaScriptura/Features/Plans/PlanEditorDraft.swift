@@ -83,10 +83,13 @@ import SwiftUI
             self.draft.sections[i].title = value.isEmpty ? nil : value; self.changed()
         })
     }
-    func addSection() {
+    func addSection() { addSections(1) }
+    func addSections(_ count: Int) {
         guard !saving else { return }
-        guard draft.sections.count < 200 else { message = StudyMutationFailure.capacity.localizedDescription; return }
-        draft.sections.append(.init()); changed()
+        guard count > 0, count <= 200 - draft.sections.count else { message = "Enter a count that keeps this Plan within 200 sections."; return }
+        draft.sections.append(contentsOf: (0..<count).map { _ in PlanSection() })
+        if draft.cursor?.kind == .planSummary { draft.cursor = nil }
+        changed()
     }
     func removeSection(_ id: UUID) {
         guard !saving, draft.sections.contains(where: { $0.id == id }) else { return }

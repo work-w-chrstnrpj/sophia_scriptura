@@ -146,8 +146,7 @@ struct ActivityRecordDetailView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: 720, alignment: .leading)
-                .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(theme.palette.rule), lineWidth: 1))
+                .studyCard()
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .frame(maxWidth: .infinity)

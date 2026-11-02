@@ -22,6 +22,7 @@ struct CollectionsView: View {
     @State private var searchPresented = false
     @State private var sort: CollectionLibrarySort = .modified
     @State private var showingNewCollection = false
+    @Environment(\.shellTabActionsVisible) private var shellTabActionsVisible
     @State private var editingCollection: StudyCollection?
     @State private var duplicatingCollection: StudyCollection?
     @State private var movingCollection: StudyCollection?
@@ -262,33 +263,39 @@ struct CollectionsView: View {
 
             Spacer(minLength: 12)
 
-            ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
-                .padding(.trailing, 12)
-
-            Button { showArchivedPlans = true } label: { LibraryHeaderIcon(systemImage: "list.bullet.rectangle") }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Archived Plans")
-            Button { showArchivedCollections = true } label: {
-                LibraryHeaderIcon(systemImage: "archivebox")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Archived collections")
-            .accessibilityIdentifier("collections.archive")
-
             if searchPresented {
                 searchField
                     .frame(minWidth: 180, idealWidth: 280, maxWidth: 340)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                Button { searchPresented = true } label: {
-                    LibraryHeaderIcon(systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Search collections")
-                .accessibilityIdentifier("collections.searchButton")
             }
 
-            libraryControls
+            HStack(spacing: 0) {
+                ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
+
+                Menu {
+                    Button("Archived Collections", systemImage: "folder") { showArchivedCollections = true }
+                        .accessibilityIdentifier("collections.archive.collections")
+                    Button("Archived Plans", systemImage: "list.bullet.rectangle") { showArchivedPlans = true }
+                        .accessibilityIdentifier("collections.archive.plans")
+                } label: {
+                    LibraryHeaderIcon(systemImage: "archivebox")
+                }
+                .accessibilityLabel("Archive")
+                .accessibilityIdentifier("collections.archive")
+
+                if !searchPresented {
+                    Button { searchPresented = true } label: {
+                        LibraryHeaderIcon(systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Search collections")
+                    .accessibilityIdentifier("collections.searchButton")
+                }
+
+                libraryControls
+            }
+            .libraryCommandCluster()
         }
         .animation(.easeInOut(duration: 0.2), value: searchPresented)
     }
@@ -317,14 +324,17 @@ struct CollectionsView: View {
             .accessibilityValue(sort.title)
             .accessibilityIdentifier("collections.sort")
 
-            Button {
-                showingNewCollection = true
-            } label: {
-                LibraryHeaderIcon(systemImage: "plus")
+            // The shell's Add Collection capsule replaces this when tab actions are on.
+            if !shellTabActionsVisible {
+                Button {
+                    showingNewCollection = true
+                } label: {
+                    LibraryHeaderIcon(systemImage: "plus")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Collection")
+                .accessibilityIdentifier("collections.newCollection")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("New Collection")
-            .accessibilityIdentifier("collections.newCollection")
         }
     }
 

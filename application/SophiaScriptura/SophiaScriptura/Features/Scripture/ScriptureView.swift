@@ -73,8 +73,10 @@ struct ScriptureView: View {
                             .padding(.horizontal, 24)
                         }
                         HStack(spacing: 16) {
+                            // Wide portrait centers the picker over the chapter title it controls.
+                            if wideLayout { Spacer(minLength: 0) }
                             readerBookVersionPicker
-                            if !wideLayout { Spacer(minLength: 0) }
+                            Spacer(minLength: 0)
                         }
                         .shellTabDockLeadingAlignment()
                     }

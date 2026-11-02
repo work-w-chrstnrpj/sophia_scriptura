@@ -25,6 +25,7 @@ struct NotesView: View {
     @State private var filingNote: NoteDocument?
     @State private var editingNote: NoteDocument?
     @State private var showingNewNote = false
+    @Environment(\.shellTabActionsVisible) private var shellTabActionsVisible
     @State private var showArchivedNotes = false
     @State private var selectionMode = false
     @State private var selectedNoteIDs: Set<UUID> = []
@@ -194,41 +195,47 @@ struct NotesView: View {
 
             Spacer(minLength: 12)
 
-            ProtectionControls(domains: [.notes], available: session.snapshot.notes.contains { $0.protectionID != nil || !$0.access.notesCredentialIDs.isEmpty }).labelStyle(.iconOnly)
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectionMode.toggle()
-                    if !selectionMode { selectedNoteIDs.removeAll() }
-                }
-            } label: {
-                LibraryHeaderIcon(systemImage: selectionMode ? "checkmark.circle.fill" : "checkmark.circle")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(selectionMode ? "Exit note selection" : "Select notes")
-            .accessibilityIdentifier("notes.selectMode")
-
-            Button { showArchivedNotes = true } label: {
-                LibraryHeaderIcon(systemImage: "archivebox")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Archived notes")
-            .accessibilityIdentifier("notes.archive")
-
             if searchPresented {
                 searchField
                     .frame(minWidth: 180, idealWidth: 280, maxWidth: 340)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                Button { searchPresented = true } label: {
-                    LibraryHeaderIcon(systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Search notes")
-                .accessibilityIdentifier("notes.searchButton")
             }
 
-            libraryControls
+            HStack(spacing: 0) {
+                ProtectionControls(domains: [.notes], available: session.snapshot.notes.contains { $0.protectionID != nil || !$0.access.notesCredentialIDs.isEmpty }).labelStyle(.iconOnly)
+                    .frame(width: 44, height: 44)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectionMode.toggle()
+                        if !selectionMode { selectedNoteIDs.removeAll() }
+                    }
+                } label: {
+                    LibraryHeaderIcon(systemImage: selectionMode ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(selectionMode ? "Exit note selection" : "Select notes")
+                .accessibilityIdentifier("notes.selectMode")
+
+                Button { showArchivedNotes = true } label: {
+                    LibraryHeaderIcon(systemImage: "archivebox")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Archived notes")
+                .accessibilityIdentifier("notes.archive")
+
+                if !searchPresented {
+                    Button { searchPresented = true } label: {
+                        LibraryHeaderIcon(systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Search notes")
+                    .accessibilityIdentifier("notes.searchButton")
+                }
+
+                libraryControls
+            }
+            .libraryCommandCluster()
         }
         .animation(.easeInOut(duration: 0.2), value: searchPresented)
     }
@@ -269,7 +276,8 @@ struct NotesView: View {
 
             backupsMenu
 
-            newNoteButton
+            // The shell's Add Note capsule replaces this when tab actions are on.
+            if !shellTabActionsVisible { newNoteButton }
         }
     }
 
@@ -306,7 +314,7 @@ struct NotesView: View {
         }
         .buttonStyle(.plain)
         .disabled(!session.loaded)
-        .accessibilityLabel("New Notes")
+        .accessibilityLabel("New Note")
         .accessibilityIdentifier("notes.newNotes")
     }
 
@@ -482,7 +490,7 @@ struct NotesView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
             if !hasActiveLibraryFilter, !deleted {
-                Button("New Notes") { showingNewNote = true }
+                Button("New Note") { showingNewNote = true }
                     .buttonStyle(CollectionProminentButtonStyle())
                     .padding(.top, 4)
                     .disabled(!session.loaded)

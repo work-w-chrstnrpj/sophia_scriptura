@@ -123,6 +123,10 @@ enum SophyActionExecutor {
         }
         for action in actions {
             switch action {
+            case .updatePlan(let before, let after):
+                guard collections.sophyCanSharePlan(before), let current = collections.plans.first(where: { $0.id == before.id }),
+                      current == before, after.id == before.id, after.revision == before.revision,
+                      SophyPlanEdit.isAdditive(before: before, after: after) else { return .stalePlan }
             case .createFolders(let destination, let nodes):
                 guard (1...100).contains(nodes.count), (try? SophyResponseValidator.validateTree(nodes)) != nil else { return .invalidArguments }
                 let parentID = destination.flatMap { handles[$0] }
@@ -178,6 +182,9 @@ enum SophyActionExecutor {
     private static func preparedEntry(for action: SophyActionDraft, handles: [String: UUID], now: Date, makeID: () -> UUID) -> SophyJournalEntry {
         let ids: [UUID]
         switch action {
+        case .updatePlan(let before, let after):
+            let existing = Set(before.sections.map(\.id) + before.items.map(\.id))
+            ids = (after.sections.map(\.id) + after.items.map(\.id)).filter { !existing.contains($0) }
         case .createFolders(_, let nodes):
             ids = nodes.filter { $0.existingID == nil }.map { _ in makeID() }
         case .createReminder, .createActivity:
@@ -208,6 +215,17 @@ enum SophyActionExecutor {
         calendar: Calendar
     ) async -> SophyCommitOutcome {
         switch action {
+        case .updatePlan(let before, let after):
+            guard collections.sophyCanSharePlan(before), collections.plans.first(where: { $0.id == before.id }) == before,
+                  SophyPlanEdit.isAdditive(before: before, after: after) else { return .rejected(.stalePlan) }
+            let result = await collections.submit(.init(commandID: entry.id, expectedPlanRevision: before.revision,
+                intent: .savePlan(after, collectionID: nil)))
+            switch result {
+            case .committed: return .committed(resultIDs: entry.resultIDs)
+            case .uncertain: return .uncertain(resultIDs: entry.resultIDs)
+            case .rejected(let error):
+                return .rejected(error == .stale ? .stalePlan : error == .accessDenied ? .accessDenied : error == .invalid ? .invalidArguments : .writeFailed)
+            }
         case .createFolders(let destinationHandle, let nodes):
             let destinationID: UUID?
             if let destinationHandle {

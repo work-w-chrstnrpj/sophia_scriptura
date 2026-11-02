@@ -104,6 +104,7 @@ struct SophyFolderNodeDraft: Equatable, Sendable {
 }
 
 enum SophyActionDraft: Equatable, Sendable {
+    case updatePlan(before: StudyPlan, after: StudyPlan)
     case createFolders(destinationHandle: String?, nodes: [SophyFolderNodeDraft])
     case createReminder(title: String, description: String, modeHandle: String, localDate: String, localTime: String, repeatRule: String, deleteAfterFiring: Bool)
     case createActivity(title: String, description: String, modeHandle: String, localDate: String, localStartTime: String?, localEndDate: String?, localEndTime: String?, durationMinutes: Int?)
@@ -118,6 +119,7 @@ enum SophyActionDraft: Equatable, Sendable {
 
     var typeName: String {
         switch self {
+        case .updatePlan: return "updatePlan"
         case .createFolders: return "createFolders"
         case .createReminder: return "createReminder"
         case .createActivity: return "createActivity"
@@ -134,7 +136,7 @@ enum SophyActionDraft: Equatable, Sendable {
 
     var mutatesSavedData: Bool {
         switch self {
-        case .createFolders, .createReminder, .createActivity: return true
+        case .updatePlan, .createFolders, .createReminder, .createActivity: return true
         default: return false
         }
     }
@@ -334,4 +336,37 @@ enum SophySlashCommandCatalog {
 
     You can also ask in plain language—for example, open James 1 in Scripture, or describe folders to review before saving.
     """
+}
+
+
+/// An AI Plan proposal can only append sections and Scripture assignments.
+enum SophyPlanEdit {
+    static func updatedCursor(before: StudyPlan, sections: [PlanSection]) -> PlanCursor? {
+        guard var cursor = before.cursor else { return nil }
+        if cursor.kind == .planSummary { return nil }
+        if cursor.kind == .sectionSummary,
+           let section = sections.first(where: { $0.id == cursor.sectionID }),
+           let newItem = section.items.first(where: { item in !before.items.contains(where: { $0.id == item.id }) }) {
+            cursor.kind = .item; cursor.itemID = newItem.id; cursor.editionID = before.preferredEditionID
+        }
+        return cursor
+    }
+    static func isAdditive(before: StudyPlan, after: StudyPlan) -> Bool {
+        guard after.sections.count >= before.sections.count, (try? after.validate()) != nil else { return false }
+        var restored = after
+        restored.sections = before.sections; restored.cursor = before.cursor
+        guard restored == before, after.cursor == updatedCursor(before: before, sections: after.sections) else { return false }
+        for (index, section) in after.sections.enumerated() {
+            if index < before.sections.count {
+                let original = before.sections[index]
+                var metadata = section; metadata.items = original.items
+                guard metadata == original, section.items.starts(with: original.items),
+                      section.items.dropFirst(original.items.count).allSatisfy({ $0.payload.kind == .scripture && $0.completedAt == nil }) else { return false }
+            } else {
+                guard section.title == nil, section.materialsFolderID == nil, section.dueDate == nil,
+                      section.items.allSatisfy({ $0.payload.kind == .scripture && $0.completedAt == nil }) else { return false }
+            }
+        }
+        return after.sections != before.sections
+    }
 }

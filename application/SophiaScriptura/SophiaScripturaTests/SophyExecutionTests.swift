@@ -106,3 +106,45 @@ private actor RejectingCollectionsRepository: CollectionsRepository {
         throw CollectionsError.stale
     }
 }
+
+@MainActor final class SophyPlanExecutionTests: XCTestCase {
+    func testPlanCommitPersistsFilesAssignmentsAndRejectsRepeatedOrStalePreview() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repository = CollectionsFileRepository(directory: root.appendingPathComponent("collections"))
+        let store = CollectionsStore(repository: repository); await store.load()
+        let plan = StudyPlan(title: "Plan", preferredEditionID: ScriptureReferenceIdentity.bundledEditionID,
+            referenceSystemID: "org.sophia.web.engwebp", sections: [.init()])
+        let saved = await PlanCommandService(store: store).save(plan)
+        XCTAssertNotNil(saved.receipt)
+        let before = try XCTUnwrap(store.plans.first)
+        var after = before
+        after.sections.append(contentsOf: (0..<130).map { _ in PlanSection() })
+        after.sections[1].items = [.init(payload: .scripture(referenceSystemID: plan.referenceSystemID, book: "GEN", chapter: 1, start: 1))]
+        let sophyRepository = SophyFileRepository(directory: root.appendingPathComponent("sophy"))
+        let activity = ActivityStore(repository: ActivityFileRepository(directory: root.appendingPathComponent("activity")))
+        await activity.load()
+        let action = SophyActionDraft.updatePlan(before: before, after: after)
+        let result = await SophyActionExecutor.commit(actions: [action], handles: [:], collections: store,
+            activity: activity, repository: sophyRepository, now: Date(), calendar: .current)
+        guard case .committed(let ids) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(ids.count, 131)
+        let committed = try XCTUnwrap(store.plans.first)
+        XCTAssertEqual(committed.sections.count, 131)
+        let section = committed.sections[1], item = try XCTUnwrap(section.items.first)
+        XCTAssertTrue(store.collectionIDs(containing: item.id).contains(try XCTUnwrap(section.materialsFolderID)))
+        let reopened = CollectionsStore(repository: repository); await reopened.load()
+        XCTAssertEqual(reopened.plans.first, committed)
+        let history = try await sophyRepository.loadHistory().value
+        let journal = try await sophyRepository.loadJournal().value
+        XCTAssertEqual(history.last?.actionType, "updatePlan"); XCTAssertEqual(history.last?.resultCount, 131)
+        XCTAssertEqual(journal.last?.state, .committed)
+        var interrupted = try XCTUnwrap(journal.last); interrupted.state = .applying
+        let present = Set(committed.sections.map(\.id) + committed.items.map(\.id))
+        XCTAssertEqual(SophyActionExecutor.reconcile(journal: [interrupted], presentIDs: present, featureRecoveredOlderGeneration: false, now: Date()).first?.state, .committed)
+        let retry = await SophyActionExecutor.commit(actions: [action], handles: [:], collections: store,
+            activity: activity, repository: sophyRepository, now: Date(), calendar: .current)
+        XCTAssertEqual(retry, .rejected(.stalePlan))
+        XCTAssertEqual(store.plans.first, committed)
+    }
+}

@@ -491,6 +491,82 @@ final class PlanUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 10), .completed)
         XCTAssertFalse(app.buttons["collections.newPlan"].exists)
     }
+    func testBulkSectionsAndFloatingControlsAbovePlanReading() {
+        continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchEnvironment["SP009_TEST_STORE"] = UUID().uuidString
+        app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30))
+        let toggle = app.switches["settings.sophy.enabled"]
+        let settingsScroll = app.scrollViews["settings.content"]
+        for _ in 0..<8 {
+            if toggle.exists && toggle.isHittable { break }
+            let reveal = app.buttons["navigation.showTabs"]
+            if reveal.exists && reveal.isHittable { reveal.tap() }
+            let settingsTab = app.buttons["tab.settings"]
+            if settingsTab.waitForExistence(timeout: 2), settingsTab.isHittable { settingsTab.tap() }
+            if toggle.waitForExistence(timeout: 3), toggle.isHittable { break }
+            if settingsScroll.exists && settingsScroll.isHittable { settingsScroll.swipeUp() }
+        }
+        XCTAssertTrue(toggle.exists && toggle.isHittable)
+        if toggle.value as? String != "1" { toggle.tap() }
+        XCTAssertTrue(app.buttons["sophy.character"].waitForExistence(timeout: 5))
+        openFolder(app)
+        app.buttons["collections.addMaterial"].tap(); app.buttons["collections.newPlan"].tap()
+        let title = app.textFields["plans.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5)); enterText("Shared Plan", into: title)
+        let assignment = app.buttons["plans.addAssignment"].firstMatch
+        scrollTo(assignment, app: app); assignment.tap()
+        XCTAssertTrue(app.buttons["plans.addScripture"].waitForExistence(timeout: 10)); app.buttons["plans.addScripture"].tap()
+        app.buttons["plans.save"].tap(); assertMaterialPickerClosed(app)
+        let item = app.buttons["collections.open.Shared Plan"]
+        XCTAssertTrue(item.waitForExistence(timeout: 10)); item.tap()
+        app.buttons["plans.edit"].tap()
+        let bulk = app.buttons["plans.addMultipleSections"]
+        scrollTo(bulk, app: app); bulk.tap()
+        let count = app.alerts.textFields.firstMatch
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        count.typeText(XCUIKeyboardKey.delete.rawValue + "6")
+        XCTAssertEqual(count.value as? String, "6")
+        let addSections = app.alerts.buttons["Add sections"]
+        XCTAssertTrue(addSections.isEnabled)
+        addSections.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // iPad can consume the first touch to dismiss/reposition its keyboard.
+        // Confirm only while the same dialog remains; the resulting count guards against a duplicate add.
+        if app.alerts["Add Days/Sections"].exists {
+            app.alerts.buttons["Add sections"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.alerts["Add Days/Sections"])
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+        app.buttons["plans.finishEditing"].tap()
+        XCTAssertTrue(app.staticTexts["0 of 7 completed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["sophy.character"].isHittable)
+        app.buttons["plans.shareWithSophy"].tap()
+        XCTAssertTrue(app.otherElements["sophy.sharedPlan"].waitForExistence(timeout: 5)
+            || app.staticTexts["Shared Plan: Shared Plan"].exists)
+        app.buttons["Done"].tap()
+        app.buttons["plans.playDay.1"].tap()
+        XCTAssertTrue(app.textViews["scripture.text"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["activity.recorder.expand"].isHittable)
+        XCTAssertTrue(app.buttons["sophy.character"].isHittable)
+        app.buttons["activity.recorder.expand"].tap()
+        XCTAssertTrue(app.buttons["activity.recorder.pause"].waitForExistence(timeout: 5))
+        app.buttons["activity.recorder.pause"].tap()
+        XCTAssertEqual(app.buttons["activity.recorder.pause"].label, "Resume activity")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(app.buttons["sophy.character"].isHittable)
+        XCTAssertTrue(app.buttons["activity.recorder.expand"].isHittable)
+        let image = XCTAttachment(screenshot: app.screenshot()); image.name = "Plan floating controls landscape"; image.lifetime = .keepAlways; add(image)
+        app.buttons["activity.recorder.finish"].tap()
+        XCTAssertTrue(app.navigationBars["Stop Plan Activity"].waitForExistence(timeout: 10))
+        app.buttons["Pause Plan"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["reader.book"].waitForExistence(timeout: 30)); openFolder(app)
+        XCTAssertTrue(item.waitForExistence(timeout: 10)); item.tap()
+        XCTAssertTrue(app.staticTexts["0 of 7 completed"].waitForExistence(timeout: 5))
+    }
+
     private func scrollTo(_ element: XCUIElement, app: XCUIApplication) {
         for _ in 0..<7 {
             if element.exists && element.isHittable { return }

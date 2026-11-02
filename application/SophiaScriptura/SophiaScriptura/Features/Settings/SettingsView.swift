@@ -15,6 +15,7 @@ struct SettingsView: View {
     @Binding var showMusicLibrary: Bool
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showTranslationDownloads = false
     @StateObject private var settingsToast = SettingsToastCenter()
 
@@ -28,33 +29,38 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
+            HStack(alignment: .top, spacing: 0) {
+                if horizontalSizeClass == .regular {
+                    sectionIndex(proxy)
+                }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     LibraryHeaderTitle(title: "Settings")
                         .accessibilityIdentifier("settings.title")
 
                     if !collections.studyMutationBlocked {
-                    profileSection
-                    ladyWisdomSection
-                    appearanceSection
-                    readingSection
-                    offlineSection
-                    scriptureAudioSection
-                    translationsSection
-                    providerSection
-                    musicSection
-                    pictureInPictureSection
-                    shellSection
-                    protectionSection
-                    archiveSection
-                    trashSection
-                    deleteDataSection
+                    profileSection.id(Landmark.profile)
+                    ladyWisdomSection.id(Landmark.companion)
+                    appearanceSection.id(Landmark.appearance)
+                    readingSection.id(Landmark.reading)
+                    offlineSection.id(Landmark.offline)
+                    scriptureAudioSection.id(Landmark.audio)
+                    translationsSection.id(Landmark.translations)
+                    providerSection.id(Landmark.provider)
+                    musicSection.id(Landmark.music)
+                    pictureInPictureSection.id(Landmark.floatingPlayer)
+                    shellSection.id(Landmark.tabShortcuts)
+                    protectionSection.id(Landmark.protection)
+                    archiveSection.id(Landmark.archive)
+                    trashSection.id(Landmark.trash)
+                    deleteDataSection.id(Landmark.deleteData)
                     } else {
                         Text("Complete study recovery below before changing study data.")
                             .font(.footnote)
                     }
-                    backupSection
-                    aboutSection
+                    backupSection.id(Landmark.backup)
+                    aboutSection.id(Landmark.about)
                     if let notice = reader.notice {
                         settingsCard {
                             Text(notice)
@@ -66,9 +72,13 @@ struct SettingsView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                // Keep cards at a comfortable reading measure on large iPads.
+                .frame(maxWidth: 860, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("settings.content")
+            }
+            }
             .appSurface()
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -298,6 +308,7 @@ struct SettingsView: View {
     private var ladyWisdomSection: some View {
         settingsCard {
             VStack(alignment: .leading, spacing: 14) {
+                sectionHeading("Companion character")
                 Toggle("Turn on Companion Character", isOn: Binding(
                     get: { sophy.preferences.enabled },
                     set: { sophy.setEnabled($0) }
@@ -525,11 +536,126 @@ struct SettingsView: View {
     }
 
     private func sectionHeading(_ title: String) -> some View {
-        Text(title)
-            .font(.system(.title3, design: .serif).weight(.semibold))
-            .foregroundStyle(Color(theme.palette.ink))
+        HStack(spacing: 10) {
+            if let symbol = Self.sectionSymbols[title] {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(theme.palette.accent))
+                    .frame(width: 30, height: 30)
+                    .background(Color(theme.palette.accent).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+                .font(.system(.title3, design: .serif).weight(.semibold))
+                .foregroundStyle(Color(theme.palette.ink))
+        }
     }
 
+    /// Leading glyphs give the long settings scroll recognizable landmarks.
+    private static let sectionSymbols: [String: String] = Dictionary(
+        uniqueKeysWithValues: Landmark.allCases.map { ($0.heading, $0.symbol) }
+    )
+
+    /// Every Settings card in scroll order; the iPad index jumps between them.
+    private enum Landmark: String, CaseIterable, Identifiable {
+        case profile, companion, appearance, reading, offline, audio, translations, provider
+        case music, floatingPlayer, tabShortcuts, protection, archive, trash, deleteData, backup, about
+        var id: String { rawValue }
+        /// Matches the card's `sectionHeading` so headings and the index share one glyph.
+        var heading: String {
+            switch self {
+            case .profile: "Profile"
+            case .companion: "Companion character"
+            case .appearance: "Appearance presets"
+            case .reading: "Reading"
+            case .offline: "Offline Bible"
+            case .audio: "Scripture audio (BSB)"
+            case .translations: "Translations"
+            case .provider: "Provider keys"
+            case .music: "Background music"
+            case .floatingPlayer: "Floating Player"
+            case .tabShortcuts: "Tab shortcuts"
+            case .protection: "Protection"
+            case .archive: "Archive"
+            case .trash: "Trash"
+            case .deleteData: "Delete data"
+            case .backup: "Backup data"
+            case .about: "About"
+            }
+        }
+        var indexTitle: String {
+            switch self {
+            case .companion: "Companion"
+            case .appearance: "Appearance"
+            case .audio: "Scripture audio"
+            case .provider: "Provider keys"
+            case .music: "Music"
+            case .backup: "Backup"
+            default: heading
+            }
+        }
+        var symbol: String {
+            switch self {
+            case .profile: "person.crop.circle"
+            case .companion: "sparkles"
+            case .appearance: "paintpalette"
+            case .reading: "textformat.size"
+            case .offline: "arrow.down.circle"
+            case .audio: "headphones"
+            case .translations: "character.book.closed"
+            case .provider: "key"
+            case .music: "music.note"
+            case .floatingPlayer: "pip"
+            case .tabShortcuts: "rectangle.bottomthird.inset.filled"
+            case .protection: "lock"
+            case .archive: "archivebox"
+            case .trash: "trash"
+            case .deleteData: "exclamationmark.triangle"
+            case .backup: "externaldrive"
+            case .about: "info.circle"
+            }
+        }
+    }
+
+    private var visibleLandmarks: [Landmark] {
+        collections.studyMutationBlocked ? [.backup, .about] : Landmark.allCases
+    }
+
+    private func sectionIndex(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(visibleLandmarks) { landmark in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) { proxy.scrollTo(landmark, anchor: .top) }
+                    } label: {
+                        Label {
+                            Text(landmark.indexTitle)
+                                .foregroundStyle(Color(theme.palette.ink))
+                        } icon: {
+                            Image(systemName: landmark.symbol)
+                                .foregroundStyle(Color(theme.palette.accent))
+                                .frame(width: 22)
+                        }
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.index.\(landmark.rawValue)")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 64)
+            .padding(.bottom, 32)
+        }
+        .frame(width: 210)
+        .background(Color(theme.palette.card).ignoresSafeArea())
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(Color(theme.palette.rule)).frame(width: 1).ignoresSafeArea()
+        }
+        .accessibilityLabel("Settings sections")
+    }
     private func settingsLinkRow(_ title: String) -> some View {
         HStack {
             Text(title)
@@ -546,8 +672,6 @@ struct SettingsView: View {
         content()
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color(theme.palette.rule), lineWidth: 1))
+            .studyCard()
     }
 }

@@ -133,16 +133,16 @@ actor SophyFileRepository {
     nonisolated static func validateHistory(_ entries: [SophyHistoryEntry]) throws {
         guard Set(entries.map(\.id)).count == entries.count else { throw SophySafeError.writeFailed }
         let statuses: Set<String> = ["committed", "rejected", "uncertain", "saved", "notScheduled"]
-        let types: Set<String> = ["createFolders", "createReminder", "createActivity", "lookup", "insights", "enhance", "music", "openQuiz", "openContemplation", "openChat"]
-        guard entries.allSatisfy({ types.contains($0.actionType) && statuses.contains($0.status) && $0.resultCount == $0.resultIDs.count && $0.resultCount <= 120 && Set($0.resultIDs).count == $0.resultIDs.count && $0.createdAt.timeIntervalSince1970.isFinite }) else {
+        let types: Set<String> = ["updatePlan", "createFolders", "createReminder", "createActivity", "lookup", "insights", "enhance", "music", "openQuiz", "openContemplation", "openChat"]
+        guard entries.allSatisfy({ types.contains($0.actionType) && statuses.contains($0.status) && $0.resultCount == $0.resultIDs.count && $0.resultCount <= ($0.actionType == "updatePlan" ? 400 : 120) && Set($0.resultIDs).count == $0.resultIDs.count && $0.createdAt.timeIntervalSince1970.isFinite }) else {
             throw SophySafeError.writeFailed
         }
     }
 
     private func validateJournal(_ entries: [SophyJournalEntry]) throws {
         guard Set(entries.map(\.id)).count == entries.count else { throw SophySafeError.writeFailed }
-        let types: Set<String> = ["createFolders", "createReminder", "createActivity"]
-        guard entries.allSatisfy({ types.contains($0.actionType) && $0.resultIDs.count <= 120 }) else { throw SophySafeError.writeFailed }
+        let types: Set<String> = ["updatePlan", "createFolders", "createReminder", "createActivity"]
+        guard entries.allSatisfy({ types.contains($0.actionType) && $0.resultIDs.count <= ($0.actionType == "updatePlan" ? 400 : 120) }) else { throw SophySafeError.writeFailed }
     }
 
     private func digest(_ data: Data) -> String {

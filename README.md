@@ -291,8 +291,11 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.6.1](docs/releases/v1.6.1.md), build 31**, dated
-**2026-10-31**. Prayer has balanced compact margins in portrait/landscape and gray dashed
+The current release is **[v1.7.0](docs/releases/v1.7.0.md), build 32**, dated
+**2026-11-02**. The Activity recorder and Lady Wisdom stay above fullscreen Plans, Plan Edit
+can add many sections at once, and a Plan can be explicitly shared with Lady Wisdom for
+previewed section/Scripture additions. The interface gains a pinned dock on library and
+settings tabs, unified card surfaces, grouped header commands and a Settings section index. Prayer has balanced compact margins in portrait/landscape and gray dashed
 annotation boundaries when maximized. Every note kind exposes its metadata/color editor
 in More from Notes or Collections, including Edit Canvas. Plans support one-Day playback, direct Day selection, automatic Activity
 timing with History only on completion, retained paused time between Days, New Conversation,

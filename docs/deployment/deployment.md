@@ -828,3 +828,7 @@ existing Live Activity extension (`build/sp058/device-build.log`). Owner-confirm
 sign-in to the existing Personal Team resolved it. No uninstall, study-data reset,
 explicit translation sync, signing/bundle-ID change, version bump or source release
 occurred. Physical feature and real-provider acceptance remain separate from delivery.
+
+## v1.7.0 / build 32 source release — 2026-11-02
+
+The owner authorized push and release of SP-058 together with the UI/UX polish pass. The version was bumped to **1.7.0/build 32** after SP-058's signed device delivery (which ran at 1.6.1/build 31), so the device does not yet carry build 32. Source publication follows the development → main merge and hosted Release verification. No uninstall, data reset or signing change occurred.

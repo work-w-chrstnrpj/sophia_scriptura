@@ -30,7 +30,7 @@ These change shell behavior, not study data. Screenshots are in `after-r2/`, wit
 
 | # | Recommendation | Implementation |
 |---|----------------|----------------|
-| R1 | The dock hid after 3 s even on screens that don't scroll | `ShellChromeState.autoHides`: the dock stays pinned on Collections, Notes, Activity and Settings. It still auto-hides (after 3 s) in Scripture, Companion chat, full-screen note editing and Plan playback. New unit test: `testPinnedDockStaysVisibleUntilAutoHideResumes`. |
+| R1 | The dock hid after 3 s even on screens that don't scroll | `ShellChromeState.autoHides`: the dock stays pinned on Collections, Notes, Activity and Settings. It still auto-hides (after 3 s) in Scripture, Companion chat, full-screen note editing and Plan playback. It sits behind the keyboard. New unit test: `testPinnedDockStaysVisibleUntilAutoHideResumes`. |
 | R2 | Duplicate "add" affordances | When the Add/Start capsule is enabled (Settings › Tab shortcuts), the header `+` is hidden on Notes, Collections and Activity. The capsule now carries the header's accessibility ID (`notes.newNotes` / `collections.newCollection`) and opens the same sheet. With the capsule turned off, the header `+` comes back. |
 | R3 | The music button covered reading text | It hides together with the dock. In Scripture it disappears once reading settles and returns when the dock is revealed. |
 | R4 | The Archived Plans icon was ambiguous | Archived Collections and Archived Plans now share a single Archive menu (`collections.archive` → `.collections` / `.plans`). |
@@ -44,4 +44,5 @@ UI test updates: `ShellNavigationUITests.testLibraryHeadersUsePresetTitleAndExpa
 
 - `xcodebuild build` for the iPad simulator: **succeeded**.
 - Each tab captured in light mode before and after; Settings also checked in dark mode (`after/07-settings-dark.png`).
-- Round 2: `ShellChromeStateTests` passed (6/6). See the commit message for the UI test results from `ShellNavigationUITests` and `ItemProtectionUITests`.
+- Round 2 (rebased onto SP-058 `5d3eff3`): **512 unit tests passed, 0 failures**. `ShellNavigationUITests`: **11/12 passed**. The one failure, `testSettingsProviderKeysRowIsFullyAboveDockInBothOrientations`, also fails on the original `main` (`2ad3753`), as does `ItemProtectionUITests`, so both failures predate this branch.
+- A regression found during testing was fixed before commit: the pinned dock rose above the keyboard and covered fields. The bottom shell overlay now ignores the keyboard safe area.

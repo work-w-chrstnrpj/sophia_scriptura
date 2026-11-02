@@ -83,6 +83,14 @@ struct RootTabView: View {
         reduceMotion ? .easeOut(duration: 0.16) : .easeInOut(duration: 0.28)
     }
     private var editingNote: Bool { (selection == .notes || selection == .collections) && notes.selectedNoteID != nil }
+    /// Scripture, chat, and full-screen editing reclaim the bottom edge; library tabs keep the dock.
+    private var chromeAutoHides: Bool {
+        switch selection {
+        case .scripture, .companion: true
+        case .collections, .notes: editingNote || notes.planPresentationActive
+        case .activity, .settings: false
+        }
+    }
     private var sophyIdleQuotesSuspended: Bool {
         if editingNote { return true }
         if selection == .scripture, annotations.mode != .hidden { return true }
@@ -220,6 +228,8 @@ struct RootTabView: View {
             }
             .padding(.bottom, 12)
             .animation(shellChromeAnimation, value: chrome.isVisible)
+            // A pinned dock stays behind the keyboard instead of riding up over the field being edited.
+            .ignoresSafeArea(.keyboard)
         }
         .sheet(isPresented: $showMusicLibrary) {
             NavigationStack {
@@ -242,6 +252,7 @@ struct RootTabView: View {
         .tint(Color(palette.accent))
         .preferredColorScheme(reader.preferences.theme == "system" ? nil : reader.preferences.theme == "dark" ? .dark : .light)
         .environment(\.appTheme, theme)
+        .environment(\.shellTabActionsVisible, shellPreferences.preferences.showTabActionButtons)
         .environment(\.studySwipeCoordinator, swipeActions)
         .environment(notes)
         .environmentObject(userProfile)
@@ -390,7 +401,8 @@ struct RootTabView: View {
                 Task { await notes.save() }
             }
         }
-        .onAppear { chrome.reveal() }
+        .onAppear { chrome.autoHides = chromeAutoHides; chrome.reveal() }
+        .onChange(of: chromeAutoHides) { _, autoHides in chrome.autoHides = autoHides }
         .onDisappear { chrome.stop() }
         .onChange(of:scenePhase) { _, phase in
             protection.sceneActive(phase == .active, background: phase == .background)
@@ -409,7 +421,7 @@ struct RootTabView: View {
     @ViewBuilder
     private var shellFABRow: some View {
         HStack(alignment: .bottom, spacing: 0) {
-            if !editingNote && music.preferences.showFloatingControl {
+            if !editingNote && music.preferences.showFloatingControl && chrome.isVisible {
                 BackgroundMusicFloatingControl(session: music, showLibrary: $showMusicLibrary, fabEngagedUntil: $shellFABEngagedUntil)
                     .shellFABEngagementOpacity(engagedUntil: $shellFABEngagedUntil)
             }
@@ -430,11 +442,11 @@ struct RootTabView: View {
     private var tabSpecificShellFAB: some View {
         if editingNote || !shellPreferences.preferences.showTabActionButtons { EmptyView() }
         else if selection == .collections {
-            shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "shell.addCollection") {
+            shellCapsuleFAB(title: "Add Collection", systemImage: "folder.badge.plus", id: "collections.newCollection") {
                 showShellNewCollection = true
             }
         } else if selection == .notes, notes.loaded {
-            shellCapsuleFAB(title: "Add Note", systemImage: "note.text.badge.plus", id: "shell.addNote") {
+            shellCapsuleFAB(title: "Add Note", systemImage: "note.text.badge.plus", id: "notes.newNotes") {
                 showShellNoteKindPicker = true
             }
         } else if selection == .companion, companion.activeConversations.isEmpty {
@@ -557,15 +569,27 @@ struct RootTabView: View {
         HStack(spacing:0) {
             ForEach(Tab.allCases,id:\.self) { tab in
                 Button {
-                    Task {
-                        chrome.reveal()
-                        let leavingScripture = selection == .scripture && tab != .scripture
-                        if leavingScripture, annotations.loaded {
+                    chrome.reveal()
+                    let leavingScripture = selection == .scripture && tab != .scripture
+                    // Idle annotations save behind the slide; only a live stroke or save holds the tab.
+                    if leavingScripture, annotations.loaded, annotations.usingTool || annotations.saving {
+                        Task {
                             _ = await annotations.prepareForNavigation()
+                            reader.save()
+                            selection = tab
+                            annotations.active = false
                         }
+                    } else {
                         reader.save()
                         selection = tab
-                        annotations.active = tab == .scripture
+                        if leavingScripture, annotations.loaded {
+                            Task {
+                                _ = await annotations.prepareForNavigation()
+                                annotations.active = selection == .scripture
+                            }
+                        } else {
+                            annotations.active = tab == .scripture
+                        }
                     }
                 } label: {
                     VStack(spacing:4) {

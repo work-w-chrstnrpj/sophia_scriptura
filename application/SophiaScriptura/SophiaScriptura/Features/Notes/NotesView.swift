@@ -25,6 +25,7 @@ struct NotesView: View {
     @State private var filingNote: NoteDocument?
     @State private var editingNote: NoteDocument?
     @State private var showingNewNote = false
+    @Environment(\.shellTabActionsVisible) private var shellTabActionsVisible
     @State private var showArchivedNotes = false
     @State private var selectionMode = false
     @State private var selectedNoteIDs: Set<UUID> = []
@@ -275,7 +276,8 @@ struct NotesView: View {
 
             backupsMenu
 
-            newNoteButton
+            // The shell's Add Note capsule replaces this when tab actions are on.
+            if !shellTabActionsVisible { newNoteButton }
         }
     }
 

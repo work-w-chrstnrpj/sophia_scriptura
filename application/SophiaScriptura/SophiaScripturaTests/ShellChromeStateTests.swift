@@ -20,6 +20,21 @@ final class ShellChromeStateTests: XCTestCase {
         XCTAssertTrue(chrome.isVisible)
         chrome.stop()
     }
+    func testPinnedDockStaysVisibleUntilAutoHideResumes() async throws {
+        let chrome = ShellChromeState(delay: .milliseconds(100))
+        chrome.reveal()
+        chrome.autoHides = false
+        try await Task.sleep(for: .milliseconds(180))
+        XCTAssertTrue(chrome.isVisible, "Library tabs pin the dock")
+        chrome.reveal()
+        try await Task.sleep(for: .milliseconds(180))
+        XCTAssertTrue(chrome.isVisible, "Activity must not restart the hide timer while pinned")
+        chrome.autoHides = true
+        try await Task.sleep(for: .milliseconds(180))
+        XCTAssertFalse(chrome.isVisible, "Returning to a reading surface restores the timer")
+        chrome.stop()
+    }
+
     func testHideImmediatelyDismissesVisibleDock() {
         let chrome = ShellChromeState()
         chrome.reveal()

@@ -7,6 +7,14 @@ import Observation
 final class ShellChromeState {
     nonisolated static let visibilityDelay: Duration = .seconds(3)
     private(set) var isVisible = true
+    /// Reading surfaces let the dock fade away; library tabs pin it so it never disappears
+    /// from a screen that has nothing to scroll.
+    var autoHides = true {
+        didSet {
+            guard autoHides != oldValue else { return }
+            if autoHides { reveal() } else { pin() }
+        }
+    }
     @ObservationIgnored private var deadline: ContinuousClock.Instant?
     @ObservationIgnored private var hideTask: Task<Void, Never>?
     @ObservationIgnored private let clock = ContinuousClock()
@@ -23,6 +31,7 @@ final class ShellChromeState {
 
     func reveal() {
         isVisible = true
+        guard autoHides else { return }
         deadline = clock.now.advanced(by: delay)
         guard hideTask == nil else { return }
         hideTask = Task { [weak self] in
@@ -38,6 +47,13 @@ final class ShellChromeState {
                 }
             }
         }
+    }
+
+    private func pin() {
+        hideTask?.cancel()
+        hideTask = nil
+        deadline = nil
+        isVisible = true
     }
 
     func stop() {

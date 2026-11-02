@@ -22,6 +22,7 @@ struct CollectionsView: View {
     @State private var searchPresented = false
     @State private var sort: CollectionLibrarySort = .modified
     @State private var showingNewCollection = false
+    @Environment(\.shellTabActionsVisible) private var shellTabActionsVisible
     @State private var editingCollection: StudyCollection?
     @State private var duplicatingCollection: StudyCollection?
     @State private var movingCollection: StudyCollection?
@@ -272,14 +273,15 @@ struct CollectionsView: View {
                 ProtectionControls(domains: [.collections], available: store.hasCollectionsAccessRequirements).labelStyle(.iconOnly)
                     .frame(width: 44, height: 44)
 
-                Button { showArchivedPlans = true } label: { LibraryHeaderIcon(systemImage: "list.bullet.rectangle") }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Archived Plans")
-                Button { showArchivedCollections = true } label: {
+                Menu {
+                    Button("Archived Collections", systemImage: "folder") { showArchivedCollections = true }
+                        .accessibilityIdentifier("collections.archive.collections")
+                    Button("Archived Plans", systemImage: "list.bullet.rectangle") { showArchivedPlans = true }
+                        .accessibilityIdentifier("collections.archive.plans")
+                } label: {
                     LibraryHeaderIcon(systemImage: "archivebox")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Archived collections")
+                .accessibilityLabel("Archive")
                 .accessibilityIdentifier("collections.archive")
 
                 if !searchPresented {
@@ -322,14 +324,17 @@ struct CollectionsView: View {
             .accessibilityValue(sort.title)
             .accessibilityIdentifier("collections.sort")
 
-            Button {
-                showingNewCollection = true
-            } label: {
-                LibraryHeaderIcon(systemImage: "plus")
+            // The shell's Add Collection capsule replaces this when tab actions are on.
+            if !shellTabActionsVisible {
+                Button {
+                    showingNewCollection = true
+                } label: {
+                    LibraryHeaderIcon(systemImage: "plus")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Collection")
+                .accessibilityIdentifier("collections.newCollection")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("New Collection")
-            .accessibilityIdentifier("collections.newCollection")
         }
     }
 

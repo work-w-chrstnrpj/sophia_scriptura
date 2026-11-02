@@ -24,18 +24,24 @@ Device: iPad Pro 13-inch (M5) simulator, Old Paper preset, light mode (plus one 
 
 Files touched: `DesignSystem/StudyCard.swift` (new), `DesignSystem/ScriptureAppearance.swift` (`card` token), `RootTabView.swift`, `Features/Settings/SettingsView.swift`, `Features/Settings/SettingsDeleteDataSection.swift`, `Features/Activity/ActivityView.swift`, `Features/Activity/ActivityAnalyticsView.swift`, `Features/Activity/ActivityHistoryView.swift`, `Features/Notes/NotesView.swift`, `Features/Notes/NoteLibraryCard.swift`, `Features/Collections/CollectionsView.swift`, `Features/Companion/CompanionView.swift`.
 
-## Recommendations not applied (they touch behavior or need your call)
+## Round 2 — recommendations applied
 
-1. **The dock hides after 3 s even on screens that don't scroll** (empty Notes, Companion). Consider hiding only on downward scroll in Scripture and keeping it visible elsewhere, or raising the delay to about 6 s. `ShellChromeStateTests` asserts 3 s.
-2. **Three "add" affordances on one screen.** Collections shows a header `+`, an empty-state "New Collection" button and the "Add Collection" FAB. Activity shows a header `+`, an "Add or start a new activity" row and the "Start Activity" FAB. Pick one primary path per tab (the FAB) and hide the header `+` while the FAB is enabled.
-3. **The floating music button covers reading text.** It sits over the scripture column (bottom-left in Scripture and Settings). Consider anchoring it inside the dock row or fading it while scrolling.
-4. **Archived Plans icon (`list.bullet.rectangle`)** is hard to tell apart from a list/view toggle. Consider folding Archived Plans and Archived Collections into one "Archive" menu.
-5. **The Settings scroll has 17 sections.** On iPad, a `NavigationSplitView` with a section sidebar (the same pattern Companion already uses) would remove the long scroll.
-6. **Scripture passage picker** (`Genesis | WEB`) is offset from both the title and the reading column. Align it to the reading column's leading edge or center it over the chapter title.
-7. **Leaving Scripture can feel slow:** tab switching awaits `annotations.prepareForNavigation()` before the selection changes. Switching the highlight first and saving afterwards would make taps feel immediate. This is a logic change, so it is listed here only.
+These change shell behavior, not study data. Screenshots are in `after-r2/`, with side-by-side comparisons against the original baseline in `compare-r2/`.
+
+| # | Recommendation | Implementation |
+|---|----------------|----------------|
+| R1 | The dock hid after 3 s even on screens that don't scroll | `ShellChromeState.autoHides`: the dock stays pinned on Collections, Notes, Activity and Settings. It still auto-hides (after 3 s) in Scripture, Companion chat, full-screen note editing and Plan playback. New unit test: `testPinnedDockStaysVisibleUntilAutoHideResumes`. |
+| R2 | Duplicate "add" affordances | When the Add/Start capsule is enabled (Settings › Tab shortcuts), the header `+` is hidden on Notes, Collections and Activity. The capsule now carries the header's accessibility ID (`notes.newNotes` / `collections.newCollection`) and opens the same sheet. With the capsule turned off, the header `+` comes back. |
+| R3 | The music button covered reading text | It hides together with the dock. In Scripture it disappears once reading settles and returns when the dock is revealed. |
+| R4 | The Archived Plans icon was ambiguous | Archived Collections and Archived Plans now share a single Archive menu (`collections.archive` → `.collections` / `.plans`). |
+| R5 | The Settings scroll had 17 sections | At regular width, a section index sidebar jumps to any card. It uses the same glyphs as the card headings. Compact width (Split View/Slide Over) keeps the single column. |
+| R6 | The passage picker was misaligned | In wide portrait it is centered over the chapter title. Compact and landscape layouts are unchanged. |
+| R7 | Leaving Scripture felt slow | The tab changes immediately and the annotation save finishes in the background. If a pencil stroke or save is still in progress, the old ordering is kept (save first, then switch), so ink is never cut off. |
+
+UI test updates: `ShellNavigationUITests.testLibraryHeadersUsePresetTitleAndExpandableSearch` now asserts that New Note and New Collection appear as the shell capsule below the header, not as items in the header row.
 
 ## Verification
 
 - `xcodebuild build` for the iPad simulator: **succeeded**.
 - Each tab captured in light mode before and after; Settings also checked in dark mode (`after/07-settings-dark.png`).
-- Unit and UI test suites were **not** run on this branch.
+- Round 2: `ShellChromeStateTests` passed (6/6). See the commit message for the UI test results from `ShellNavigationUITests` and `ItemProtectionUITests`.

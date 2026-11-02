@@ -152,9 +152,9 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertFalse(app.navigationBars["Collections"].exists)
         XCTAssertLessThan(collectionTitle.frame.maxX, collectionSearch.frame.minX)
         XCTAssertLessThan(abs(collectionSearch.frame.midY - collectionSort.frame.midY), 2)
-        XCTAssertLessThan(abs(collectionSort.frame.midY - newCollection.frame.midY), 2)
         XCTAssertLessThanOrEqual(collectionSearch.frame.maxX, collectionSort.frame.minX)
-        XCTAssertLessThanOrEqual(collectionSort.frame.maxX, newCollection.frame.minX)
+        // With tab actions on, New Collection is the shell capsule above the dock, not a header duplicate.
+        XCTAssertGreaterThan(newCollection.frame.minY, collectionSort.frame.maxY)
         capture(app,"Collections minimal expanded search header")
         app.buttons["Close search"].tap()
         waitForVisible(collectionSearchButton)
@@ -175,10 +175,10 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertLessThan(noteTitle.frame.maxX, noteSearch.frame.minX)
         XCTAssertLessThan(abs(noteSearch.frame.midY - noteOptions.frame.midY), 2)
         XCTAssertLessThan(abs(noteOptions.frame.midY - backups.frame.midY), 2)
-        XCTAssertLessThan(abs(backups.frame.midY - newNote.frame.midY), 2)
         XCTAssertLessThanOrEqual(noteSearch.frame.maxX, noteOptions.frame.minX)
         XCTAssertLessThanOrEqual(noteOptions.frame.maxX, backups.frame.minX)
-        XCTAssertLessThanOrEqual(backups.frame.maxX, newNote.frame.minX)
+        // With tab actions on, New Note is the shell capsule above the dock, not a header duplicate.
+        XCTAssertGreaterThan(newNote.frame.minY, backups.frame.maxY)
         capture(app,"Notes minimal expanded search header")
         app.buttons["Close search"].tap()
         waitForVisible(noteSearchButton)
@@ -215,8 +215,8 @@ final class ShellNavigationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["History"].exists)
         capture(app, "Activity dashboard portrait")
 
-        XCTAssertTrue(handle.waitForExistence(timeout: 8))
-        handle.tap()
+        // Library tabs keep the dock pinned; reveal only if it has been hidden.
+        reveal(app)
         waitForVisible(app.buttons["tab.settings"])
         app.buttons["tab.settings"].tap()
         let night = app.buttons["preset.midnightLibrary"]
@@ -225,8 +225,7 @@ final class ShellNavigationUITests: XCTestCase {
         defer { XCUIDevice.shared.orientation = .portrait }
         let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 10), .completed)
-        XCTAssertTrue(handle.waitForExistence(timeout: 8))
-        handle.tap()
+        reveal(app)
         waitForVisible(app.buttons["tab.activity"])
         app.buttons["tab.activity"].tap()
         XCTAssertTrue(app.staticTexts["Analytics"].waitForExistence(timeout: 8))

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActivityView: View {
     @Environment(\.appTheme) private var theme
+    @Environment(\.shellTabActionsVisible) private var shellTabActionsVisible
     @ObservedObject var store: ActivityStore
     @ObservedObject var sophy: SophySession
     @ObservedObject var companion: CompanionSession
@@ -362,15 +363,18 @@ struct ActivityView: View {
             LibraryHeaderTitle(title: "Activity")
                 .accessibilityIdentifier("activity.title")
             Spacer(minLength: 12)
-            Button {
-                showingAddChooser = true
-            } label: {
-                LibraryHeaderIcon(systemImage: "plus")
+            // History's add row and the Start Activity capsule cover this when tab actions are on.
+            if !shellTabActionsVisible {
+                Button {
+                    showingAddChooser = true
+                } label: {
+                    LibraryHeaderIcon(systemImage: "plus")
+                }
+                .buttonStyle(.plain)
+                .disabled(!store.isReady)
+                .accessibilityLabel("Add activity")
+                .accessibilityIdentifier("activity.add")
             }
-            .buttonStyle(.plain)
-            .disabled(!store.isReady)
-            .accessibilityLabel("Add activity")
-            .accessibilityIdentifier("activity.add")
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)

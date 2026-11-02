@@ -21,3 +21,12 @@ extension View {
             .frame(maxWidth: .infinity)
     }
 }
+
+private struct ShellTabActionsVisibleKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True when the shell shows a tab's Add/Start capsule, so headers can drop their duplicate `+`.
+    var shellTabActionsVisible: Bool {
+        get { self[ShellTabActionsVisibleKey.self] }
+        set { self[ShellTabActionsVisibleKey.self] = newValue }
+    }
+}

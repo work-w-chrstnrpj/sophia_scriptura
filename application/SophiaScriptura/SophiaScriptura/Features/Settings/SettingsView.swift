@@ -17,6 +17,8 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var showTranslationDownloads = false
+    /// The section index stays hidden until the Settings title is tapped; the choice is remembered.
+    @AppStorage("settings.sectionIndexVisible") private var showSectionIndex = false
     @StateObject private var settingsToast = SettingsToastCenter()
 
     private func preference<Value>(_ path: WritableKeyPath<ReaderPreferences, Value>) -> Binding<Value> {
@@ -31,12 +33,20 @@ struct SettingsView: View {
         NavigationStack {
             ScrollViewReader { proxy in
             HStack(alignment: .top, spacing: 0) {
-                if horizontalSizeClass == .regular {
+                if horizontalSizeClass == .regular && showSectionIndex {
                     sectionIndex(proxy)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     LibraryHeaderTitle(title: "Settings")
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard horizontalSizeClass == .regular else { return }
+                            withAnimation(.easeInOut(duration: 0.25)) { showSectionIndex.toggle() }
+                        }
+                        .accessibilityAddTraits(horizontalSizeClass == .regular ? .isButton : [])
+                        .accessibilityHint(horizontalSizeClass == .regular ? (showSectionIndex ? "Hides the section list" : "Shows the section list") : "")
                         .accessibilityIdentifier("settings.title")
 
                     if !collections.studyMutationBlocked {

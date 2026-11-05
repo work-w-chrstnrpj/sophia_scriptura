@@ -19,6 +19,23 @@ import SwiftUI
         id = plan.id; draft = plan; expectedRevision = isExisting ? plan.revision : nil
         persistedDraft = isExisting ? plan : nil
     }
+    /// Switch the Plan's reading translation. Every edition has its own reference system,
+    /// so existing Scripture assignments are re-anchored to it; the store still verifies
+    /// each chapter and verse range exists in the new translation before saving.
+    func changeTranslation(to editionID: String) {
+        guard editionID != draft.preferredEditionID,
+              let referenceSystemID = ScriptureReferenceIdentity.referenceSystemID(forEditionID: editionID) else { return }
+        draft.preferredEditionID = editionID
+        draft.referenceSystemID = referenceSystemID
+        for s in draft.sections.indices {
+            for i in draft.sections[s].items.indices where draft.sections[s].items[i].payload.kind == .scripture {
+                draft.sections[s].items[i].payload.referenceSystemID = referenceSystemID
+            }
+        }
+        if draft.cursor?.kind == .item { draft.cursor?.editionID = editionID; draft.cursor?.location = nil }
+        message = nil
+        commandID = UUID()
+    }
     var saveStatus: String { autosaving ? "Saving…" : draft == persistedDraft ? "Saved" : "Changes pending" }
     func scheduleAutosave(store: CollectionsStore, collectionID: UUID) {
         autosaveTask?.cancel()

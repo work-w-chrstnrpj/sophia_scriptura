@@ -291,8 +291,10 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.7.0](docs/releases/v1.7.0.md), build 32**, dated
-**2026-11-02**. The Activity recorder and Lady Wisdom stay above fullscreen Plans, Plan Edit
+The current release is **[v1.7.1](docs/releases/v1.7.1.md), build 33**, dated
+**2026-11-05**. Plan Edit has a Translation picker for any installed translation, new Plans
+no longer fall back to WEB, and tapping the Settings title shows or hides the section index.
+In v1.7.0, the Activity recorder and Lady Wisdom stay above fullscreen Plans, Plan Edit
 can add many sections at once, and a Plan can be explicitly shared with Lady Wisdom for
 previewed section/Scripture additions. The interface gains a pinned dock on library and
 settings tabs, unified card surfaces, grouped header commands and a Settings section index. Prayer has balanced compact margins in portrait/landscape and gray dashed

@@ -50,8 +50,12 @@ struct CollectionArtifactPicker: View {
                 Section {
                     Button("New Plan", systemImage: "list.bullet.rectangle") {
                         finishAfterPlan = false
-                        creatingPlan = PlanEditorDraft(plan: StudyPlan(title: "", preferredEditionID: reader?.edition?.id ?? ScriptureReferenceIdentity.bundledEditionID,
-                            referenceSystemID: reader?.edition?.referenceSystemID ?? "org.sophia.web.engwebp", sections: [.init()]))
+                        // New Plans start in the Reader's chosen translation; change it any time in the Plan editor.
+                        let editionID = reader?.edition?.id ?? reader?.preferences.preferredEdition ?? ScriptureReferenceIdentity.bundledEditionID
+                        let referenceSystemID = reader?.edition?.id == editionID ? reader?.edition?.referenceSystemID
+                            : ScriptureReferenceIdentity.referenceSystemID(forEditionID: editionID)
+                        creatingPlan = PlanEditorDraft(plan: StudyPlan(title: "", preferredEditionID: referenceSystemID == nil ? ScriptureReferenceIdentity.bundledEditionID : editionID,
+                            referenceSystemID: referenceSystemID ?? ScriptureReferenceIdentity.bundledReferenceSystemID, sections: [.init()]))
                     }
                         .accessibilityIdentifier("collections.newPlan")
                     Button("New Point to Ponder", systemImage: "questionmark.bubble") { creatingPoint = true }

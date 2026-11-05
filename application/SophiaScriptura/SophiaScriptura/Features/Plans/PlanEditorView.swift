@@ -92,6 +92,25 @@ struct PlanEditorView: View {
             } message: { Text("How many more? You can add up to \(200 - model.draft.sections.count) Days/Sections.") }
             .onChange(of: permitted) { _, allowed in if !allowed { model.closeAssignmentPicker(); model.confirmReset = false; confirmDeletePlan = false; showingSectionCount = false } }
     }
+    /// Translations available offline for Plan reading, plus the Plan's current one if it is no longer installed.
+    private var translationOptions: [(id: String, label: String)] {
+        var options: [(id: String, label: String)] = [(ScriptureReferenceIdentity.bundledEditionID, "WEB · World English Bible")]
+        if let reader {
+            for status in reader.helloAOEditions where status.isAvailable {
+                options.append((status.appEditionID, "\(status.eligible.abbreviation) · \(status.catalogName ?? status.eligible.name)"))
+            }
+            for status in reader.translations where status.isAvailable {
+                options.append((status.translation.editionID, "\(status.translation.abbreviation) · \(status.translation.name)"))
+            }
+        }
+        let current = model.draft.preferredEditionID
+        if !options.contains(where: { $0.id == current }) {
+            let name = reader?.edition?.id == current ? reader?.edition?.abbreviation
+                : LicensedTranslation.approved.first(where: { $0.editionID == current })?.abbreviation
+            options.append((current, "\(name ?? current) · not downloaded"))
+        }
+        return options
+    }
     private var editor: some View {
         let sections = model.draft.sections
         return List {
@@ -99,10 +118,11 @@ struct PlanEditorView: View {
                 TextField("Plan title", text: $model.draft.title).accessibilityIdentifier("plans.title")
                 TextField("Description", text: $model.draft.detail, axis: .vertical)
                 TextField("Section label, such as Day", text: $model.draft.sectionPrefix)
-                Text("Translation: \(reader?.edition?.id == model.draft.preferredEditionID ? reader?.edition?.abbreviation ?? model.draft.preferredEditionID : model.draft.preferredEditionID)").font(.caption)
-                if let reader, let edition = reader.edition, edition.id != model.draft.preferredEditionID {
-                    Button("Use current translation (\(edition.abbreviation))") { model.draft.preferredEditionID = edition.id; model.commandID = UUID() }
+                Picker("Translation", selection: Binding(get: { model.draft.preferredEditionID }, set: { model.changeTranslation(to: $0) })) {
+                    ForEach(translationOptions, id: \.id) { option in Text(option.label).tag(option.id) }
                 }
+                .disabled(model.saving)
+                .accessibilityIdentifier("plans.translation")
                 Text(model.saveStatus).font(.caption).accessibilityIdentifier("plans.saveStatus")
                 if let message = model.message { Text(message).foregroundStyle(.red).accessibilityIdentifier("plans.error") }
             }

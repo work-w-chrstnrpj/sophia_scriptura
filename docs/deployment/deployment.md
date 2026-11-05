@@ -832,3 +832,7 @@ occurred. Physical feature and real-provider acceptance remain separate from del
 ## v1.7.0 / build 32 source release — 2026-11-02
 
 The owner authorized push and release of SP-058 together with the UI/UX polish pass. The version was bumped to **1.7.0/build 32** after SP-058's signed device delivery (which ran at 1.6.1/build 31), so the device does not yet carry build 32. Source publication follows the development → main merge and hosted Release verification. No uninstall, data reset or signing change occurred.
+
+## v1.7.1 / build 33 source release — 2026-11-05
+
+The owner authorized release of the Plan translation picker and Settings index toggle. The change set was installed in place on the owner's iPad at 1.7.0/build 32 before the bump to **1.7.1/build 33**; build 33 is reinstalled in place after the bump. Source publication follows the development → main merge and hosted Release verification. No uninstall, data reset or signing change occurred.

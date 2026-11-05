@@ -890,3 +890,7 @@ acceptance remain open. No source release or data reset selected.
 ## v1.7.0 — SP-058 and UI/UX polish, 2026-11-02
 
 Owner-authorized release combining [SP-058](../../tickets/SP-058-plan-floating-controls-and-sophy-editing.md) with the [UI/UX review](../ui-ux-review/README.md) changes (dock, cards, header clusters, Settings index). 512 unit tests passed; ShellNavigationUITests 11/12 with the one failure pre-existing on v1.6.1. Physical owner and live-provider acceptance remain open. See [release notes](../releases/v1.7.0.md).
+
+## v1.7.1 — Plan translation picker and Settings index toggle, 2026-11-05
+
+Owner-authorized patch release. Plan Edit gains a Translation picker (re-anchoring existing Scripture assignments, validated before save), new Plans use the Reader's saved translation instead of falling back to WEB, and tapping the Settings title shows/hides the section index on regular width. 512 unit tests passed. Physical owner acceptance of translation switching on Plans with existing assignments remains open. See [release notes](../releases/v1.7.1.md).

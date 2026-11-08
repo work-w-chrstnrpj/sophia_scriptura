@@ -7,6 +7,8 @@ import PencilKit
     private(set) var snapshot = AnnotationSnapshot()
     private(set) var reopenGeneration = 0
     private(set) var groupID: UUID?
+    private(set) var planScope: PlanAnnotationScope?
+    private var ordinaryPresentation: (groupID: UUID?, mode: Mode, layoutAvailable: Bool, margin: Bool, tools: Bool, collapsed: Bool)?
     private(set) var loaded = false
     private(set) var loading = false
     private(set) var layoutAvailable = false
@@ -39,7 +41,7 @@ import PencilKit
         var id: UUID { layer.id }
     }
     func layers(for document: ChapterDocument) -> [LayerChoice] {
-        let choices = snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
+        let choices = snapshot.groups.filter { $0.planScope == nil && $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
             .flatMap { group in group.layers.filter { $0.deletedAt == nil }.map { LayerChoice(groupID: group.id, layer: $0, layout: $0.layout ?? group.layout) } }
         return choices.sorted(by: Self.layerDisplaySort)
     }
@@ -56,12 +58,28 @@ import PencilKit
         }
     }
     func deletedLayers(for document: ChapterDocument) -> [LayerChoice] {
-        snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
+        snapshot.groups.filter { $0.planScope == nil && $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
             .flatMap { group in group.layers.filter { $0.deletedAt != nil }.map { LayerChoice(groupID: group.id, layer: $0, layout: $0.layout ?? group.layout) } }
     }
     var canTransition: Bool { loaded && !usingTool && !saving && !dirty && !failed }
     init(repository: any AnnotationRepository = AnnotationFileRepository(directory: AnnotationFileRepository.defaultDirectory())) { self.repository = repository }
     func open(_ document: ChapterDocument?) async {
+        await load()
+        guard loaded, planScope == nil else { return }
+        guard let document else { groupID = nil; layoutAvailable = false; return }
+        let candidates = snapshot.groups.filter { $0.planScope == nil && $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
+        groupID = candidates.last(where: { $0.source == AnnotationSource(document) })?.id ?? candidates.last?.id
+        refreshLayout(for: document)
+    }
+
+    func preparePlanChapter() async -> Bool {
+        while loading && !Task.isCancelled { try? await Task.sleep(for: .milliseconds(20)) }
+        guard !Task.isCancelled else { return false }
+        await load()
+        return await prepareForNavigation()
+    }
+
+    private func load() async {
         if !loaded {
             guard !loading else { return }
             loading = true; defer { loading = false }
@@ -73,11 +91,60 @@ import PencilKit
                 notice = value.recovered ? "Recovered the previous good annotation save. Original files retained." : "Undo history starts when a layer is opened."
             } catch { failed = true; notice = error.localizedDescription; return }
         }
-        guard let document else { groupID = nil; layoutAvailable = false; return }
-        let candidates = snapshot.groups.filter { $0.source.editionID == document.editionID && $0.source.book == document.book && $0.source.chapter == document.chapter }
-        groupID = candidates.last(where: { $0.source == AnnotationSource(document) })?.id ?? candidates.last?.id
-        refreshLayout(for: document)
     }
+
+    func openPlanChapter(_ document: ChapterDocument, scope: PlanAnnotationScope, name: String) {
+        guard canTransition else { return }
+        if ordinaryPresentation == nil {
+            ordinaryPresentation = (groupID, mode, layoutAvailable, marginExpanded, toolsVisible, paletteCollapsed)
+        }
+        disconnectSurface()
+        planScope = scope
+        groupID = snapshot.groups.first { $0.planScope == scope && $0.source == AnnotationSource(document) }?.id
+        refreshLayout(for: document)
+        mode = selected == nil ? .hidden : .visible
+        marginExpanded = false; toolsVisible = false; paletteCollapsed = false
+        if let g = snapshot.groups.firstIndex(where: { $0.id == groupID }),
+           let layer = selected, layer.name != name {
+            snapshot.groups[g].layers[0].name = name
+            changed()
+        }
+    }
+
+    func createPlanLayer(document: ChapterDocument, preferences: ReaderPreferences, width: Double, name: String) async {
+        guard let scope = planScope, await prepareForNavigation(), planScope == scope,
+              group == nil, !snapshot.groups.contains(where: { $0.planScope == scope && $0.source == AnnotationSource(document) }) else { return }
+        let layout = AnnotationRenderer.measure(document, preferences: preferences, width: width)
+        var layer = AnnotationLayer(name: name, drawing: PKDrawing().dataRepresentation())
+        layer.layout = layout
+        layer.appearance = AnnotationLayerAppearance(preferences)
+        let value = AnnotationGroup(source: AnnotationSource(document), layout: layout, layers: [layer],
+                                    selectedLayerID: layer.id, planScope: scope)
+        snapshot.groups.append(value)
+        snapshot.schemaVersion = 2
+        groupID = value.id
+        refreshLayout(for: document)
+        changed()
+        await save()
+        if groupID == value.id, !failed { mode = .draw; toolsVisible = true }
+    }
+
+    func closePlanChapter() {
+        guard let ordinary = ordinaryPresentation else { return }
+        disconnectSurface()
+        planScope = nil
+        groupID = ordinary.groupID; mode = ordinary.mode; layoutAvailable = ordinary.layoutAvailable
+        marginExpanded = ordinary.margin; toolsVisible = ordinary.tools; paletteCollapsed = ordinary.collapsed
+        ordinaryPresentation = nil
+    }
+
+    private func disconnectSurface() {
+        flush?()
+        reopenGeneration += 1
+        flush = nil; undo = nil; redo = nil; clear = nil
+        finishStroke()
+    }
+
     private func refreshLayout(for document: ChapterDocument) {
         layoutAvailable = group.flatMap { group in selectedLayout.map { AnnotationRenderer.matches($0, source: group.source, document: document) } } ?? false
     }
@@ -138,6 +205,7 @@ import PencilKit
     }
 
     func applyMode(_ mode: Mode, reader: ReaderSession) async {
+        guard planScope == nil else { return }
         if usingTool { await withCheckedContinuation { strokeWaiters.append($0) } }
         while saving { try? await Task.sleep(for: .milliseconds(20)) }
         self.mode = mode
@@ -155,7 +223,8 @@ import PencilKit
                     source: group.source,
                     layout: repairedGroupLayout,
                     layers: group.layers,
-                    selectedLayerID: group.selectedLayerID
+                    selectedLayerID: group.selectedLayerID,
+                    planScope: group.planScope
                 )
             }
             for layerIndex in group.layers.indices {
@@ -169,7 +238,7 @@ import PencilKit
         }
     }
     func create(document: ChapterDocument, preferences: ReaderPreferences, width: Double) async {
-        guard loaded, !usingTool, !saving else { return }
+        guard loaded, planScope == nil, !usingTool, !saving else { return }
         await save(); guard canTransition else { return }
         if group == nil || group?.source != AnnotationSource(document) || group?.layout.surroundingSpace == false {
             let value = AnnotationGroup(source: AnnotationSource(document), layout: AnnotationRenderer.measure(document, preferences: preferences, width: width))
@@ -186,6 +255,7 @@ import PencilKit
         refreshLayout(for: document); mode = .draw; toolsVisible = false; paletteCollapsed = false; changed(); await save()
     }
     func select(_ id: UUID) async {
+        guard planScope == nil else { return }
         await transition { [self] in
             guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }), snapshot.groups[g].layers.contains(where: { $0.id == id && $0.deletedAt == nil }) else { return }
             snapshot.groups[g].selectedLayerID = id; changed()
@@ -193,7 +263,7 @@ import PencilKit
         await save()
     }
     func select(_ choice: LayerChoice, document: ChapterDocument, reader: ReaderSession) async {
-        guard await prepareForNavigation() else { return }
+        guard planScope == nil, await prepareForNavigation(), planScope == nil else { return }
         guard let g = snapshot.groups.firstIndex(where: { $0.id == choice.groupID }),
               let l = snapshot.groups[g].layers.firstIndex(where: { $0.id == choice.id && $0.deletedAt == nil }) else { return }
         groupID = choice.groupID
@@ -206,13 +276,13 @@ import PencilKit
 
     /// Opens a saved collection link: selects the layer, restores appearance, and shows ink in Read Visible.
     func activateSavedLayer(groupID: UUID, layerID: UUID, document: ChapterDocument, reader: ReaderSession) async {
-        guard loaded else { return }
+        guard loaded, planScope == nil else { return }
         guard await prepareForNavigation() else { return }
-        if let resolved = snapshot.groups.first(where: { $0.id == groupID }),
+        if let resolved = snapshot.groups.first(where: { $0.id == groupID && $0.planScope == nil }),
            resolved.layers.contains(where: { $0.id == layerID && $0.deletedAt != nil }) {
             await restoreLayer(layerID, document: document)
         }
-        guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }),
+        guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID && $0.planScope == nil }),
               snapshot.groups[g].layers.contains(where: { $0.id == layerID && $0.deletedAt == nil }) else {
             notice = "This annotation layer is no longer available."
             mode = .hidden
@@ -231,7 +301,7 @@ import PencilKit
     }
     private var pendingAppearanceRestore: ReaderPreferences?
     func restoreSelectedAppearance(reader: ReaderSession) {
-        guard let appearance = selected?.appearance else { return }
+        guard planScope == nil, let appearance = selected?.appearance else { return }
         let restored = appearance.applying(to: reader.preferences)
         if restored != reader.preferences {
             pendingAppearanceRestore = restored
@@ -241,7 +311,7 @@ import PencilKit
     func appearanceChanged(to preferences: ReaderPreferences, document: ChapterDocument, width: Double) async {
         if pendingAppearanceRestore == preferences { pendingAppearanceRestore = nil; return }
         pendingAppearanceRestore = nil
-        guard await prepareForNavigation(), group?.source == AnnotationSource(document), selected != nil else { return }
+        guard planScope == nil, await prepareForNavigation(), group?.source == AnnotationSource(document), selected != nil else { return }
         guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }),
               let l = snapshot.groups[g].layers.firstIndex(where: { $0.id == selected?.id }) else { return }
         let layout = AnnotationRenderer.measure(document, preferences: preferences, width: width)
@@ -257,6 +327,7 @@ import PencilKit
         if hasInk { notice = "Font updated for this layer. Existing marks may need adjustment." }
     }
     func rename(_ name: String) async {
+        guard planScope == nil else { return }
         let name = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
         guard !name.isEmpty else { return }
         await transition { [self] in
@@ -265,6 +336,7 @@ import PencilKit
         }; await save()
     }
     func deleteSelected() async {
+        guard planScope == nil else { return }
         await transition { [self] in
             guard let g = snapshot.groups.firstIndex(where: { $0.id == groupID }), let l = snapshot.groups[g].layers.firstIndex(where: { $0.id == selected?.id }) else { return }
             snapshot.groups[g].layers[l].deletedAt = Date()
@@ -274,8 +346,9 @@ import PencilKit
         }; await save()
     }
     func restoreLayer(_ id: UUID, document: ChapterDocument? = nil) async {
+        guard planScope == nil else { return }
         await transition { [self] in
-            guard let g = snapshot.groups.firstIndex(where: { $0.layers.contains(where: { $0.id == id && $0.deletedAt != nil }) }),
+            guard let g = snapshot.groups.firstIndex(where: { $0.planScope == nil && $0.layers.contains(where: { $0.id == id && $0.deletedAt != nil }) }),
                   let l = snapshot.groups[g].layers.firstIndex(where: { $0.id == id }) else { return }
             groupID = snapshot.groups[g].id
             snapshot.groups[g].layers[l].deletedAt = nil; snapshot.groups[g].selectedLayerID = id

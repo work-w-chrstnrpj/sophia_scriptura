@@ -34,7 +34,58 @@ import Combine
     private var unrecordedDrafts: [ActivityDraft] { [snapshot.draft].compactMap { $0 } + (snapshot.pausedPlanDrafts ?? []) }
     var goalMinutes: Int { snapshot.dailyGoalMinutes }
     func goalMinutes(for modeID: String) -> Int { snapshot.dailyGoalMinutesByMode?[modeID] ?? 0 }
-    var reminders: [ActivityReminder] { (snapshot.reminders ?? []).sorted { $0.date < $1.date } }
+    var reminders: [ActivityReminder] {
+        (snapshot.reminders ?? []).filter {
+            $0.planOccurrence == nil || ($0.planDismissed != true && $0.date > Date())
+        }.sorted { $0.date < $1.date }
+    }
+
+    func refreshPlanReminders(_ plans: [StudyPlan], privatePlanIDs: Set<UUID>, requestPermission: Bool = false, resync: Bool = false) {
+        guard loaded, !backupLeaseHeld, !sophyCommitInFlight else { return }
+        let existing = snapshot.reminders ?? []
+        let next = PlanReminderTime.rollingReminders(
+            for: plans, existing: existing, times: snapshot.planReminderTimes ?? [:],
+            now: Date(), isPrivate: privatePlanIDs.contains
+        )
+        if next != existing {
+            snapshot.reminders = next
+            persist()
+        }
+        if next != existing || requestPermission || resync {
+            let needsPermission = requestPermission && plans.contains { $0.isActive && $0.strictSchedule != nil }
+            syncReminders(requestPermission: needsPermission, reportDenied: false)
+        }
+    }
+
+    func updatePlanReminder(_ reminder: ActivityReminder, minute: Int, useForFuture: Bool) -> Bool {
+        guard !rejectWhileSophyCommits(), let occurrence = reminder.planOccurrence,
+              let index = snapshot.reminders?.firstIndex(where: { $0.id == reminder.id && $0.planDismissed != true })
+        else { return false }
+        var calendar = Calendar.current
+        if let zoneID = reminder.planTimeZoneID, let zone = TimeZone(identifier: zoneID) { calendar.timeZone = zone }
+        guard let date = PlanReminderTime.date(on: occurrence.dueDay, minute: minute, calendar: calendar),
+              date > Date() else {
+            errorMessage = "Choose a future time for this reminder."
+            return false
+        }
+        snapshot.reminders?[index].date = date
+        snapshot.reminders?[index].planTimeOverride = useForFuture ? nil : minute
+        if useForFuture {
+            var times = snapshot.planReminderTimes ?? [:]
+            times[occurrence.planID] = minute
+            snapshot.planReminderTimes = times
+            for i in (snapshot.reminders ?? []).indices where i != index {
+                guard let other = snapshot.reminders?[i], other.planOccurrence?.planID == occurrence.planID,
+                      other.planTimeOverride == nil, other.date > Date(),
+                      let day = other.planOccurrence?.dueDay,
+                      let time = PlanReminderTime.date(on: day, minute: minute, calendar: calendar), time > Date() else { continue }
+                snapshot.reminders?[i].date = time
+            }
+        }
+        persist()
+        syncReminders(requestPermission: true)
+        return true
+    }
     var isReady: Bool { loaded }
     var automaticReadingWorkflow: Bool { snapshot.automaticReadingWorkflow ?? true }
     var automaticContemplationWorkflow: Bool { snapshot.automaticContemplationWorkflow ?? true }
@@ -474,7 +525,11 @@ import Combine
     func deleteReminder(_ id: UUID) {
         guard !rejectWhileSophyCommits() else { return }
 
-        snapshot.reminders?.removeAll { $0.id == id }
+        if let index = snapshot.reminders?.firstIndex(where: { $0.id == id && $0.planOccurrence != nil }) {
+            snapshot.reminders?[index].planDismissed = true
+        } else {
+            snapshot.reminders?.removeAll { $0.id == id }
+        }
         persist()
         syncReminders(requestPermission: false)
     }
@@ -483,7 +538,12 @@ import Combine
         guard !rejectWhileSophyCommits() else { return }
 
         guard loaded else { return }
-        snapshot.reminders = []
+        snapshot.reminders = (snapshot.reminders ?? []).compactMap { reminder in
+            guard reminder.planOccurrence != nil else { return nil }
+            var dismissed = reminder
+            dismissed.planDismissed = true
+            return dismissed
+        }
         persist()
         syncReminders(requestPermission: false)
     }
@@ -501,7 +561,7 @@ import Combine
         guard !rejectWhileSophyCommits() else { return }
 
         let before = snapshot.reminders?.count ?? 0
-        snapshot.reminders?.removeAll { $0.repeatRule == .once && $0.deleteAfterFiring == true && $0.date <= now }
+        snapshot.reminders?.removeAll { $0.planOccurrence == nil && $0.repeatRule == .once && $0.deleteAfterFiring == true && $0.date <= now }
         if (snapshot.reminders?.count ?? 0) != before {
             persist()
             syncReminders(requestPermission: false)
@@ -519,14 +579,13 @@ import Combine
         persist()
     }
 
-    private func syncReminders(requestPermission: Bool) {
+    private func syncReminders(requestPermission: Bool, reportDenied: Bool = true) {
         let prior = pendingReminderSync
         pendingReminderSync = Task {
             await prior?.value
             do {
-                remindersEnabled = try await ActivityReminderNotifications.sync(reminders,
-                    requestPermission: requestPermission)
-                if requestPermission && !remindersEnabled {
+                remindersEnabled = try await syncReminderNotifications(reminders, requestPermission)
+                if requestPermission && reportDenied && !remindersEnabled {
                     errorMessage = "Reminder saved, but notifications are off. Enable Sophia notifications in iPad Settings."
                 }
             } catch { errorMessage = "Reminder notification could not be scheduled: \(error.localizedDescription)" }

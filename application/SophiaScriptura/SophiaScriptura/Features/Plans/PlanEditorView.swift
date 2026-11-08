@@ -2,8 +2,10 @@ import SwiftUI
 
 struct PlanEditorView: View {
     @EnvironmentObject private var activity: ActivityStore
+    @Environment(\.appTheme) private var theme
     @Environment(\.scenePhase) private var scenePhase
     @State private var confirmDeletePlan = false
+    @State private var showingOutfitColors = false
     @State private var sectionCount = "1"
     @State private var showingSectionCount = false
     @State private var editMode: EditMode = .inactive
@@ -90,7 +92,7 @@ struct PlanEditorView: View {
                 }
                     .disabled(Int(sectionCount.trimmingCharacters(in: .whitespacesAndNewlines)).map { $0 > 0 && $0 <= 200 - model.draft.sections.count } != true)
             } message: { Text("How many more? You can add up to \(200 - model.draft.sections.count) Days/Sections.") }
-            .onChange(of: permitted) { _, allowed in if !allowed { model.closeAssignmentPicker(); model.confirmReset = false; confirmDeletePlan = false; showingSectionCount = false } }
+            .onChange(of: permitted) { _, allowed in if !allowed { model.closeAssignmentPicker(); model.confirmReset = false; confirmDeletePlan = false; showingSectionCount = false; showingOutfitColors = false } }
     }
     /// Translations available offline for Plan reading, plus the Plan's current one if it is no longer installed.
     private var translationOptions: [(id: String, label: String)] {
@@ -111,6 +113,71 @@ struct PlanEditorView: View {
         }
         return options
     }
+    private var outfitColorName: String { model.draft.travelerOutfitColor?.title ?? "Character default" }
+
+    private var outfitColorPicker: some View {
+        Button {
+            showingOutfitColors = true
+        } label: {
+            HStack {
+                Text("Outfit color")
+                    .foregroundStyle(Color(theme.palette.ink))
+                Spacer()
+                Circle()
+                    .fill(model.draft.travelerOutfitColor?.color ?? model.draft.resolvedTravelerCharacter.defaultTravelerOutfit)
+                    .frame(width: 16, height: 16)
+                Text(outfitColorName)
+                    .foregroundStyle(Color(theme.palette.secondary))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(Color(theme.palette.secondary))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Outfit color")
+        .accessibilityValue(outfitColorName)
+        .accessibilityIdentifier("plans.outfitColor")
+        .popover(isPresented: $showingOutfitColors) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Outfit color").font(.headline)
+                    Button {
+                        model.draft.travelerOutfitColor = nil
+                        showingOutfitColors = false
+                    } label: {
+                        HStack {
+                            Circle()
+                                .fill(model.draft.resolvedTravelerCharacter.defaultTravelerOutfit)
+                                .frame(width: 22, height: 22)
+                            Text("Character default")
+                            Spacer()
+                            if model.draft.travelerOutfitColor == nil {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(model.draft.travelerOutfitColor == nil ? .isSelected : [])
+                    CollectionColorGrid(selection: Binding(
+                        get: { model.draft.travelerOutfitColor ?? .preset },
+                        set: { color in
+                            model.draft.travelerOutfitColor = color
+                            showingOutfitColors = false
+                        }
+                    ), palette: CollectionAccent.allCases.filter { $0 != .preset })
+                }
+                .padding(16)
+                .foregroundStyle(Color(theme.palette.ink))
+            }
+            .frame(width: 320, height: 440)
+            .background(Color(theme.palette.paper))
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+
     private var editor: some View {
         let sections = model.draft.sections
         return List {
@@ -126,6 +193,40 @@ struct PlanEditorView: View {
                 Text(model.saveStatus).font(.caption).accessibilityIdentifier("plans.saveStatus")
                 if let message = model.message { Text(message).foregroundStyle(.red).accessibilityIdentifier("plans.error") }
             }
+            Section("Plan card") {
+                Picker("Character", selection: Binding(get: { model.draft.resolvedTravelerCharacter }, set: {
+                    model.draft.travelerCharacter = $0
+                })) {
+                    ForEach(StudyCompanionCharacter.allCases) { character in
+                        Text(character.displayName).tag(character)
+                    }
+                }
+                .accessibilityValue(model.draft.resolvedTravelerCharacter.displayName)
+                .accessibilityIdentifier("plans.travelerCharacter")
+                outfitColorPicker
+                Picker("Scenery", selection: Binding(get: { model.draft.travelerBackdrop ?? .cloudy }, set: {
+                    model.draft.travelerBackdrop = $0
+                })) {
+                    ForEach(PlanTravelerBackdrop.allCases) { backdrop in
+                        Text(backdrop.title).tag(backdrop)
+                    }
+                }
+                .accessibilityValue((model.draft.travelerBackdrop ?? .cloudy).title)
+                .accessibilityIdentifier("plans.travelerBackdrop")
+                Picker("Equipment", selection: Binding(get: { model.draft.travelerEquipment ?? .candle }, set: {
+                    model.draft.travelerEquipment = $0
+                })) {
+                    ForEach(PlanTravelerEquipment.allCases) { equipment in
+                        Text(equipment.title).tag(equipment)
+                    }
+                }
+                .accessibilityValue((model.draft.travelerEquipment ?? .candle).title)
+                .accessibilityIdentifier("plans.travelerEquipment")
+                if model.draft.travelerEquipment == .armorOfGod {
+                    Text("Ephesians 6:14–17 · Belt of truth, breastplate of righteousness, shoes of readiness for the gospel of peace, shield of faith, helmet of salvation, and sword of the Spirit.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             Section("Playback and schedule") {
                 Picker("Activity type", selection: Binding(get: { model.draft.resolvedActivityModeID }, set: { model.draft.activityModeID = $0 })) {
                     ForEach(activity.modes) { mode in Text(mode.name).tag(mode.id) }
@@ -137,6 +238,14 @@ struct PlanEditorView: View {
                     model.draft.strictSchedule = $0 ? PlanSchedule() : nil
                 })).accessibilityIdentifier("plans.strictMode")
                 if model.draft.strictSchedule != nil {
+                    let calendar = model.draft.strictSchedule?.calendar ?? .current
+                    DatePicker("Initial reminder time", selection: Binding(get: {
+                        PlanReminderTime.displayDate(model.draft.strictSchedule?.initialReminderMinute ?? 480, calendar: calendar)
+                    }, set: {
+                        model.draft.strictSchedule?.reminderMinute = PlanReminderTime.minute(of: $0, calendar: calendar)
+                    }), displayedComponents: .hourAndMinute)
+                    .environment(\.timeZone, calendar.timeZone)
+                    .accessibilityIdentifier("plans.reminderTime")
                     Toggle("Choose start date", isOn: Binding(get: { model.draft.strictSchedule?.startDate != nil }, set: {
                         model.draft.strictSchedule?.startDate = $0 ? Date() : nil
                     }))

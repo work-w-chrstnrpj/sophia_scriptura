@@ -6,6 +6,7 @@ struct PlanDetailView: View {
     @EnvironmentObject private var music: MusicSession
     @EnvironmentObject private var activity: ActivityStore
     @EnvironmentObject private var companion: CompanionSession
+    @Environment(AnnotationSession.self) private var annotations
     @EnvironmentObject private var sophy: SophySession
     @State private var recorderEngagedUntil = Date.distantPast
     @Environment(\.dismiss) private var dismiss
@@ -17,7 +18,16 @@ struct PlanDetailView: View {
     let collectionID: UUID
     let planID: UUID
     var openNote: (UUID) -> Void
-    @State private var scriptureEdit: PlanScriptureEditTarget?
+    enum InitialRoute {
+        case detail, edit, review(UUID)
+    }
+    var initialRoute: InitialRoute = .detail
+    @State private var usedInitialRoute = false
+    @State private var reviewCursor: PlanCursor?
+    @State private var passageReader: ReaderSession?
+    @State private var planConversationID: UUID?
+    @State private var priorConversationID: UUID?
+    @State private var priorCompanionDraft = ""
     @State private var editing: PlanEditorDraft?
     @State private var reading = false
     @State private var loading = false
@@ -28,7 +38,6 @@ struct PlanDetailView: View {
     @State private var reflection: PlanReflectionDraft?
     @State private var pendingNoteID: UUID?
     @State private var previewNoteID: UUID?
-    @State private var showingConversation = false
     @State private var showingCompletion = false
     @State private var showingMusic = false
     @State private var showingMusicLibrary = false
@@ -36,15 +45,15 @@ struct PlanDetailView: View {
     private var playback: PlanPlaybackService { .init(store: store, activity: activity) }
     private var plan: StudyPlan? { store.plans.first { $0.id == planID && $0.trashedAt == nil } }
     private var permitted: Bool { plan.map { store.planAccessAllowed($0) } ?? false }
-    private var cursor: PlanCursor? { plan?.cursor }
+    private var cursor: PlanCursor? { reviewCursor ?? plan?.cursor }
     private var item: PlanItem? { plan?.items.first { $0.id == cursor?.itemID } }
 
     private var assignmentReady: Bool {
         guard let item, cursor?.kind == .item else { return true }
         switch item.payload.kind {
         case .scripture:
-            return reader?.document?.book == item.payload.book && reader?.document?.chapter == item.payload.chapter
-                && reader?.document?.editionID == plan?.preferredEditionID && reader?.error == nil
+            return passageReader?.document?.book == item.payload.book && passageReader?.document?.chapter == item.payload.chapter
+                && passageReader?.document?.editionID == plan?.preferredEditionID && passageReader?.error == nil
         case .note:
             guard let id = item.payload.targetID, let note = notes.snapshot.notes.first(where: { $0.id == id }) else { return false }
             return note.isActiveInLibrary && !notes.isLocked(note) && !store.concealsNote(id)
@@ -56,17 +65,24 @@ struct PlanDetailView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
-                if let plan, permitted {
-                    if let editing {
-                        PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID,
-                            model: editing, embedded: true, onFinish: {
-                                self.editing = nil
-                                if store.plans.first(where: { $0.id == planID })?.trashedAt != nil { dismiss() }
-                            })
-                            .accessibilityIdentifier("plans.inlineEditor")
-                    } else if reading { readingContent(plan) } else { contents(plan) }
-                } else {
-                    ContentUnavailableView("Plan unavailable", systemImage: "lock", description: Text("Unlock Collections to view this Plan."))
+                ZStack {
+                    Group {
+                        if let plan, permitted {
+                            if let editing {
+                                PlanEditorView(store: store, notes: notes, reader: reader, collectionID: collectionID,
+                                    model: editing, embedded: true, onFinish: {
+                                        self.editing = nil
+                                        if store.plans.first(where: { $0.id == planID })?.trashedAt != nil { dismiss() }
+                                    })
+                                    .accessibilityIdentifier("plans.inlineEditor")
+                            } else if reading || reviewCursor != nil { readingContent(plan) } else { contents(plan) }
+                        } else {
+                            ContentUnavailableView("Plan unavailable", systemImage: "lock", description: Text("Unlock Collections to view this Plan."))
+                        }
+                    }
+                    .accessibilityHidden(planConversationID != nil)
+                    .allowsHitTesting(planConversationID == nil)
+                    if previewNoteID == nil { conversationOverlay }
                 }
             }
             .appSurface()
@@ -75,22 +91,18 @@ struct PlanDetailView: View {
                 VStack(spacing: 0) {
                     if let message { Text(message).font(.callout).foregroundStyle(.red).padding() }
                     if reading, permitted, let plan { readingControls(plan) }
-                }.background(Color(theme.palette.paper))
-            }
-            .sheet(isPresented: $showingConversation) {
-                CompanionView(session: companion, openNote: { id in
-                    showingConversation = false; previewNote(id)
-                })
-                .safeAreaInset(edge: .top) {
-                    HStack { Text("Plan conversation").font(.headline); Spacer(); Button("Back to Plan") { showingConversation = false } }
-                        .padding().background(Color(theme.palette.paper))
+                    if reviewCursor != nil, permitted {
+                        conversationButton(item: item, noteID: nil)
+                            .labelStyle(.iconOnly).buttonStyle(PlanControlStyle()).padding(12)
+                            .disabled(loading || transitioning)
+                    }
                 }
+                .background(Color(theme.palette.paper))
+                .disabled(planConversationID != nil)
+                .accessibilityHidden(planConversationID != nil)
             }
             .sheet(isPresented: $showingCompletion, onDismiss: { Task { await closePlan() } }) {
                 completionContent
-            }
-            .sheet(item: $scriptureEdit) { target in
-                PlanScriptureAssignmentEditor(store: store, notes: notes, reader: reader, target: target)
             }
             .sheet(isPresented: Binding(get: { linkID != nil }, set: { if !$0 { linkID = nil } })) {
                 if let linkID, permitted, store.link(id: linkID) != nil {
@@ -108,35 +120,69 @@ struct PlanDetailView: View {
             }
             .navigationDestination(isPresented: Binding(get: { previewNoteID != nil }, set: { if !$0 { closeNotePreview() } })) {
                 if permitted, let id = previewNoteID, readableNote(id) != nil, let reader {
-                    NoteEditorView(session: notes, reader: reader, collections: store, includesScripturePane: false)
+                    ZStack {
+                        NoteEditorView(session: notes, reader: reader, collections: store, includesScripturePane: false)
+                            .accessibilityHidden(planConversationID != nil)
+                            .allowsHitTesting(planConversationID == nil)
+                        conversationOverlay
+                    }
                         .toolbar(.visible, for: .navigationBar)
                         .navigationBarBackButtonHidden()
                         .toolbar { ToolbarItem(placement: .cancellationAction) {
                             Button("Back to Plan") { closeNotePreview() }.accessibilityIdentifier("plans.note.back")
                         } }
+                        .toolbar { ToolbarItem(placement: .primaryAction) {
+                            conversationButton(item: nil, noteID: id)
+                        } }
                         .onDisappear { notes.flushSurface?(); Task { await notes.save() } }
                 } else { ContentUnavailableView("Note unavailable", systemImage: "lock") }
             }
             .onAppear { notes.planPresentationActive = true; music.load() }
-            .task { await activity.load(); await reader?.start() }
+            .task {
+                await activity.load(); await reader?.start()
+                guard !usedInitialRoute, permitted, let plan else { return }
+                usedInitialRoute = true
+                switch initialRoute {
+                case .detail: break
+                case .edit: editing = PlanEditorDraft(plan: plan, isExisting: true)
+                case .review(let id): await review(plan, itemID: id)
+                }
+            }
+            .task(id: passageReader?.navigationID) {
+                guard let passageReader else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(60))
+                    guard !Task.isCancelled else { return }
+                    await passageReader.checkAccess()
+                }
+            }
             .onChange(of: activity.draft?.id) { _, _ in
                 guard reading, !transitioning else { return }
                 Task { await reconcileActivityEnd() }
+            }
+            .onChange(of: planContextIsReadable) { _, readable in
+                if !readable { clearPlanConversation() }
             }
             .onChange(of: permitted) { _, allowed in
                 if !allowed {
                     notes.flushSurface?(); notes.selectedNoteID = nil; notes.active = false
                     Task { _ = await playback.pause(planID) }
-                    showingCompletion = false; showingConversation = false
-                    reading = false; editing = nil; scriptureEdit = nil; linkID = nil; reflection = nil; previewNoteID = nil; showingMusic = false
+                    showingCompletion = false
+                    clearPlanConversation()
+                    concealPassage()
+                    reading = false; editing = nil; linkID = nil; reflection = nil; previewNoteID = nil; showingMusic = false
                 }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { notes.flushSurface?(); Task { await notes.save(); _ = await playback.pause(planID) }; reading = false; linkID = nil; showingMusic = false; showingConversation = false }
+                if phase != .active {
+                    clearPlanConversation(); concealPassage(); notes.flushSurface?()
+                    Task { await notes.save(); _ = await playback.pause(planID) }
+                    reading = false; linkID = nil; showingMusic = false
+                }
             }
         }
         .overlay {
-            if let reader {
+            if planConversationID == nil, let reader {
                 SophyChrome(sophy: sophy, companion: companion, collections: store, activity: activity,
                     music: music, notes: notes, books: reader.books,
                     referenceSystemID: reader.edition?.referenceSystemID ?? "org.sophia.web.engwebp",
@@ -145,7 +191,7 @@ struct PlanDetailView: View {
             }
         }
         .overlay {
-            if let draft = activity.draft {
+            if planConversationID == nil, let draft = activity.draft {
                 ActivityFloatingRecorder(draft: draft, fabEngagedUntil: $recorderEngagedUntil,
                     pauseOrResume: { if activity.draft?.runningSince == nil { activity.resume() } else { activity.pause() } },
                     finish: { Task {
@@ -156,22 +202,33 @@ struct PlanDetailView: View {
         }
         .onChange(of: store.plans) { _, _ in sophy.privacyChanged(collections: store, notes: notes) }
         .onChange(of: cursor) { old, new in
+            clearPlanConversation()
             if reading, old?.kind == .sectionSummary, new?.kind == .item { Task { await loadAssignment() } }
         }
-        .onDisappear { if sophy.sharedPlan?.id == planID { sophy.detachPlan() } }
+        .onDisappear {
+            clearPlanConversation(); concealPassage()
+            if sophy.sharedPlan?.id == planID { sophy.detachPlan() }
+        }
         .interactiveDismissDisabled()
     }
 
     private var header: some View {
-        HStack(spacing: 16) {
-            Button { Task { await closePlan() } } label: { Image(systemName: "xmark").frame(width: 44, height: 44) }
-                .buttonStyle(CollectionSecondaryButtonStyle()).accessibilityLabel("Exit Plan").accessibilityIdentifier("plans.exit")
+        let returningToPlan = planConversationID != nil || reviewCursor != nil
+        return HStack(spacing: 16) {
+            Button {
+                Task {
+                    if planConversationID != nil { clearPlanConversation() }
+                    else if reviewCursor != nil { await closeReview() }
+                    else { await closePlan() }
+                }
+            } label: { Image(systemName: returningToPlan ? "chevron.left" : "xmark").frame(width: 44, height: 44) }
+                .buttonStyle(CollectionSecondaryButtonStyle()).accessibilityLabel(returningToPlan ? "Back to Plan" : "Exit Plan").accessibilityIdentifier("plans.exit")
             VStack(alignment: .leading, spacing: 3) {
                 Text("READ · REFLECT · REMEMBER").font(.caption2).tracking(2).foregroundStyle(Color(theme.palette.secondary))
                 Text(permitted ? plan?.title ?? "Plan" : "Plan").font(.system(.title2, design: .serif).weight(.semibold)).lineLimit(1)
             }
             Spacer(minLength: 4)
-            if permitted, editing == nil, let plan, sophy.preferences.enabled {
+            if planConversationID == nil, permitted, editing == nil, let plan, sophy.preferences.enabled {
                 Button("Share with " + sophy.character.displayName, systemImage: "bubble.left.and.bubble.right") {
                     sophy.syncRoute(companion)
                     sophy.sharePlan(plan, collections: store)
@@ -185,7 +242,7 @@ struct PlanDetailView: View {
                 Button("Done", systemImage: "checkmark") { Task { await finishEditing() } }
                     .buttonStyle(CollectionSecondaryButtonStyle()).disabled(saving || editing.saving)
                     .accessibilityIdentifier("plans.finishEditing")
-            } else if permitted, !reading, let plan {
+            } else if permitted, !reading, reviewCursor == nil, let plan {
                 Button("Edit", systemImage: "pencil") { editing = PlanEditorDraft(plan: plan, isExisting: true) }
                     .buttonStyle(CollectionSecondaryButtonStyle()).accessibilityIdentifier("plans.edit")
             }
@@ -222,7 +279,7 @@ struct PlanDetailView: View {
                         VStack(spacing: 0) {
                             if section.items.isEmpty { Text("No assignments").foregroundStyle(Color(theme.palette.secondary)).padding(20) }
                             ForEach(section.items) { item in
-                                assignmentRow(item)
+                                assignmentRow(item, plan: plan)
                                 if item.id != section.items.last?.id { Divider().padding(.leading, 56) }
                             }
                         }.background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22))
@@ -236,12 +293,12 @@ struct PlanDetailView: View {
             }.padding(28).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .top)
         }
     }
-    private func assignmentRow(_ item: PlanItem) -> some View {
+    private func assignmentRow(_ item: PlanItem, plan: StudyPlan) -> some View {
         Button {
             switch item.payload.kind {
             case .note: if let id = item.payload.targetID { previewNote(id) }
             case .link: linkID = item.payload.targetID
-            case .scripture: scriptureEdit = .resolve(itemID: item.id, store: store)
+            case .scripture: Task { await review(plan, itemID: item.id) }
             }
         } label: {
             HStack(alignment: .top, spacing: 16) {
@@ -257,7 +314,7 @@ struct PlanDetailView: View {
                         Text("Preview note").font(.caption).foregroundStyle(Color(theme.palette.accent))
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: item.payload.kind == .scripture ? "pencil" : "chevron.right")
+                Image(systemName: "chevron.right")
                     .foregroundStyle(Color(theme.palette.secondary))
             }.padding(20).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityIdentifier("plans.assignment.\(item.id)")
@@ -271,7 +328,7 @@ struct PlanDetailView: View {
                     Text(plan.sectionTitle(index)).font(.caption.weight(.semibold)).tracking(1.4).foregroundStyle(Color(theme.palette.secondary))
                 }
                 if let item { Text(title(item)).font(.system(.title, design: .serif).weight(.semibold)) }
-                if item?.payload.kind == .scripture { Text(reader?.edition?.name ?? "").font(.caption).foregroundStyle(Color(theme.palette.secondary)) }
+                if item?.payload.kind == .scripture { Text(passageReader?.edition?.name ?? "").font(.caption).foregroundStyle(Color(theme.palette.secondary)) }
             }.padding(.top, 20).padding(.horizontal)
             if loading { ProgressView("Loading assignment…").frame(maxHeight: .infinity) }
             else if cursor?.kind == .sectionSummary {
@@ -281,18 +338,17 @@ struct PlanDetailView: View {
             } else if let item {
                 switch item.payload.kind {
                 case .scripture:
-                    if let reader, let document = reader.document,
-                       document.book == item.payload.book, document.chapter == item.payload.chapter,
-                       document.editionID == plan.preferredEditionID, reader.error == nil {
-                        ReaderTextSurface(document: document, preferences: reader.preferences,
-                            targetVerse: reader.targetVerse, navigationID: reader.navigationID,
-                            restorationLocation: nil, onVerse: { _ in }, onVisibleLocation: { _, _, _ in },
-                            onChapterSwipe: { _ in }, authorizeQuote: reader.authorizeQuote,
-                            planFocusVerses: item.payload.selection == .verseRange ? reader.emphasisVerses : nil,
-                            emphasisVerses: reader.emphasisVerses)
-                            .frame(maxWidth: 960).frame(maxWidth: .infinity)
+                    if let reader = passageReader, let document = reader.document,
+                       assignmentReady, let scope = annotationScope, let name = layerName(in: plan) {
+                        PlanPassageReader(reader: reader, document: document, annotations: annotations,
+                            scope: scope, layerName: name,
+                            focus: item.payload.selection == .verseRange ? reader.emphasisVerses : nil)
+                            .allowsHitTesting(!transitioning || annotations.usingTool)
+                        if annotations.planScope != scope {
+                            Button("Retry opening Pencil layer") { Task { await loadAssignment() } }
+                        }
                     } else {
-                        ContentUnavailableView("Scripture unavailable", systemImage: "book.closed", description: Text(reader?.error ?? "Download this Plan’s translation before reading."))
+                        ContentUnavailableView("Scripture unavailable", systemImage: "book.closed", description: Text(passageReader?.error ?? "Download this Plan’s translation before reading."))
                         Button("Retry") { Task { await loadAssignment() } }
                     }
                 case .note:
@@ -320,19 +376,7 @@ struct PlanDetailView: View {
             Spacer(minLength: 0)
             Button("Add new note", systemImage: "square.and.pencil") { beginReflection(.note, plan: plan) }.disabled(cursor?.sectionID == nil).accessibilityIdentifier("plans.addNote")
             Button("Add new link", systemImage: "link.badge.plus") { beginReflection(.link, plan: plan) }.disabled(cursor?.sectionID == nil).accessibilityIdentifier("plans.addLink")
-            Button("New conversation", systemImage: "bubble.left.and.bubble.right") {
-                Task {
-                    await companion.load()
-                    if companion.createConversation() != nil { showingConversation = true }
-                    else {
-                        message = companion.notice
-                        // The mounted Companion tab observes this shared notice. Keep
-                        // a Plan creation failure local so its alert cannot replace
-                        // the fullscreen Plan presentation.
-                        companion.clearNotice()
-                    }
-                }
-            }.accessibilityIdentifier("plans.newConversation")
+            conversationButton(item: item, noteID: nil)
             Button("Background music", systemImage: "music.note") { showingMusic = true }.accessibilityIdentifier("plans.music")
                 .popover(isPresented: $showingMusic) {
                     NavigationStack {
@@ -374,6 +418,7 @@ struct PlanDetailView: View {
         notes.open(id); notes.active = true; previewNoteID = id
     }
     private func closeNotePreview() {
+        clearPlanConversation()
         notes.flushSurface?(); previewNoteID = nil; notes.selectedNoteID = nil; notes.active = false
         Task { await notes.save(); if reading { await loadAssignment() } }
     }
@@ -385,6 +430,8 @@ struct PlanDetailView: View {
     }
     private func closePlan() async {
         guard !saving, !transitioning, reflection?.saving != true else { return }
+        transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
         if let editing, permitted {
             guard await editing.persist(store: store, collectionID: collectionID) else { return }
             self.editing = nil
@@ -392,6 +439,8 @@ struct PlanDetailView: View {
         notes.flushSurface?(); await notes.save()
         guard !notes.dirty else { message = "The note could not be saved. Retry before exiting."; return }
         guard await playback.pause(planID) else { message = activity.errorMessage; return }
+        clearPlanConversation()
+        concealPassage()
         notes.planPresentationActive = false
         notes.selectedNoteID = nil; notes.active = false; reading = false; dismiss()
     }
@@ -424,6 +473,7 @@ struct PlanDetailView: View {
     }
     private func reconcileActivityEnd() async {
         guard !transitioning, permitted else { return }; transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
         if let noteID = notes.selectedNoteID, item?.payload.kind == .note {
             let result = await notes.commitPlanEdits(noteID: noteID, operationID: UUID())
             guard case .committed = result else { message = "Save the note before finishing this day."; return }
@@ -431,7 +481,7 @@ struct PlanDetailView: View {
         do {
             if try await playback.reconcileFinishedActivity(planID) {
                 notes.flushSurface?(); await notes.save()
-                reading = false; showingConversation = false; showingCompletion = true
+                clearPlanConversation(); concealPassage(); reading = false; showingCompletion = true
             }
         } catch { message = error.localizedDescription }
     }
@@ -467,6 +517,7 @@ struct PlanDetailView: View {
     }
     private func next(_ plan: StudyPlan) async {
         guard !transitioning else { return }; transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
         if let noteID = notes.selectedNoteID, item?.payload.kind == .note {
             let result = await notes.commitPlanEdits(noteID: noteID, operationID: UUID())
             guard case .committed = result else { message = "Save the note before continuing."; return }
@@ -474,7 +525,7 @@ struct PlanDetailView: View {
         do {
             let completed = try await playback.advance(plan.id)
             message = nil
-            if completed { reading = false; showingCompletion = true }
+            if completed { concealPassage(); reading = false; showingCompletion = true }
             else { await loadAssignment() }
         } catch { message = error.localizedDescription }
     }
@@ -488,6 +539,7 @@ struct PlanDetailView: View {
     }
     private func previous(_ plan: StudyPlan) async {
         guard !transitioning else { return }; transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
         if let noteID = notes.selectedNoteID, item?.payload.kind == .note {
             let result = await notes.commitPlanEdits(noteID: noteID, operationID: UUID())
             guard case .committed = result else { message = "Save the note before continuing."; return }
@@ -495,22 +547,172 @@ struct PlanDetailView: View {
         guard let target = previousCursor(plan) else { return }
         if await commit(plan, cursor: target) { await loadAssignment() }
     }
+    private var annotationScope: PlanAnnotationScope? {
+        cursor?.sectionID.map { PlanAnnotationScope(planID: planID, sectionID: $0) }
+    }
+
+    private func layerName(in plan: StudyPlan) -> String? {
+        guard let index = plan.sections.firstIndex(where: { $0.id == cursor?.sectionID }) else { return nil }
+        let suffix = " · \(plan.sectionPrefix) \(index + 1)"
+        return String(plan.title.prefix(80 - suffix.count)) + suffix
+    }
+
+    private func savePlanInk() async -> Bool {
+        guard annotations.planScope?.planID == planID else { return true }
+        if await annotations.prepareForNavigation() { return true }
+        message = "The Pencil layer could not be saved. Retry before leaving this passage."
+        return false
+    }
+
+    private func concealPassage() {
+        if annotations.planScope?.planID == planID {
+            annotations.closePlanChapter()
+            Task { await annotations.save() }
+        }
+        passageReader = nil
+        reviewCursor = nil
+    }
+
+    private func review(_ plan: StudyPlan, itemID: UUID) async {
+        guard permitted, !transitioning, !reading, reader != nil,
+              let section = plan.sections.first(where: { $0.items.contains(where: { $0.id == itemID }) }),
+              let item = section.items.first(where: { $0.id == itemID && $0.payload.kind == .scripture }) else { return }
+        transitioning = true; defer { transitioning = false }
+        reviewCursor = itemCursor(plan, section, item)
+        await loadAssignment()
+    }
+
+    private func closeReview() async {
+        guard !transitioning else { return }
+        transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
+        concealPassage()
+        message = nil
+    }
+
+    private func conversationButton(item: PlanItem?, noteID: UUID?) -> some View {
+        Button("New conversation", systemImage: "bubble.left.and.bubble.right") {
+            Task { await openConversation(item: item, noteID: noteID) }
+        }
+        .accessibilityIdentifier("plans.newConversation")
+        .disabled(noteID == nil && (!assignmentReady || (item?.payload.kind != .note && item?.payload.kind != .scripture)))
+    }
+
+    @ViewBuilder private var conversationOverlay: some View {
+        if let id = planConversationID, planContextIsReadable {
+            GeometryReader { geometry in
+                ZStack(alignment: .trailing) {
+                    Color(theme.palette.ink).opacity(0.12).accessibilityHidden(true)
+                    PlanCompanionPanel(session: companion, conversationID: id, notes: notes,
+                        close: clearPlanConversation, openNote: { noteID in
+                            clearPlanConversation()
+                            previewNote(noteID)
+                        })
+                        .frame(width: min(geometry.size.width, 520))
+                }
+            }
+        }
+    }
+
+    private func openConversation(item: PlanItem?, noteID: UUID?) async {
+        guard permitted, scenePhase == .active, !transitioning, planConversationID == nil else { return }
+        transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
+        await companion.load()
+        guard permitted, scenePhase == .active, !companion.isSending else { return }
+        let context: PlanQuestionContext
+        var privateContext = !store.accessForPlan(planID).isEmpty
+        let canSend: () -> Bool
+        if let noteID = noteID ?? item?.payload.targetID, noteID == previewNoteID || item?.payload.kind == .note {
+            notes.flushSurface?()
+            guard let note = readableNote(noteID) else { return }
+            context = .note(note)
+            privateContext = privateContext || note.protectionID != nil || !note.access.isEmpty
+                || store.collectionIDs(containing: noteID).contains(where: store.sophyFolderIsProtected)
+            canSend = { permitted && readableNote(noteID) != nil && (noteID == previewNoteID || self.item?.id == item?.id) }
+        } else if let item, item.id == self.item?.id, assignmentReady,
+                  let passageReader, let document = passageReader.document {
+            await passageReader.checkAccess()
+            guard permitted, assignmentReady, passageReader.document?.contentRevision == document.contentRevision else { return }
+            context = .scripture(document, assignment: item.payload,
+                label: title(item) + " (\(passageReader.abbreviation))")
+            canSend = { permitted && assignmentReady && self.item?.id == item.id }
+        } else { return }
+        guard permitted, scenePhase == .active, canSend() else { return }
+        let previousID = companion.selectedConversationID
+        let previousDraft = companion.composerText
+        let conversationTitle: String
+        if privateContext {
+            conversationTitle = context.isScripture ? "Plan Scripture study" : "Plan note study"
+        } else if !context.isScripture, context.label == "Untitled Note", let plan {
+            conversationTitle = CompanionConversationTitle.fromQuestion("Note study · \(plan.title)")
+        } else {
+            conversationTitle = context.label
+        }
+        guard let id = companion.createConversation(title: conversationTitle) else {
+            message = companion.notice
+            companion.clearNotice()
+            return
+        }
+        priorConversationID = previousID
+        priorCompanionDraft = previousDraft
+        companion.attachPlanContext(context, to: id, canSend: canSend)
+        planConversationID = id
+        message = nil
+    }
+
+    private var planContextIsReadable: Bool {
+        if let noteID = previewNoteID ?? item?.payload.targetID, previewNoteID != nil || item?.payload.kind == .note {
+            return permitted && readableNote(noteID) != nil
+        }
+        return permitted && assignmentReady
+    }
+
+    private func clearPlanConversation() {
+        guard let id = planConversationID else { return }
+        companion.closePlanConversation(id)
+        if companion.selectedConversationID == id {
+            companion.selectConversation(priorConversationID)
+            companion.composerText = priorCompanionDraft
+        }
+        planConversationID = nil
+        priorConversationID = nil
+        priorCompanionDraft = ""
+    }
+
     private func loadAssignment() async {
-        guard permitted, reading, cursor?.kind == .item, let item, let plan else { return }
+        guard permitted, reading || reviewCursor != nil else { return }
+        guard cursor?.kind == .item, let item, let plan else {
+            concealPassage()
+            return
+        }
         loading = true; defer { loading = false }
-        if item.payload.kind == .note {
-            if let id = item.payload.targetID, readableNote(id) != nil { notes.open(id); notes.active = true }
+        let expectedCursor = cursor
+        if item.payload.kind != .scripture {
+            if annotations.planScope?.planID == planID { annotations.closePlanChapter() }
+            passageReader = nil
+            if item.payload.kind == .note, let id = item.payload.targetID, readableNote(id) != nil {
+                notes.open(id); notes.active = true
+            }
             return
         }
         notes.flushSurface?(); await notes.save(); notes.active = false
-        guard item.payload.kind == .scripture, let reader else { return }
-        await reader.start()
-        guard permitted, reading, !Task.isCancelled else { return }
-        if reader.edition?.id != plan.preferredEditionID { await reader.selectEdition(plan.preferredEditionID) }
-        guard reader.edition?.id == plan.preferredEditionID, permitted, reading, !Task.isCancelled else { return }
-        let verses = item.payload.selection == .verseRange ? Array((item.payload.startVerse ?? 1)...(item.payload.endVerse ?? 1)) : []
-        await reader.navigate(book: item.payload.book ?? "", chapter: item.payload.chapter ?? 1,
-                              verse: item.payload.startVerse ?? 1, emphasis: verses)
+        guard let reader, let book = item.payload.book, let chapter = item.payload.chapter else { return }
+        let session = reader.makePlanReader()
+        let isRange = item.payload.selection == .verseRange
+        await session.openPlanPassage(editionID: plan.preferredEditionID, book: book, chapter: chapter,
+            verse: isRange ? item.payload.startVerse : nil, endVerse: isRange ? item.payload.endVerse : nil)
+        guard permitted, scenePhase == .active, cursor == expectedCursor, reading || reviewCursor != nil, !Task.isCancelled else { return }
+        passageReader = session
+        guard let document = session.document, let scope = annotationScope, let name = layerName(in: plan) else { return }
+        let prepared = await annotations.preparePlanChapter()
+        guard permitted, scenePhase == .active, cursor == expectedCursor, reading || reviewCursor != nil, !Task.isCancelled else { return }
+        if prepared {
+            annotations.openPlanChapter(document, scope: scope, name: name)
+            message = nil
+        } else {
+            message = "Pencil layers are unavailable. Retry opening this passage to enable drawing."
+        }
     }
 }
 

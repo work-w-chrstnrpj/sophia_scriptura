@@ -894,3 +894,10 @@ Owner-authorized release combining [SP-058](../../tickets/SP-058-plan-floating-c
 ## v1.7.1 — Plan translation picker and Settings index toggle, 2026-11-05
 
 Owner-authorized patch release. Plan Edit gains a Translation picker (re-anchoring existing Scripture assignments, validated before save), new Plans use the Reader's saved translation instead of falling back to WEB, and tapping the Settings title shows/hides the section index on regular width. 512 unit tests passed. Physical owner acceptance of translation switching on Plans with existing assignments remains open. See [release notes](../releases/v1.7.1.md).
+
+## SP-059 — Plan study experience, 2026-11-08
+
+Complete after owner testing on iPad. [SP-059](../../tickets/SP-059-plan-study-experience.md)
+adds the customizable Plan-card traveler, rolling strict Plan reminders, tap-to-read Scripture
+review, contextual Companion and one named Pencil layer per section.
+[v1.8.0](../releases/v1.8.0.md) contains the accepted changes.

@@ -182,3 +182,14 @@ lookup, sticky activation, safe fallback copies and typed owner commit APIs pres
 through orphan/rename/detach/recovery. Legacy v1 is read and migrated by the future reader;
 new required metadata cannot be exported as v1. Existing drawing/layout/size limits remain.
 These are ready implementation requirements, not changes already made to the native app.
+
+## SP-059 Plan-owned annotation drawings
+
+Annotation snapshot v2 adds optional Plan and section IDs on chapter groups. A tagged
+group owns one drawing layer for a source chapter and edition revision. All groups with
+the same Plan and section identity form the section's single named layer in the Plan UI.
+Ordinary Reader layer selectors and Collections catalogs exclude tagged groups. The
+Plan's live access gate is required to present them. All-data and annotation archives
+retain those groups, even when the associated Plan is unavailable. The current reader
+accepts v1 untagged snapshots. V2 live pointers require the current app. The previous pointer still supports recovery
+of its earlier generation through the current reader.

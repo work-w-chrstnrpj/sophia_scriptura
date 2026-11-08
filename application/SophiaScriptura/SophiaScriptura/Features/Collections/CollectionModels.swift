@@ -43,10 +43,11 @@ enum CollectionArtifactKind: String, Codable, CaseIterable, Hashable, Identifiab
 }
 
 /// Muted, ink-like folder colors ordered around the color wheel. Raw values are persisted.
-enum CollectionAccent: String, Codable, CaseIterable, Hashable, Identifiable {
+enum CollectionAccent: String, Codable, CaseIterable, Hashable, Identifiable, Sendable {
     /// Tracks the active appearance preset accent from Settings (light/dark aware).
     case preset
     case oxblood
+    case crimson
     case brick
     case rose
     case blush
@@ -84,6 +85,7 @@ enum CollectionAccent: String, Codable, CaseIterable, Hashable, Identifiable {
         switch self {
         case .preset: return "Preset accent"
         case .oxblood: return "Oxblood"
+        case .crimson: return "Crimson"
         case .brick: return "Brick"
         case .rose: return "Rose"
         case .blush: return "Blush"
@@ -363,6 +365,12 @@ struct CollectionArtifact: Identifiable, Hashable {
     var passageText: String = ""
     var insight: String = ""
     var isPlanComplete = false
+    var isPlanInProgress = false
+    var planProgress: Double = 0
+    var planTravelerCharacter: StudyCompanionCharacter = .sophy
+    var planTravelerOutfitColor: CollectionAccent?
+    var planTravelerBackdrop: PlanTravelerBackdrop = .cloudy
+    var planTravelerEquipment: PlanTravelerEquipment = .candle
 }
 
 struct StudyCollection: Codable, Identifiable, Hashable {

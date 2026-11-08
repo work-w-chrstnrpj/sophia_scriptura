@@ -255,6 +255,7 @@ struct RootTabView: View {
         .environment(\.shellTabActionsVisible, shellPreferences.preferences.showTabActionButtons)
         .environment(\.studySwipeCoordinator, swipeActions)
         .environment(notes)
+        .environment(annotations)
         .environmentObject(userProfile)
         .environmentObject(music)
         .environmentObject(activity)
@@ -328,8 +329,16 @@ struct RootTabView: View {
                 collections.studyMutationBlocked = true; notes.backupLeaseHeld = true
                 activity.backupLeaseHeld = true; companion.backupLeaseHeld = true
             }
+            refreshPlanReminders(requestPermission: true)
             activityLiveActivity.reconcile(projection: activity.committedProjection, sceneActive: scenePhase == .active)
             await sophy.load(collections: collections, activity: activity, recoveredOlderGeneration: collections.recoveredOlderGeneration || activity.recoveredOlderGeneration) }
+        .onChange(of: collections.plans) { old, new in
+            let oldSchedules = Dictionary(uniqueKeysWithValues: old.map { ($0.id, $0.strictSchedule) })
+            let shouldAsk = new.contains { $0.isActive && $0.strictSchedule != nil && (oldSchedules[$0.id] ?? nil) == nil }
+            refreshPlanReminders(requestPermission: shouldAsk)
+        }
+        .onChange(of: collections.collections) { _, _ in refreshPlanReminders() }
+        .onChange(of: activity.backupLeaseHeld) { _, held in if !held { refreshPlanReminders() } }
         .onChange(of: activity.committedProjection) { _, projection in
             activityLiveActivity.reconcile(projection: projection, sceneActive: scenePhase == .active)
         }
@@ -408,10 +417,16 @@ struct RootTabView: View {
             protection.sceneActive(phase == .active, background: phase == .background)
             annotations.active = phase == .active && selection == .scripture
             notes.active = phase == .active && (selection == .notes || (selection == .collections && notes.openingCollectionID != nil) || (notes.planPresentationActive && notes.selectedNoteID != nil))
-            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); companion.scheduleQuizCacheWarmup(); Task { await collections.adoptMandatoryPlanFolders(); await collections.reconcilePlanTreeTrash() } }
+            if phase == .active { chrome.reveal(); activity.pruneExpiredReminders(); refreshPlanReminders(resync: true); companion.scheduleQuizCacheWarmup(); Task { await collections.adoptMandatoryPlanFolders(); await collections.reconcilePlanTreeTrash() } }
             else { chrome.stop(); notes.flushSurface?(); Task { await notes.save(); await collections.flush(); await companion.flush(); await activity.flush() } }
         }
     }
+    private func refreshPlanReminders(requestPermission: Bool = false, resync: Bool = false) {
+        let plans = collections.plans
+        let privateIDs = Set(plans.filter { !collections.accessForPlan($0.id).isEmpty }.map(\.id))
+        activity.refreshPlanReminders(plans, privatePlanIDs: privateIDs, requestPermission: requestPermission, resync: resync)
+    }
+
     private var shellFABBottomPadding: CGFloat {
         guard !meditationJourney.isActive, chrome.isVisible else { return 0 }
         return ShellChromeLayout.shellFABBottomPaddingWhenTabsVisible

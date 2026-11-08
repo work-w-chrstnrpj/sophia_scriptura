@@ -97,6 +97,10 @@ struct ActivityReminder: Codable, Identifiable, Equatable {
     var repeatRule: ActivityReminderRepeat
     // Optional so reminders saved before per-record cleanup was introduced still decode.
     var deleteAfterFiring: Bool? = nil
+    var planOccurrence: PlanReminderOccurrence? = nil
+    var planTimeZoneID: String? = nil
+    var planTimeOverride: Int? = nil
+    var planDismissed: Bool? = nil
 }
 
 struct ActivitySnapshot: Codable {
@@ -112,6 +116,7 @@ struct ActivitySnapshot: Codable {
     var suppressedQuizSessionIDs: [UUID]?
     // Optional for existing v1 archives and local generations.
     var reminders: [ActivityReminder]?
+    var planReminderTimes: [UUID: Int]?
     // Missing values preserve the guided-start behavior of older versions.
     var automaticReadingWorkflow: Bool?
     var automaticContemplationWorkflow: Bool?

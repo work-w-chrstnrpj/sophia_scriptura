@@ -291,8 +291,11 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.7.1](docs/releases/v1.7.1.md), build 33**, dated
-**2026-11-05**. Plan Edit has a Translation picker for any installed translation, new Plans
+The current release is **[v1.8.0](docs/releases/v1.8.0.md), build 34**, dated
+**2026-11-08**. Plan cards have a customizable traveler that moves with progress. Strict
+Plans offer rolling reminders, and Plans support Scripture review, a named Pencil layer
+per section, and contextual Companion conversations inside the Plan.
+In v1.7.1, Plan Edit gained a Translation picker for any installed translation, new Plans
 no longer fall back to WEB, and tapping the Settings title shows or hides the section index.
 In v1.7.0, the Activity recorder and Lady Wisdom stay above fullscreen Plans, Plan Edit
 can add many sections at once, and a Plan can be explicitly shared with Lady Wisdom for
@@ -305,8 +308,8 @@ and optional strict schedules with explicit Catch up. Folder names follow full P
 saving a new Plan closes Add Items. Dates appear once below each Day. Prayer Clear lives
 inside More actions with its existing confirmation. Plans still edit inline with autosave,
 managed Plan/Day folders, paired recoverable Trash and shared Scripture editing. Complete
-reader lifecycle and Plan Pencil layers remain SP-050/051 acceptance scope; physical and
-live-provider acceptance remain separate. See the release notes and tickets for evidence.
+reader lifecycle and physical Pencil acceptance remain in SP-050/051.
+See the release notes and tickets for the remaining physical and live-provider checks.
 
 The project has executable unit/integration and UI tests, signed iPad installation evidence
 and owner-device walkthroughs. Passing simulator tests or installation does not close all

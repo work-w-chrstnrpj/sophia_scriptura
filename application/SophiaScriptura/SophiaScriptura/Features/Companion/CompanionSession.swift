@@ -12,6 +12,43 @@ final class CompanionSession: ObservableObject {
     @Published var backupLeaseHeld = false
     @Published var composerText = ""
     @Published var selectedPresetID: String
+    @Published private(set) var planQuestionContext: PlanQuestionContext?
+    private var planConversationID: UUID?
+    private var canSendPlanContext: (() -> Bool)?
+    private var streamingConversationID: UUID?
+
+    func attachPlanContext(_ context: PlanQuestionContext, to id: UUID, canSend: @escaping () -> Bool) {
+        planConversationID = id
+        canSendPlanContext = canSend
+        planQuestionContext = context
+    }
+
+    func planContext(for id: UUID) -> PlanQuestionContext? {
+        planConversationID == id ? planQuestionContext : nil
+    }
+
+    func removePlanContext(from id: UUID) {
+        guard planConversationID == id else { return }
+        planConversationID = nil
+        canSendPlanContext = nil
+        planQuestionContext = nil
+    }
+
+    func closePlanConversation(_ id: UUID) {
+        if streamingConversationID == id { cancelStreaming() }
+        removePlanContext(from: id)
+    }
+
+    private func verifyPlanContext(for id: UUID) -> Bool {
+        guard planConversationID == id else { return true }
+        guard canSendPlanContext?() == true else {
+            removePlanContext(from: id)
+            notice = "The Plan attachment is no longer available."
+            return false
+        }
+        return true
+    }
+
     @Published var attachments: [CompanionAttachment] = []
     @Published var sources: [CompanionSource] = []
     @Published var summaries: [ContextSummary] = []
@@ -80,12 +117,24 @@ final class CompanionSession: ObservableObject {
         guard let catalog = try? PromptPresetCatalog.bundled() else {
             preconditionFailure("prompt-presets.seed.json is missing from the app bundle.")
         }
-        return CompanionSession(
-            presetCatalog: catalog,
-            repository: CompanionFileRepository(directory: CompanionFileRepository.defaultDirectory()),
-            registry: registry
-        )
+        let repository = CompanionFileRepository(directory: CompanionFileRepository.defaultDirectory())
+        #if DEBUG
+        if usesPlanConversationFixture {
+            return CompanionSession(presetCatalog: catalog, repository: repository,
+                credentials: InMemoryCompanionCredentialsStore(),
+                registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()]))
+        }
+        #endif
+        return CompanionSession(presetCatalog: catalog, repository: repository, registry: registry)
     }
+
+    #if DEBUG
+    private static var usesPlanConversationFixture: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["SP059_TEST_COMPANION"] == "1"
+            && environment["SP009_TEST_STORE"].flatMap(UUID.init(uuidString:)) != nil
+    }
+    #endif
 
     func adapter(id: String) -> (any LLMProviderAdapter)? { registry.adapter(id: id) }
 
@@ -104,6 +153,13 @@ final class CompanionSession: ObservableObject {
             let load = try await repository.load()
             apply(load.snapshot)
             hasLoaded = true
+            #if DEBUG
+            if Self.usesPlanConversationFixture, let configuration = providerConfigurations.first(where: { $0.adapterID == "mock" }) {
+                try credentials.writeKey("fixture", for: configuration.id)
+            } else if Self.usesPlanConversationFixture {
+                try saveProviderKey("fixture", adapterID: "mock", accountLabel: "Plan UI Test", defaultModelID: "mock")
+            }
+            #endif
             purgeExpiredTrash()
             conversations.forEach { syncCollections($0) }
             if load.recovered { notice = "Recovered the previous Companion revision." }
@@ -418,7 +474,7 @@ final class CompanionSession: ObservableObject {
     }
 
     @discardableResult
-    func createConversation() -> UUID? {
+    func createConversation(title: String = CompanionConversationTitle.untitled) -> UUID? {
         guard !backupLeaseHeld else { notice = StudyMutationFailure.busy.localizedDescription; return nil }
         guard let route = resolvedSharedRoute(),
               let adapter = registry.adapter(id: route.adapterID),
@@ -431,6 +487,7 @@ final class CompanionSession: ObservableObject {
             return nil
         }
         let conversation = CompanionConversation(
+            title: title,
             providerConfigID: route.configurationID,
             providerAdapterID: route.adapterID,
             modelID: route.modelID,
@@ -438,7 +495,7 @@ final class CompanionSession: ObservableObject {
             capabilitySnapshot: ProviderCapabilitySnapshot.from(adapter: adapter, modelID: route.modelID)
         )
         conversations.insert(conversation, at: 0)
-        selectedConversationID = conversation.id
+        selectConversation(conversation.id)
         syncCollections(conversation)
         scheduleSave()
         return conversation.id
@@ -530,8 +587,10 @@ final class CompanionSession: ObservableObject {
             return
         }
 
+        guard verifyPlanContext(for: conversation.id) else { return }
         isSending = true
-        defer { isSending = false }
+        streamingConversationID = conversation.id
+        defer { isSending = false; streamingConversationID = nil }
 
         let nextSequence = (messages.filter { $0.conversationID == conversationID }.map(\.sequence).max() ?? -1) + 1
         let userMessage = CompanionMessage(
@@ -558,10 +617,12 @@ final class CompanionSession: ObservableObject {
         composerText = ""
         conversation.composerDraft = ""
         conversation.updatedAt = Date()
-        if conversation.title == "New conversation" {
-            conversation.title = String(visibleText.prefix(48))
+        let previousTitle = conversation.title
+        if previousTitle == CompanionConversationTitle.untitled {
+            conversation.title = CompanionConversationTitle.fromQuestion(visibleText)
         }
         replaceConversation(conversation)
+        if conversation.title != previousTitle { syncCollections(conversation) }
         scheduleSave()
 
         let retrievalAvailable = conversation.capabilitySnapshot.providerRetrieval
@@ -574,7 +635,7 @@ final class CompanionSession: ObservableObject {
             conversation: conversation,
             messages: messages.filter { $0.id != assistant.id },
             attachments: attachments,
-            pendingUserText: ""
+            pendingUserText: "", planContext: planContext(for: conversation.id)
         )
 
         activeStreamTask?.cancel()
@@ -956,9 +1017,8 @@ final class CompanionSession: ObservableObject {
 
     @discardableResult
     func askFromChapter(_ anchor: CompanionChapterAnchor) -> UUID? {
-        guard let id = createConversation(),
+        guard let id = createConversation(title: anchor.referenceLabel),
               var conversation = conversations.first(where: { $0.id == id }) else { return nil }
-        conversation.title = anchor.referenceLabel
         conversation.chapterAnchor = anchor
         selectStudyModel(for: &conversation)
         replaceConversation(conversation)
@@ -986,9 +1046,9 @@ final class CompanionSession: ObservableObject {
         translationName: String? = nil,
         verseContextText: String? = nil
     ) -> UUID? {
-        guard let conversationID = createConversation() else { return nil }
-        guard var conversation = conversations.first(where: { $0.id == conversationID }) else { return nil }
-        conversation.title = action == .originalLanguageAnalysis ? "OLA: \(referenceLabel)" : referenceLabel
+        let title = action == .originalLanguageAnalysis ? "OLA: \(referenceLabel)" : referenceLabel
+        guard let conversationID = createConversation(title: title),
+              var conversation = conversations.first(where: { $0.id == conversationID }) else { return nil }
         if action == .ask { selectStudyModel(for: &conversation) }
         conversation.passageAnchor = CompanionPassageAnchor(
             bookID: bookID,
@@ -1128,12 +1188,13 @@ final class CompanionSession: ObservableObject {
     }
 
     func retryAssistantMessage(_ messageID: UUID) async {
-        guard let assistant = messages.first(where: { $0.id == messageID }),
+        guard !backupLeaseHeld, !isSending, let assistant = messages.first(where: { $0.id == messageID }),
               assistant.role == .assistant,
               let conversation = conversations.first(where: { $0.id == assistant.conversationID }),
               let config = providerRecord(for: conversation.providerConfigID),
               let adapter = registry.adapter(id: config.adapterID),
               let apiKey = try? credentials.readKey(for: config.id), !apiKey.isEmpty else { return }
+        guard verifyPlanContext(for: conversation.id) else { return }
         guard let index = messages.firstIndex(where: { $0.id == messageID }) else { return }
         messages[index].content = ""
         messages[index].deliveryState = .streaming
@@ -1144,10 +1205,11 @@ final class CompanionSession: ObservableObject {
             conversation: conversation,
             messages: messages.filter { $0.conversationID == conversation.id && $0.sequence < assistant.sequence },
             attachments: attachments,
-            pendingUserText: ""
+            pendingUserText: "", planContext: planContext(for: conversation.id)
         )
         isSending = true
-        defer { isSending = false }
+        streamingConversationID = conversation.id
+        defer { isSending = false; streamingConversationID = nil }
         activeStreamTask?.cancel()
         activeStreamTask = Task {
             do {

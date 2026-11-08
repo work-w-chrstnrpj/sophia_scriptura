@@ -1524,3 +1524,22 @@ stale snapshots cannot overwrite newer Plan edits. CollectionsStore remains the 
 and performs existing reference validation and folder filing. Sophy journals new section/item
 IDs and reconciles them on load, keeping uncertain outcomes visible. No Plan schema changes.
 See [SP-058](../../tickets/SP-058-plan-floating-controls-and-sophy-editing.md) for evidence and limits.
+
+### Plan study experience in SP-059
+
+Collections presents the Plan’s selected character as a candle traveler on started, unfinished
+Plan cards. The transparent SwiftUI illustration scrolls clouds and grass at different
+speeds. Optional Plan fields select the character, outfit color, transparent scenery and equipment.
+The card’s Edit action opens the existing Plan editor directly. Automatic scenery uses
+the effective appearance to select a fixed sun or moon. Armor of God layers equipment
+over the Plan character. Existing Plans use Sophy, her default outfit, cloudy sky and
+candle. Reduce Motion keeps the traveler, flame and scenery still. Strict schedules carry
+an optional initial reminder time. Activity owns the rolling today/tomorrow projection,
+per-occurrence time and dismissal state, future time overrides and notification delivery.
+Plan review and playback share the production Scripture text and PencilKit surfaces with
+an in-memory ReaderSession, preserving the ordinary reader's persisted state. The
+AnnotationSession owns chapter drawings keyed by Plan and section. Companion's in-Plan
+panel accepts explicit transient context through its existing guarded provider path.
+Context supplies the title at creation. Untitled standalone chats take a locally shortened
+first question and synchronize that title to Collections.
+See [SP-059](../../tickets/SP-059-plan-study-experience.md) for verification and limits.

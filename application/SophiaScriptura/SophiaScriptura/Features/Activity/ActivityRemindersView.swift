@@ -11,6 +11,8 @@ struct ActivityRemindersView: View {
     @State private var modeID = ActivityModeID.reading.id
     @State private var repeatRule: ActivityReminderRepeat = .once
     @State private var deleteAfterFiring = false
+    @State private var useForFuture = false
+    private var isPlanReminder: Bool { reminder?.planOccurrence != nil }
 
     private var mode: ActivityMode { store.modeIncludingArchived(modeID) ?? store.modes[0] }
     private var selectableModes: [ActivityMode] {
@@ -25,25 +27,34 @@ struct ActivityRemindersView: View {
         NavigationStack {
             Form {
                 Section(reminder == nil ? "Create reminder" : "Edit reminder") {
-                    TextField("Title", text: $title)
-                    TextField("Description", text: $details, axis: .vertical).lineLimit(2...4)
-                    Picker("Activity type", selection: $modeID) {
-                        ForEach(selectableModes) { mode in Text(mode.name).tag(mode.id) }
-                    }
-                    DatePicker("Date and time", selection: $date,
-                               displayedComponents: [.date, .hourAndMinute])
-                    Picker("Repeat", selection: $repeatRule) {
-                        ForEach(ActivityReminderRepeat.allCases) { rule in Text(rule.title).tag(rule) }
-                    }
-                    if repeatRule == .once {
-                        Toggle("Delete after it fires", isOn: $deleteAfterFiring)
-                        Text("If selected, this reminder is removed when Sophia next opens or becomes active after its time.")
+                    if isPlanReminder {
+                        Text(title)
+                        DatePicker("Reminder time", selection: $date, displayedComponents: .hourAndMinute)
+                            .environment(\.timeZone, planCalendar.timeZone)
+                        Toggle("Use this time for future reminders for this Plan", isOn: $useForFuture)
+                        Text("Fires once and is removed after its scheduled time.")
                             .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
                     } else {
-                        Text(repeatRule == .weekly
-                             ? "The selected date sets the weekday. This repeats every week at the selected time."
-                             : "This repeats at the selected time on the chosen days, beginning with the next matching day.")
-                            .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+                        TextField("Title", text: $title)
+                        TextField("Description", text: $details, axis: .vertical).lineLimit(2...4)
+                        Picker("Activity type", selection: $modeID) {
+                            ForEach(selectableModes) { mode in Text(mode.name).tag(mode.id) }
+                        }
+                        DatePicker("Date and time", selection: $date,
+                                   displayedComponents: [.date, .hourAndMinute])
+                        Picker("Repeat", selection: $repeatRule) {
+                            ForEach(ActivityReminderRepeat.allCases) { rule in Text(rule.title).tag(rule) }
+                        }
+                        if repeatRule == .once {
+                            Toggle("Delete after it fires", isOn: $deleteAfterFiring)
+                            Text("If selected, this reminder is removed when Sophia next opens or becomes active after its time.")
+                                .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+                        } else {
+                            Text(repeatRule == .weekly
+                                 ? "The selected date sets the weekday. This repeats every week at the selected time."
+                                 : "This repeats at the selected time on the chosen days, beginning with the next matching day.")
+                                .font(.footnote).foregroundStyle(Color(theme.palette.secondary))
+                        }
                     }
                     Button(reminder == nil ? "Save reminder" : "Save changes") { save() }
                         .buttonStyle(.borderedProminent)
@@ -78,7 +89,18 @@ struct ActivityRemindersView: View {
         }
     }
 
+    private var planCalendar: Calendar {
+        var calendar = Calendar.current
+        if let id = reminder?.planTimeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
+        return calendar
+    }
+
     private func save() {
+        if isPlanReminder, let reminder {
+            if store.updatePlanReminder(reminder, minute: PlanReminderTime.minute(of: date, calendar: planCalendar),
+                                        useForFuture: useForFuture) { dismiss() }
+            return
+        }
         if store.upsertReminder(id: reminder?.id, title: title, description: details, date: date,
                                 mode: mode, repeatRule: repeatRule, deleteAfterFiring: deleteAfterFiring) {
             dismiss()

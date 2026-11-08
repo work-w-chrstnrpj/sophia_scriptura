@@ -15,6 +15,12 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
     // Additive optional fields: existing Plans remain unscheduled, with Reading activity.
     var activityModeID: String?
     var strictSchedule: PlanSchedule?
+    var travelerCharacter: StudyCompanionCharacter?
+    var resolvedTravelerCharacter: StudyCompanionCharacter { travelerCharacter ?? .sophy }
+    /// Missing values use the Plan character’s usual outfit.
+    var travelerOutfitColor: CollectionAccent?
+    var travelerBackdrop: PlanTravelerBackdrop?
+    var travelerEquipment: PlanTravelerEquipment?
     var access = StudyAccessRequirements()
     var createdAt = Date()
     var modifiedAt = Date()
@@ -34,7 +40,11 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
               sections.count <= 200, items.count <= 2000 else { throw StudyMutationFailure.invalid }
         var ids: Set<UUID> = [id]
         guard activityModeID.map({ !$0.isEmpty && $0.count <= 200 }) ?? true,
-              strictSchedule.map({ TimeZone(identifier: $0.timeZoneID) != nil && ($0.startDate?.timeIntervalSince1970.isFinite ?? true) }) ?? true else { throw StudyMutationFailure.invalid }
+              strictSchedule.map({ schedule in
+                  TimeZone(identifier: schedule.timeZoneID) != nil
+                      && (schedule.startDate?.timeIntervalSince1970.isFinite ?? true)
+                      && (schedule.reminderMinute.map { (0..<1440).contains($0) } ?? true)
+              }) ?? true else { throw StudyMutationFailure.invalid }
         for section in sections {
             guard ids.insert(section.id).inserted,
                   section.dueDate?.timeIntervalSince1970.isFinite ?? true,

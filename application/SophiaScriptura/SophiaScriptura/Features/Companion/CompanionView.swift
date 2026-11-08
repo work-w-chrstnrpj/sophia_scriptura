@@ -412,6 +412,60 @@ private struct PendingNoteSaveItem: Identifiable {
     let content: StudyNoteSaveContent
 }
 
+struct PlanCompanionPanel: View {
+    @Environment(\.appTheme) private var theme
+    @ObservedObject var session: CompanionSession
+    let conversationID: UUID
+    let notes: NotesSession
+    let close: () -> Void
+    let openNote: (UUID) -> Void
+    @State private var pendingNoteSave: StudyNoteSaveContent?
+
+    var body: some View {
+        if let conversation = session.conversations.first(where: { $0.id == conversationID }) {
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Plan conversation")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(theme.palette.secondary))
+                        Text(conversation.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                            .accessibilityIdentifier("plans.conversation.title")
+                    }
+                    Spacer(minLength: 8)
+                    Button("Back to Plan", systemImage: "xmark", action: close)
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(CollectionSecondaryButtonStyle())
+                        .accessibilityIdentifier("plans.conversation.close")
+                }
+                .padding(16)
+                Divider()
+                NavigationStack {
+                    CompanionConversationView(session: session, conversation: conversation, compact: false,
+                        pendingNoteSave: $pendingNoteSave, openNote: openNote)
+                        .toolbar(.hidden, for: .navigationBar)
+                }
+            }
+            .background(Color(theme.palette.paper))
+            .overlay(alignment: .leading) { Rectangle().fill(Color(theme.palette.rule)).frame(width: 1) }
+            .clipped()
+            .alert("Plan conversation", isPresented: Binding(get: { session.notice != nil }, set: { if !$0 { session.clearNotice() } })) {
+                Button("OK", role: .cancel) { session.clearNotice() }
+            } message: {
+                Text(session.notice ?? "")
+            }
+            .sheet(item: Binding(
+                get: { pendingNoteSave.map(PendingNoteSaveItem.init) },
+                set: { pendingNoteSave = $0?.content }
+            )) { item in
+                StudyNoteDestinationPicker(content: item.content, notes: notes, openNote: openNote)
+            }
+        }
+    }
+}
+
 struct CompanionConversationView: View {
     @ObservedObject var session: CompanionSession
     let conversation: CompanionConversation
@@ -502,6 +556,25 @@ struct CompanionConversationView: View {
             }
 
             CompanionStudyChrome {
+                if let context = session.planContext(for: conversation.id) {
+                    HStack(alignment: .top) {
+                        if let text = context.text {
+                            DisclosureGroup("Attached: \(context.label)") {
+                                ScrollView { Text(text).frame(maxWidth: .infinity, alignment: .leading) }
+                                    .frame(maxHeight: 140)
+                            }
+                        } else {
+                            Label(context.label + (context.isScripture ? " · Reference only" : " · No typed text"),
+                                  systemImage: context.isScripture ? "book" : "note.text")
+                        }
+                        Spacer(minLength: 8)
+                        Button("Remove Plan attachment", systemImage: "xmark.circle") {
+                            session.removePlanContext(from: conversation.id)
+                        }.labelStyle(.iconOnly)
+                    }
+                    .font(.footnote)
+                    .accessibilityIdentifier("companion.planAttachment")
+                }
                 if let card = session.scriptureComposerCard(for: conversation.id) {
                     CompanionScriptureActionCard(markdown: card, palette: theme.palette)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -9,6 +9,7 @@ struct CollectionDetailView: View {
 
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var protection = ItemProtectionSession.shared
     @ObservedObject var store: CollectionsStore
     let collectionID: UUID
@@ -25,7 +26,18 @@ struct CollectionDetailView: View {
     var books: [ScriptureBook] = []
     var reader: ReaderSession? = nil
     @State private var scriptureEdit: PlanScriptureEditTarget?
-    @State private var viewingPlanID: UUID?
+    private struct PlanPresentation: Identifiable {
+        let id: UUID
+        let collectionID: UUID
+        let route: PlanDetailView.InitialRoute
+    }
+    private struct PlanCardReturn {
+        let planID: UUID
+        let previousProgress: Double
+        var walk: PlanTravelerWalk?
+    }
+    @State private var planPresentation: PlanPresentation?
+    @State private var planCardReturn: PlanCardReturn?
 
     @AppStorage("collections.subfolder.arrange") private var arrangeStore = ""
 
@@ -99,6 +111,15 @@ struct CollectionDetailView: View {
         .onChange(of: protection.unlocked) { _, _ in
             if store.isLocked(collectionID) { showingPicker = false; showingEditor = false; showingSubfolderEditor = false; pointCard = nil; passageCard = nil; linkCard = nil; editingLink = nil; conversationCard = nil; organizing = nil; editingSubfolder = nil }
         }
+        .task(id: planCardReturn?.walk) {
+            guard let walk = planCardReturn?.walk else { return }
+            do { try await Task.sleep(for: .seconds(walk.duration)) }
+            catch { return }
+            if planCardReturn?.walk == walk { planCardReturn = nil }
+        }
+        .onChange(of: reduceMotion) { _, enabled in
+            if enabled { planCardReturn = nil }
+        }
     }
 
     private func collectionContent(_ collection: StudyCollection) -> some View {
@@ -142,13 +163,14 @@ struct CollectionDetailView: View {
                         createConversation: createConversation
                     )
                 }
-                .fullScreenCover(isPresented: Binding(get: { viewingPlanID != nil }, set: { if !$0 { viewingPlanID = nil } }), onDismiss: {
+                .fullScreenCover(item: $planPresentation, onDismiss: {
+                    startPlanCardWalk()
                     notes.flushSurface?(); notes.selectedNoteID = nil; notes.planPresentationActive = false; notes.active = false
                     Task { await notes.save() }
-                }) {
-                    if let viewingPlanID {
-                        PlanDetailView(store: store, notes: notes, reader: reader, collectionID: collectionID, planID: viewingPlanID, openNote: { openNote($0, collectionID) })
-                    }
+                }) { presentation in
+                    PlanDetailView(store: store, notes: notes, reader: reader,
+                        collectionID: presentation.collectionID, planID: presentation.id,
+                        openNote: { openNote($0, presentation.collectionID) }, initialRoute: presentation.route)
                 }
                 .sheet(item: $duplicatingCollection) { folder in
                     CollectionDuplicateSheet(store: store, folderID: folder.id)
@@ -513,6 +535,7 @@ struct CollectionDetailView: View {
         } else {
             placement = .folder
         }
+        let returning = planCardReturn.flatMap { $0.planID == artifact.id ? $0 : nil }
         return CollectionArtifactRow(
             artifact: artifact,
             accent: placement == .subfolder ? store.accent(for: artifact.id) : collection.accent,
@@ -535,7 +558,10 @@ struct CollectionDetailView: View {
             },
             editLink: artifact.kind == .link ? { editingLink = store.link(id: artifact.id) } : nil,
             cards: cards,
-            readScripture: artifact.kind == .scripture ? { readPlanScripture(artifact) } : nil
+            editScripture: artifact.kind == .scripture ? { scriptureEdit = .resolve(itemID: artifact.id, store: store) } : nil,
+            editPlan: artifact.kind == .plan ? { editPlan(artifact.id, placement: placement) } : nil,
+            travelerPreviousProgress: returning?.previousProgress,
+            travelerWalk: returning?.walk
         )
         .collectionStudyMaterialDrag(artifact.id, sourceID: collectionID, store: store, enabled: placement != .subfolder) { store.link(notes: notes.snapshot.notes) }
     }
@@ -698,19 +724,46 @@ struct CollectionDetailView: View {
     }
 
     private func readPlanScripture(_ artifact: CollectionArtifact) {
-            guard let plan = store.plans.first(where: { plan in
-                plan.isActive && store.planAccessAllowed(plan) && plan.items.contains { $0.id == artifact.id }
-            }), let item = plan.items.first(where: { $0.id == artifact.id }), let book = item.payload.book,
-                let chapter = item.payload.chapter else { return }
-            openPassage(SavedPassage(id: item.id, bookID: book, bookTitle: bookTitleForCode(book),
-                chapter: chapter, startVerse: item.payload.startVerse ?? 1, endVerse: item.payload.endVerse ?? 1,
-                editionID: plan.preferredEditionID, versionAbbreviation: "", passageText: "", insight: "",
-                kind: .bookmark, createdAt: item.createdAt))
+        guard let plan = store.plans.first(where: { plan in
+            plan.isActive && store.planAccessAllowed(plan) && plan.items.contains { $0.id == artifact.id }
+        }) else { return }
+        presentPlan(.init(id: plan.id, collectionID: collectionID, route: .review(artifact.id)))
     }
+
+    private func editPlan(_ id: UUID, placement: CollectionArtifactRow.Placement) {
+        guard let plan = store.plans.first(where: { $0.id == id && $0.isActive && store.planAccessAllowed($0) }) else { return }
+        let source = placement == .subfolder
+            ? store.collectionIDs(containing: id).filter { !store.isLocked($0) }.min { $0.uuidString < $1.uuidString }
+            : collectionID
+        presentPlan(.init(id: plan.id, collectionID: source ?? StudyCollection.unfiledID, route: .edit))
+    }
+
+    private func presentPlan(_ presentation: PlanPresentation) {
+        let card = cards && !reduceMotion ? visibleArtifacts.first {
+            $0.kind == .plan && $0.id == presentation.id && !$0.isPlanComplete
+        } : nil
+        planCardReturn = card.map { PlanCardReturn(planID: $0.id, previousProgress: $0.planProgress) }
+        planPresentation = presentation
+    }
+
+    private func startPlanCardWalk() {
+        guard var returning = planCardReturn, cards, !reduceMotion,
+              let card = visibleArtifacts.first(where: { $0.kind == .plan && $0.id == returning.planID }),
+              let walk = PlanTravelerWalk(from: returning.previousProgress, to: card.planProgress, startedAt: .now)
+        else {
+            planCardReturn = nil
+            return
+        }
+        returning.walk = walk
+        planCardReturn = returning
+    }
+
     private func open(_ artifact: CollectionArtifact) {
         switch artifact.kind {
         case .plan:
-            if let plan = store.plans.first(where: { $0.id == artifact.id && store.planAccessAllowed($0) }) { viewingPlanID = plan.id }
+            if let plan = store.plans.first(where: { $0.id == artifact.id && store.planAccessAllowed($0) }) {
+                presentPlan(.init(id: plan.id, collectionID: collectionID, route: .detail))
+            }
         case .pointToPonder:
             pointCard = store.pointsToPonder.first { $0.id == artifact.id && $0.trashedAt == nil }
         case .note:
@@ -722,7 +775,7 @@ struct CollectionDetailView: View {
         case .conversation:
             conversationCard = artifact.id
         case .scripture:
-            scriptureEdit = .resolve(itemID: artifact.id, store: store)
+            readPlanScripture(artifact)
         case .annotation:
             if let saved = store.savedAnnotation(id: artifact.id) {
                 openAnnotation(saved)

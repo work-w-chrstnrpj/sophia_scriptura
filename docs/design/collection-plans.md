@@ -385,3 +385,43 @@ Checked reading reflections remain in creation order and are traversable in orde
 Owner addition (2026-10-20): Add assignment is separated into Scripture, Notes and
 Links tabs. Only the selected type's fields, creation action and existing-material list
 are rendered; input drafts survive switching tabs. Scripture is the initial tab.
+
+## Plan study experience in SP-059
+
+The In Progress Plan card shows its own selected character walking in place with a flickering
+candle between the title and date. Completed Days or Sections set the traveler's horizontal
+position. Half complete places the traveler at the center, and two-thirds complete places
+them two-thirds of the way across. The artwork stays inside the card near either edge.
+When a completed section advances progress, the traveler walks from the previous
+position after the Plan closes. After the final section, the traveler reaches the end
+before the completion stamp appears. Reduce Motion shows the updated position or stamp
+immediately.
+Sabinus has gray hair and a beard, Sophy has a braid,
+and Sol is clean-shaven. Clouds drift behind the traveler and grass passes more quickly
+underfoot. Hold the Plan card and choose Edit to change Character, Outfit color, Scenery
+or Equipment in the Plan card section. Each Plan saves its own character independently
+of Companion Settings. Plans without a saved character use Sophy. Character default
+uses the Plan character’s usual outfit. Outfit color uses filled palette swatches,
+including Crimson. Scenery includes mountain terrain, cloudy sky,
+library, sunny, moonlit and rainy. Automatic follows Sophia’s effective appearance,
+using Sunny in light mode and Moonlit in dark mode. A few faint clouds drift through both
+scenes. The sun and moon hold their positions within soft halos, with gently pulsing sun
+rays and twinkling stars.
+The transparent scene uses the card background. Equipment includes a candle, handled lantern,
+or the Armor of God from Ephesians 6:14–17. The armored traveler turns in a three-quarter
+stance, bracing the upright shield ahead with one arm and carrying the sword low across
+the waist in the other hand. The lantern casts a warm pool of light at the traveler’s feet, inspired by
+Psalm 119:105. Reduce Motion keeps the traveler, flame, light and scenery still.
+A tap on a Scripture assignment opens the shared Scripture reading surface in review
+mode. Edit offers Replace assignment. Review leaves the Plan's
+cursor, completion checks and Activity timer untouched. Assigned verses are emphasized
+with surrounding verses dimmed in both reading and Pencil modes.
+
+Draw opens the section's named layer, created on first use. Chapters share its Plan and
+section identity and retain separate drawings for their source and captured layout.
+The conversation button opens a panel beside the Plan content with a removable attachment
+for the displayed assignment. The Plan header stays visible and closing the panel returns
+to the same assignment. The conversation starts with the passage reference or note title.
+Protected context uses a generic study title in shared conversation lists.
+See the [SP-059 ticket](../../tickets/SP-059-plan-study-experience.md) for reminder,
+context and layer behavior.

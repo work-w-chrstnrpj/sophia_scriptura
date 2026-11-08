@@ -59,12 +59,18 @@ struct AnnotationLayerAppearance: Codable, Equatable, Sendable {
     }
 }
 
+struct PlanAnnotationScope: Codable, Equatable, Hashable, Sendable {
+    let planID: UUID
+    let sectionID: UUID
+}
+
 struct AnnotationGroup: Codable, Identifiable, Equatable, Sendable {
     var id = UUID()
     let source: AnnotationSource
     let layout: AnnotationLayout
     var layers: [AnnotationLayer] = []
     var selectedLayerID: UUID?
+    var planScope: PlanAnnotationScope?
 }
 
 struct AnnotationSnapshot: Codable, Equatable, Sendable {

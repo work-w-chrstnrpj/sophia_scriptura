@@ -36,10 +36,16 @@ actor AnnotationFileRepository: AnnotationRepository {
         return try Data(contentsOf: url)
     }
     private func validate(_ value: AnnotationSnapshot) throws {
-        guard value.schemaVersion == 1 else { throw AnnotationError.unsupported }
-        guard value.revision >= 0, value.groups.count <= 128 else { throw AnnotationError.invalid }
+        guard (1...2).contains(value.schemaVersion) else { throw AnnotationError.unsupported }
+        guard value.revision >= 0, withinGroupLimits(value) else { throw AnnotationError.invalid }
         var groupIDs = Set<UUID>(), layerIDs = Set<UUID>(), total = 0
+        var managedSources: [PlanAnnotationScope: Set<AnnotationSource>] = [:]
         for group in value.groups {
+            if let scope = group.planScope {
+                guard value.schemaVersion == 2, group.layers.count == 1,
+                      managedSources[scope, default: []].insert(group.source).inserted
+                else { throw AnnotationError.invalid }
+            }
             guard groupIDs.insert(group.id).inserted, group.layers.count <= 256,
                   !group.source.editionID.isEmpty, !group.source.contentRevision.isEmpty,
                   !group.source.referenceSystemID.isEmpty, group.source.book.count == 3,
@@ -77,11 +83,16 @@ actor AnnotationFileRepository: AnnotationRepository {
             }
         }
     }
+    private func withinGroupLimits(_ snapshot: AnnotationSnapshot) -> Bool {
+        snapshot.groups.count <= (snapshot.schemaVersion == 2 ? 512 : 128)
+            && snapshot.groups.lazy.filter { $0.planScope == nil }.count <= 128
+    }
+
     private func entries(_ snapshot: AnnotationSnapshot) -> [Entry] {
         snapshot.groups.flatMap(\.layers).map { Entry(id: $0.id, count: $0.drawing.count, checksum: Self.digest($0.drawing)) }
     }
     private func check(_ snapshot: AnnotationSnapshot, entries: [Entry]) throws {
-        guard snapshot.groups.count <= 128, snapshot.groups.allSatisfy({ $0.layers.count <= 256 }) else { throw AnnotationError.invalid }
+        guard withinGroupLimits(snapshot), snapshot.groups.allSatisfy({ $0.layers.count <= 256 }) else { throw AnnotationError.invalid }
         let layers = snapshot.groups.flatMap(\.layers)
         guard entries.count == layers.count, Set(entries.map(\.id)).count == entries.count else { throw AnnotationError.invalid }
         let index = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
@@ -93,7 +104,7 @@ actor AnnotationFileRepository: AnnotationRepository {
     }
     private func decodePointer(_ name: String) throws -> Pointer {
         let pointer = try JSONDecoder().decode(Pointer.self, from: read(directory.appendingPathComponent(name), limit: 4096))
-        guard pointer.schemaVersion == 1 else { throw AnnotationError.unsupported }
+        guard (1...2).contains(pointer.schemaVersion) else { throw AnnotationError.unsupported }
         return pointer
     }
     private func generation(_ pointer: Pointer) throws -> AnnotationSnapshot {
@@ -103,8 +114,8 @@ actor AnnotationFileRepository: AnnotationRepository {
         guard Self.digest(bytes) == pointer.manifestHash else { throw AnnotationError.invalid }
         let manifest = try JSONDecoder().decode(Manifest.self, from: bytes)
         var snapshot = manifest.snapshot
-        guard snapshot.schemaVersion == 1 else { throw AnnotationError.unsupported }
-        guard snapshot.revision == pointer.revision, snapshot.groups.count <= 128, snapshot.groups.allSatisfy({ $0.layers.count <= 256 }),
+        guard (1...2).contains(snapshot.schemaVersion) else { throw AnnotationError.unsupported }
+        guard snapshot.revision == pointer.revision, withinGroupLimits(snapshot), snapshot.groups.allSatisfy({ $0.layers.count <= 256 }),
               manifest.entries.count <= 128 * 256 else { throw AnnotationError.invalid }
         for g in snapshot.groups.indices {
             for l in snapshot.groups[g].layers.indices {
@@ -164,10 +175,12 @@ actor AnnotationFileRepository: AnnotationRepository {
         try manifestData.write(to: staging.appendingPathComponent("manifest.json"), options: .atomic)
         try interrupt?(.staged)
         try fm.moveItem(at: staging, to: directory.appendingPathComponent(id.uuidString))
-        let pointer = Pointer(generation: id, revision: next.revision, manifestHash: Self.digest(manifestData))
+        let pointer = Pointer(schemaVersion: next.schemaVersion, generation: id, revision: next.revision, manifestHash: Self.digest(manifestData))
         _ = try generation(pointer)
         try interrupt?(.published)
-        if let previous = validPointer {
+        if var previous = validPointer {
+            // A downgraded reader must not recover v1 and then overwrite the managed drawings.
+            previous.schemaVersion = max(previous.schemaVersion, next.schemaVersion)
             try JSONEncoder().encode(previous).write(to: directory.appendingPathComponent("previous.json"), options: .atomic)
         }
         try interrupt?(.fallback)

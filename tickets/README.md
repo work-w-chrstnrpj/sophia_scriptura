@@ -120,3 +120,7 @@ Plan floating Activity/Lady Wisdom, numeric bulk Days/Sections, and explicit sha
 Plan context with reviewed additive section/Scripture changes. Unit regression, focused
 batch checks and Plan UI journeys passed; final signed iPad install/launch passed.
 Physical owner and real-provider acceptance remain open.
+
+2026-11-08 owner accepted and closed [SP-059](SP-059-plan-study-experience.md).
+[v1.8.0](../docs/releases/v1.8.0.md) includes progress-aware Plan card artwork,
+rolling strict Plan reminders, Scripture review, Companion context and Plan Pencil layers.

@@ -246,3 +246,12 @@ boundary; its track catalog and physical checks remain open.
 ### v0.3.0 compatibility
 
 Keep the persisted `meditating` mode ID while displaying Contemplating as the activity type and Scripture Contemplation as the section title. Activity load, restore and save normalize legacy `reviewing` records, draft and reminders to `studying`, update built-in labels, and combine Reviewing/Studying daily goals without changing the total. Preserve IDs, intervals, durations, titles, quiz links and suppression IDs. Optional workflow preferences decode to enabled when absent and travel in Activity/full backups. Companion's existing `reviewingLinks` wire keys remain compatible; Activity imports them as Studying exactly once per quiz session.
+
+### Strict Plan reminders in SP-059
+
+A dated strict Plan projects unfinished sections due today and tomorrow into Activity
+Reminders. Plan Edit supplies the initial reminder time. The Activity editor can change
+one occurrence or set the time used by future reminders from that Plan. Reminders fire
+once, disappear after their scheduled time, and are reconciled when Sophia opens, becomes
+active or the Plan schedule changes. Completing a section cancels its pending reminder.
+Background delivery uses notifications already scheduled during the rolling window.

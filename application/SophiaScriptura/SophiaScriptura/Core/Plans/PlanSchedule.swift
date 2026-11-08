@@ -3,6 +3,8 @@ import Foundation
 /// A local calendar schedule; the first Play anchors an undated strict Plan.
 struct PlanSchedule: Codable, Equatable, Sendable {
     var startDate: Date?
+    var reminderMinute: Int?
+    var initialReminderMinute: Int { reminderMinute.flatMap { (0..<1440).contains($0) ? $0 : nil } ?? 8 * 60 }
     var timeZoneID = TimeZone.current.identifier
     var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)

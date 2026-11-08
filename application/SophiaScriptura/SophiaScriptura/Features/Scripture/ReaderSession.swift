@@ -66,6 +66,34 @@ import Observation
         if state == nil { notice = ScriptureError.persistence.localizedDescription; stateWritable = false }
     }
 
+    func makePlanReader() -> ReaderSession {
+        let session: ReaderSession
+        if let library {
+            session = ReaderSession(content: bundled, state: nil, translationLibrary: library)
+        } else {
+            session = ReaderSession(content: bundled, state: nil)
+        }
+        session.stateLoaded = true
+        session.preferences = preferences
+        session.snapshot.preferences = preferences
+        session.notice = nil
+        return session
+    }
+
+    func openPlanPassage(editionID: String, book: String, chapter: Int, verse: Int?, endVerse: Int?) async {
+        do {
+            content = try await contentRepository(forEditionID: editionID)
+            edition = try await content.edition()
+            books = try await content.books()
+            guard edition?.id == editionID else { throw ScriptureError.editionUnavailable }
+            let range = verse.flatMap { first in endVerse.map { first <= $0 ? Array(first...$0) : [] } } ?? []
+            await navigate(book: book, chapter: chapter, verse: verse ?? 1, emphasis: range)
+        } catch {
+            self.error = error.localizedDescription
+            document = nil
+        }
+    }
+
     private func contentRepository(forEditionID editionID: String) async throws -> any ScriptureContentRepository {
         switch ScriptureReferenceIdentity.translationSourceID(forEditionID: editionID) {
         case .bundledWeb:

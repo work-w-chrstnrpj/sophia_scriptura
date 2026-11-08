@@ -7,14 +7,17 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     let reader: ReaderSession
     let session: AnnotationSession
     let stateToken: String
+    var planFocusVerses: [Int]? = nil
+    var isPlanSurface = false
     var saveToNote: ((ChapterTextMap.Selection) -> Void)? = nil
     var saveBookmark: ((NSRange) -> Void)? = nil
     var saveGleaning: ((NSRange) -> Void)? = nil
     func makeUIViewController(context: Context) -> AnnotationController {
-        AnnotationController(document: document, preferences: preferences, reader: reader, session: session)
+        AnnotationController(document: document, preferences: preferences, reader: reader, session: session, isPlanSurface: isPlanSurface)
     }
     func updateUIViewController(_ controller: AnnotationController, context: Context) {
         controller.preferences = preferences
+        controller.planFocusVerses = planFocusVerses
         controller.saveToNote = saveToNote
         controller.saveBookmark = saveBookmark
         controller.saveGleaning = saveGleaning
@@ -33,6 +36,8 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     var preferences: ReaderPreferences
     private let reader: ReaderSession
     private let session: AnnotationSession
+    private let isPlanSurface: Bool
+    var planFocusVerses: [Int]?
     private let openedGeneration: Int
     private let viewport = UIScrollView()
     private let paper = UIView()
@@ -61,7 +66,8 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     private var matched = false
     private var lastMode: AnnotationSession.Mode?
     private var refinementStatus = "rough"
-    init(document: ChapterDocument, preferences: ReaderPreferences, reader: ReaderSession, session: AnnotationSession) {
+    init(document: ChapterDocument, preferences: ReaderPreferences, reader: ReaderSession, session: AnnotationSession, isPlanSurface: Bool = false) {
+        self.isPlanSurface = isPlanSurface
         self.document = document; self.preferences = preferences; self.reader = reader; self.session = session; openedGeneration = session.reopenGeneration
         super.init(nibName: nil, bundle: nil)
     }
@@ -81,7 +87,9 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         text.textDragInteraction?.isEnabled = !document.isLicensed
         let parent = ReaderTextSurface(document: document, preferences: preferences, targetVerse: reader.targetVerse,
             navigationID: reader.navigationID, restorationLocation: reader.restorationLocation,
-            onVerse: { [weak reader, document] verse in reader?.hubVerse = document.verse(verse) },
+            onVerse: { [weak reader, document, isPlanSurface] verse in
+                if !isPlanSurface { reader?.hubVerse = document.verse(verse) }
+            },
             onVisibleLocation: reader.visibleLocation, onChapterSwipe: { _ in }, authorizeQuote: reader.authorizeQuote)
         let delegate = ReaderTextSurface.Coordinator(parent); delegate.map = text.map
         coordinator = delegate; text.delegate = delegate
@@ -135,7 +143,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
             (preferences.theme == "system" && traitCollection.userInterfaceStyle == .dark)
         let palette = preferences.appearance.palette(dark: dark)
         if session.usingTool {
-            updateDrawingTools(draw: session.selected != nil && session.mode == .draw && session.active)
+            updateDrawingTools(draw: session.selected != nil && session.mode == .draw && (isPlanSurface || session.active))
             return
         }
         if layoutID != layout.signature {
@@ -148,10 +156,14 @@ struct AnnotationSurface: UIViewControllerRepresentable {
 
         }
         // Typography comes exclusively from the captured layout; theme changes only colors.
-        let key = "\(layout.signature)|\(preferences.appearance)|\(dark)"
+        let key = "\(layout.signature)|\(preferences.appearance)|\(dark)|\(String(describing: planFocusVerses))"
         if key != renderKey {
             renderKey = key
-            text.attributedText = AnnotationRenderer.text(document, font: font, palette: palette)
+            let rendered = NSMutableAttributedString(attributedString: AnnotationRenderer.text(document, font: font, palette: palette))
+            if let planFocusVerses, let map = text.map {
+                PlanVerseFocus.apply(to: rendered, map: map, verses: planFocusVerses, ink: palette.ink)
+            }
+            text.attributedText = rendered
         }
         text.linkTextAttributes = [.foregroundColor: palette.accent]; text.tintColor = palette.accent
         text.focusColor = palette.accent.withAlphaComponent(0.18)
@@ -178,7 +190,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
                 #endif
             } else { selectedCanvas = nil; strokeRefiner = nil }
         }
-        let draw = session.selected != nil && session.mode == .draw && session.active
+        let draw = session.selected != nil && session.mode == .draw && (isPlanSurface || session.active)
         text.isSelectable = !draw; text.isUserInteractionEnabled = !draw
         if let layer = session.selected, let canvas = selectedCanvas {
             if drawingTokens[layer.id] != layer.revision {
@@ -277,6 +289,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
     }
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) { if canvasView === selectedCanvas { publish() } }
     func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+        guard session.reopenGeneration == openedGeneration else { return }
         strokeRefiner?.beginStroke()
         session.beginStroke()
         picker.setVisible(false, forFirstResponder: canvasView)
@@ -284,6 +297,7 @@ struct AnnotationSurface: UIViewControllerRepresentable {
         // Keep the picker active and canvas first responder while its UI is minimized.
     }
     func canvasViewDidEndUsingTool(_ canvasView: PKCanvasView) {
+        guard session.reopenGeneration == openedGeneration else { return }
         if let refined = strokeRefiner?.finishStroke() {
             replaceDrawing(canvasView, with: refined, status: strokeRefiner?.lastKind.map { "refined \($0.label)" } ?? "rough")
         } else if PencilStrokeRefiner.simulatesPencil {

@@ -6,6 +6,7 @@ extension CollectionAccent {
         switch self {
         case .preset: return (0.45, 0.45, 0.45)
         case .oxblood: return (0.45, 0.16, 0.15)
+        case .crimson: return (0.76, 0.10, 0.23)
         case .brick: return (0.52, 0.22, 0.20)
         case .rose: return (0.58, 0.25, 0.32)
         case .blush: return (0.68, 0.46, 0.50)
@@ -191,10 +192,11 @@ struct CollectionSecondaryButtonStyle: ButtonStyle {
 struct CollectionColorGrid: View {
     @Environment(\.appTheme) private var theme
     @Binding var selection: CollectionAccent
+    var palette = CollectionAccent.allCases
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 48, maximum: 56), spacing: 10)], spacing: 10) {
-            ForEach(CollectionAccent.allCases) { accent in
+            ForEach(palette) { accent in
                 let selected = accent == selection
                 let swatch = accent == .preset ? Color(theme.palette.accent) : accent.color
                 Button {

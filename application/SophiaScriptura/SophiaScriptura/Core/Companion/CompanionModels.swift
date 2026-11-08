@@ -492,7 +492,7 @@ struct CompanionConversation: Codable, Identifiable, Hashable, Sendable {
 
     init(
         id: UUID = UUID(),
-        title: String = "New conversation",
+        title: String = CompanionConversationTitle.untitled,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         providerConfigID: UUID,

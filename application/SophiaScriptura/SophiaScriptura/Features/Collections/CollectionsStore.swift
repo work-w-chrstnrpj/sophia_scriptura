@@ -921,8 +921,17 @@ final class CollectionsStore: ObservableObject {
             if let annotationSnapshot, let layer = AnnotationCollectionCatalog.resolveLayer(layerID: saved.id, in: annotationSnapshot), layer.deleted { return nil }
             return AnnotationCollectionCatalog.artifact(for: saved, snapshot: annotationSnapshot)
         }
-        let planItems = plans.filter { $0.isActive && planAccessAllowed($0) }.map {
-            CollectionArtifact(id: $0.id, title: $0.title, subtitle: "Plan · \($0.completedSectionCount)/\($0.sections.count) sections complete", kind: .plan, modifiedAt: $0.modifiedAt, isPlanComplete: $0.isComplete)
+        let planItems = plans.filter { $0.isActive && planAccessAllowed($0) }.map { plan in
+            let completed = plan.completedSectionCount
+            let total = plan.sections.count
+            let isComplete = plan.isComplete
+            return CollectionArtifact(id: plan.id, title: plan.title, subtitle: "Plan · \(completed)/\(total) sections complete", kind: .plan, modifiedAt: plan.modifiedAt, isPlanComplete: isComplete,
+                isPlanInProgress: !isComplete && (plan.cursor != nil || plan.items.contains { $0.completedAt != nil }),
+                planProgress: Double(completed) / Double(max(1, total)),
+                planTravelerCharacter: plan.resolvedTravelerCharacter,
+                planTravelerOutfitColor: plan.travelerOutfitColor,
+                planTravelerBackdrop: plan.travelerBackdrop ?? .cloudy,
+                planTravelerEquipment: plan.travelerEquipment ?? .candle)
         }
         let readingItems: [CollectionArtifact] = plans.filter { $0.isActive && planAccessAllowed($0) }.flatMap { plan in
             plan.items.filter { $0.payload.kind == .scripture }.map { item in

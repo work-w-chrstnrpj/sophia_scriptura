@@ -12,6 +12,7 @@ policy unless explicitly authorized.
 
 | Version | Date | Summary | Notes |
 | --- | --- | --- | --- |
+| [v1.8.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.8.0) | 2026-11-08 | Progress-aware Plan travelers, rolling reminders, in-Plan Scripture and Pencil layers, contextual Companion | [Release notes](v1.8.0.md) |
 | [v1.6.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.6.0) | 2026-10-30 | Daily Plan playback/Activity, direct Day selection, optional Catch up, managed folder naming and Prayer menu polish | [Release notes](v1.6.0.md) |
 | [v1.5.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.5.0) | 2026-10-25 | Inline Plan autosave, managed folders, paired recovery and shared Scripture editing | [Release notes](v1.5.0.md) |
 | [v1.4.0](https://github.com/work-w-chrstnrpj/sophia_scriptura/releases/tag/v1.4.0) | 2026-10-20 | Collection Plans, checked reflections, stable authoring, Items wording and reader position restoration | [Release notes](v1.4.0.md) |

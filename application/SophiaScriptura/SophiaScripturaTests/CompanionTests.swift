@@ -348,6 +348,51 @@ final class CompanionTests: XCTestCase {
         XCTAssertTrue(pending.providerContent.contains("Do not guess the selection"))
     }
 
+    func testNewConversationTitleUsesFirstQuestionAndSyncsToCollections() async throws {
+        let session = CompanionSession(presetCatalog: try PromptPresetCatalog.bundled(),
+            credentials: InMemoryCompanionCredentialsStore(),
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()]))
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        var collectionTitles: [UUID: String] = [:]
+        session.onCollectionsSync = { collectionTitles[$0.id] = $0.title }
+
+        let id = try XCTUnwrap(session.createConversation())
+        session.updateComposerDraft("What does grace mean\n   in Romans?")
+        await session.sendMessage()
+        XCTAssertEqual(session.selectedConversation?.title, "What does grace mean in Romans?")
+        XCTAssertEqual(collectionTitles[id], "What does grace mean in Romans?")
+
+        session.renameConversation(id, title: "Grace in Romans")
+        session.updateComposerDraft("How can I apply it?")
+        await session.sendMessage()
+        XCTAssertEqual(session.selectedConversation?.title, "Grace in Romans")
+        XCTAssertEqual(collectionTitles[id], "Grace in Romans")
+
+        let title = CompanionConversationTitle.fromQuestion(
+            "What does the parable teach about trusting God when circumstances change unexpectedly?"
+        )
+        XCTAssertEqual(title, "What does the parable teach about trusting God when circumstances…")
+    }
+
+    func testPlanContextTitleIsAvailableBeforeSendAndRemainsAfterClosing() async throws {
+        let session = CompanionSession(presetCatalog: try PromptPresetCatalog.bundled(),
+            credentials: InMemoryCompanionCredentialsStore(),
+            registry: ProviderRegistry(adapters: [MockLLMProviderAdapter()]))
+        try session.saveProviderKey("fixture-key", adapterID: "mock", accountLabel: "Test")
+        var collectionTitle: String?
+        session.onCollectionsSync = { collectionTitle = $0.title }
+        let context = PlanQuestionContext(label: "John 3:16 (WEB)", text: "Verse wording", isScripture: true)
+        let id = try XCTUnwrap(session.createConversation(title: context.label))
+        session.attachPlanContext(context, to: id, canSend: { true })
+        XCTAssertEqual(session.selectedConversation?.title, context.label)
+        XCTAssertEqual(collectionTitle, context.label)
+        session.updateComposerDraft("What does this mean?")
+        await session.sendMessage()
+        session.closePlanConversation(id)
+        XCTAssertEqual(session.selectedConversation?.title, context.label)
+        XCTAssertNil(session.planContext(for: id))
+    }
+
     func testOLATitleAttachmentAndHiddenPromptSurviveSendSaveAndReopen() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("companion-ola-" + UUID().uuidString, isDirectory: true)

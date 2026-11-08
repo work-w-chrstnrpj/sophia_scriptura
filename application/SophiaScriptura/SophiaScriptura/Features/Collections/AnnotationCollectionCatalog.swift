@@ -15,7 +15,7 @@ enum AnnotationCollectionCatalog {
     }
 
     static func layerChoices(in snapshot: AnnotationSnapshot) -> [(groupID: UUID, layer: AnnotationLayer, layout: AnnotationLayout)] {
-        snapshot.groups.flatMap { group in
+        snapshot.groups.filter { $0.planScope == nil }.flatMap { group in
             group.layers.compactMap { layer -> (UUID, AnnotationLayer, AnnotationLayout)? in
                 guard layer.deletedAt == nil else { return nil }
                 let layout = layer.layout ?? group.layout
@@ -25,7 +25,7 @@ enum AnnotationCollectionCatalog {
     }
 
     static func resolveLayer(layerID: UUID, in snapshot: AnnotationSnapshot) -> (groupID: UUID, layer: AnnotationLayer, layout: AnnotationLayout, deleted: Bool)? {
-        for group in snapshot.groups {
+        for group in snapshot.groups where group.planScope == nil {
             guard let layer = group.layers.first(where: { $0.id == layerID }) else { continue }
             let layout = layer.layout ?? group.layout
             return (group.id, layer, layout, layer.deletedAt != nil)

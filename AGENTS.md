@@ -455,3 +455,14 @@ them. Existing stored formats remain readable without a conversion or schema bum
 ## SP-057 structure update
 
 `Features/Notes/Editor/PrayerPageLayout.swift` shares the compact Prayer writing region and maximized gray dashed guide geometry. NotePageController retains canonical text/ink coordinates while fitting the preview to its actual width. NoteEditorView presents the existing NoteEditorSheet from every kind's More menu, shared by Notes and Collections entry routes.
+
+## SP-059 structure update
+
+`Core/Plans/PlanReminderTime.swift` owns the rolling strict Plan reminder projection.
+`ActivityStore` owns overrides, cleanup and local scheduling. `PlanPassageReader.swift`
+composes the production Scripture text and PencilKit surfaces using a transient reader.
+`AnnotationSession` owns Plan/section-scoped chapter drawings in annotation snapshot v2.
+`Core/Plans/PlanTravelerAppearance.swift` defines the Plan card scenery and equipment.
+`PlanTravelerArtwork.swift` and `PlanTravelerScenery.swift` render the traveler and scenes.
+`PlanQuestionContext.swift` bounds typed assignment context for the embedded Companion
+conversation. The ordinary Scripture and Collections layer pickers exclude Plan drawings.

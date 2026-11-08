@@ -13,12 +13,23 @@ enum ActivityReminderNotifications {
         }
         guard status == .authorized || status == .provisional || status == .ephemeral else { return false }
 
-        let existing = await center.pendingNotificationRequests()
-            .map(\.identifier).filter { $0.hasPrefix(prefix) }
-        center.removePendingNotificationRequests(withIdentifiers: existing)
         let requests = reminders.flatMap(requests(for:))
         guard requests.count <= 64 else { throw ActivityReminderError.tooManyNotifications }
-        for request in requests { try await center.add(request) }
+        let existing = await center.pendingNotificationRequests()
+            .filter { $0.identifier.hasPrefix(prefix) }
+        let desiredIDs = Set(requests.map(\.identifier))
+        center.removePendingNotificationRequests(withIdentifiers: existing.map(\.identifier).filter { !desiredIDs.contains($0) })
+        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.identifier, $0) })
+        for request in requests {
+            if let current = existingByID[request.identifier],
+               let oldTrigger = current.trigger as? UNCalendarNotificationTrigger,
+               let newTrigger = request.trigger as? UNCalendarNotificationTrigger,
+               oldTrigger.dateComponents == newTrigger.dateComponents,
+               oldTrigger.repeats == newTrigger.repeats,
+               current.content.title == request.content.title,
+               current.content.body == request.content.body { continue }
+            try await center.add(request)
+        }
         return true
     }
 
@@ -42,7 +53,7 @@ enum ActivityReminderNotifications {
                 components.weekday = weekday
             }
             let content = UNMutableNotificationContent()
-            content.title = reminder.title
+            content.title = reminder.planOccurrence == nil ? reminder.title : "Sophia study reminder"
             content.body = reminder.description.isEmpty ? "Time for \(reminder.modeLabel)." : reminder.description
             content.sound = .default
             content.userInfo = ["activityReminderID": reminder.id.uuidString]

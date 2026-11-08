@@ -10,6 +10,7 @@ struct CollectionArtifactRow: View {
     @Environment(\.appTheme) private var theme
     @Environment(\.noteCardsActive) private var noteCardsActive
     @State private var visible = false
+    @State private var previewingPlanCard = false
     let artifact: CollectionArtifact
     let accent: CollectionAccent
     let placement: Placement
@@ -23,7 +24,10 @@ struct CollectionArtifactRow: View {
     var onJournalField: ((JournalFieldSheet) -> Void)? = nil
     var editLink: (() -> Void)? = nil
     var cards = false
-    var readScripture: (() -> Void)? = nil
+    var editScripture: (() -> Void)? = nil
+    var editPlan: (() -> Void)? = nil
+    var travelerPreviousProgress: Double?
+    var travelerWalk: PlanTravelerWalk?
     static let listHeight: CGFloat = 80
     static let cardHeight: CGFloat = 176
 
@@ -72,17 +76,34 @@ struct CollectionArtifactRow: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Group {
-                if cards, artifact.kind == .note, let notes,
-                   let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) {
-                    NoteLibraryCard(note: note, locked: notes.isLocked(note), isActive: noteCardsActive, open: open)
-                } else {
-                    standardRecord
+            if cards, artifact.kind == .plan {
+                standardRecord(animated: noteCardsActive && visible && !previewingPlanCard, showsPlanReturn: true)
+                    .accessibilityIdentifier("collections.open.\(artifact.title)")
+                    .contextMenu {
+                        actions
+                    } preview: {
+                        standardRecord(animated: false)
+                            .environment(\.appTheme, theme)
+                            .frame(width: 280)
+                            .allowsHitTesting(false)
+                            .onAppear { previewingPlanCard = true }
+                            .onDisappear { previewingPlanCard = false }
+                    }
+            } else {
+                Group {
+                    if cards, artifact.kind == .note, let notes,
+                       let note = notes.snapshot.notes.first(where: { $0.id == artifact.id }) {
+                        NoteLibraryCard(note: note, locked: notes.isLocked(note), isActive: noteCardsActive, open: open)
+                    } else {
+                        standardRecord(animated: noteCardsActive && visible)
+                    }
                 }
+                .accessibilityIdentifier("collections.open.\(artifact.title)")
+                .contextMenu { actions }
             }
-            .accessibilityIdentifier("collections.open.\(artifact.title)")
-            .contextMenu { actions }
         }
+        .onAppear { visible = true }
+        .onDisappear { visible = false; previewingPlanCard = false }
         .studySwipeReveal(enabled: !cards, identifier: "collections.swipe.\(artifact.id)") {
             Menu("More", systemImage: "ellipsis") { actions }
                 .accessibilityIdentifier("collections.swipe.more")
@@ -92,8 +113,11 @@ struct CollectionArtifactRow: View {
         }
     }
 
-    private var standardRecord: some View {
-        Button(action: open) {
+    private func standardRecord(animated: Bool, showsPlanReturn: Bool = false) -> some View {
+        let previousProgress = showsPlanReturn ? travelerPreviousProgress : nil
+        let walk = showsPlanReturn ? travelerWalk : nil
+        let finishingPlan = artifact.isPlanComplete && previousProgress != nil
+        return Button(action: open) {
             Group {
                 if cards {
                     VStack(alignment: .leading, spacing: 8) {
@@ -112,9 +136,28 @@ struct CollectionArtifactRow: View {
                             Text(gleaningPreview).font(.footnote)
                                 .foregroundStyle(Color(theme.palette.secondary)).lineLimit(2)
                         }
-                        Spacer(minLength: 0)
-                        Text(artifact.modifiedAt.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption).foregroundStyle(accent.resolvedColor(in: theme))
+                        if artifact.isPlanInProgress || finishingPlan {
+                            PlanTravelerArtwork(character: artifact.planTravelerCharacter, ink: Color(theme.palette.ink),
+                                outfitColor: artifact.planTravelerOutfitColor,
+                                backdrop: artifact.planTravelerBackdrop,
+                                equipment: artifact.planTravelerEquipment,
+                                progress: walk == nil ? previousProgress ?? artifact.planProgress : artifact.planProgress,
+                                walk: walk,
+                                animated: animated && (previousProgress == nil || walk != nil))
+                        } else {
+                            Spacer(minLength: 0)
+                        }
+                        HStack {
+                            Text(artifact.modifiedAt.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption).foregroundStyle(accent.resolvedColor(in: theme))
+                            if artifact.isPlanInProgress {
+                                Spacer(minLength: 4)
+                                Text("In Progress")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(Color(theme.palette.accent))
+                                    .accessibilityIdentifier("plans.card.inProgress")
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -158,21 +201,23 @@ struct CollectionArtifactRow: View {
         }
         .buttonStyle(.plain)
         .overlay {
-            if artifact.kind == .plan, artifact.isPlanComplete {
-                PlanCompletedStamp(planID: artifact.id, isActive: noteCardsActive && visible)
+            if artifact.kind == .plan, artifact.isPlanComplete, !finishingPlan {
+                PlanCompletedStamp(planID: artifact.id, isActive: animated)
                     .scaleEffect(cards ? 1 : 0.65)
             }
         }
-        .onAppear { visible = true }
-        .onDisappear { visible = false }
     }
 
     @ViewBuilder
     private var actions: some View {
-        if let readScripture {
-            Button("Edit Scripture assignment", systemImage: "pencil", action: open)
+        if let editPlan {
+            Button("Edit", systemImage: "pencil", action: editPlan)
+                .accessibilityIdentifier("collections.artifact.editPlan")
+        }
+        if let editScripture {
+            Button("Edit Scripture assignment", systemImage: "pencil", action: editScripture)
                 .accessibilityIdentifier("collections.artifact.editScripture")
-            Button("Read Scripture", systemImage: "book", action: readScripture)
+            Button("Read Scripture", systemImage: "book", action: open)
                 .accessibilityIdentifier("collections.artifact.readScripture")
         }
         if artifact.kind == .link, let editLink {

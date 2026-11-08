@@ -101,8 +101,10 @@ struct ScriptureView: View {
                     Text(session.edition?.name ?? session.abbreviation)
                         .font(ScriptureFonts.interface(appearance,size:13)).foregroundStyle(Color(palette.secondary))
                 }.padding(.top,10).padding(.horizontal,24)
-                annotationControls(for: document)
-                if let group = annotations.group {
+                if annotations.planScope == nil { annotationControls(for: document) }
+                if annotations.planScope != nil {
+                    ordinaryReader(document)
+                } else if let group = annotations.group {
                     if annotations.layoutAvailable && group.source == AnnotationSource(document) {
                         annotatedReader(document, group: group)
                     } else if annotations.mode == .hidden {
@@ -183,6 +185,7 @@ struct ScriptureView: View {
         }
         .task(id: session.document.map { AnnotationSource($0) }) {
             await annotations.open(session.document)
+            guard annotations.planScope == nil else { return }
             annotations.restoreSelectedAppearance(reader: session)
             annotations.mode = .hidden
             annotations.marginExpanded = false

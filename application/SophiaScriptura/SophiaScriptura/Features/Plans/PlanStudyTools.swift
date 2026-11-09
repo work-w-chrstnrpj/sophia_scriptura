@@ -3,9 +3,9 @@ import SwiftUI
 /// One user-initiated reflection attempt retains stable target/operation/receipt IDs.
 /// Cross-store failure retains the original material; it never checks a phantom item.
 @MainActor @Observable final class PlanReflectionDraft: Identifiable {
-    enum Kind { case note, link }
+    enum Kind { case note, link, conversation }
     let id = UUID()
-    let targetID = UUID()
+    let targetID: UUID
     let itemID = UUID()
     let prepareID = UUID()
     let targetCommandID = UUID()
@@ -26,8 +26,27 @@ import SwiftUI
     var saving = false
     private var attachment: StudyMutationRequest?
     private var savedLink: SavedLink?
-    init(kind: Kind, plan: StudyPlan, sectionID: UUID, anchorID: UUID?) {
-        self.kind = kind; self.plan = plan; self.sectionID = sectionID; self.anchorID = anchorID
+    init(kind: Kind, plan: StudyPlan, sectionID: UUID, anchorID: UUID?, targetID: UUID = UUID()) {
+        self.kind = kind; self.plan = plan; self.sectionID = sectionID; self.anchorID = anchorID; self.targetID = targetID
+    }
+    /// Files a Companion conversation started inside the Plan and records it as a completed
+    /// assignment beside the item it was started from.
+    func attachConversation(store: CollectionsStore, collectionID: UUID) async -> Bool {
+        guard kind == .conversation, !saving else { return false }; saving = true; defer { saving = false }
+        guard eligible(store) else { return false }
+        // Companion mirrors a new conversation into Collections; wait briefly for it to arrive.
+        var attempts = 0
+        while store.conversation(id: targetID) == nil && attempts < 100 {
+            attempts += 1; try? await Task.sleep(for: .milliseconds(20))
+        }
+        guard store.conversation(id: targetID) != nil else {
+            message = "The conversation is saved in Companion but could not be added to this Plan."; return false
+        }
+        targetSaved = true
+        guard await ensureFolder(store, collectionID: collectionID) else { return false }
+        let filing = await store.submit(.init(commandID: fileNoteCommandID, intent: .filePlanMaterial(planID: plan.id, sectionID: sectionID, artifactID: targetID)))
+        guard filing.receipt != nil else { message = filing.message; return false }
+        return await attach(store, collectionID: collectionID)
     }
     func createNote(kind: NoteKind, color: CollectionAccent, title: String, notes: NotesSession, store: CollectionsStore, collectionID: UUID) async -> UUID? {
         guard !saving else { return nil }; saving = true; defer { saving = false }
@@ -62,6 +81,13 @@ import SwiftUI
         guard result.receipt != nil else { message = result.message; return false }
         targetSaved = true
         return await attach(store, collectionID: collectionID)
+    }
+    private var payloadKind: PlanItemPayload.Kind {
+        switch kind {
+        case .note: .note
+        case .link: .link
+        case .conversation: .conversation
+        }
     }
     private func ensureFolder(_ store: CollectionsStore, collectionID: UUID) async -> Bool {
         if creationFolderID != nil { return true }
@@ -102,7 +128,7 @@ import SwiftUI
                 while insertion < current.sections[s].items.count && current.sections[s].items[insertion].origin == .reflection { insertion += 1 }
                 position = insertion
             } else { position = current.sections[s].items.count }
-            current.sections[s].items.insert(.init(id: itemID, payload: .init(kind: kind == .note ? .note : .link, targetID: targetID),
+            current.sections[s].items.insert(.init(id: itemID, payload: .init(kind: payloadKind, targetID: targetID),
                 completedAt: Date(), origin: .reflection, operationID: id), at: position)
             attachment = .init(commandID: attachCommandID, expectedPlanRevision: current.revision, intent: .savePlan(current, collectionID: nil))
         }

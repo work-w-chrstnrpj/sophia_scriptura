@@ -670,6 +670,15 @@ final class CompanionSession: ObservableObject {
         switch event {
         case .responseStarted:
             messages[index].deliveryState = .streaming
+        case .modelSubstituted(let modelID):
+            // Free quota ran out on the chosen model; keep the conversation on the model that answered.
+            if var conversation = conversations.first(where: { $0.id == conversationID }), conversation.modelID != modelID,
+               let adapter = registry.adapter(id: conversation.providerAdapterID) {
+                conversation.modelID = modelID
+                conversation.capabilitySnapshot = ProviderCapabilitySnapshot.from(adapter: adapter, modelID: modelID)
+                replaceConversation(conversation)
+                scheduleSave()
+            }
         case .textDelta(let delta):
             messages[index].content = CompanionResponseFormatting.joinStreamDelta(
                 existing: messages[index].content,
@@ -774,7 +783,7 @@ final class CompanionSession: ObservableObject {
             for try await event in adapter.streamCompletion(apiKey: apiKey, request: request) {
                 if Task.isCancelled { return .failure(.cancelled) }
                 switch event {
-                case .responseStarted, .sourceEvidence, .completed:
+                case .responseStarted, .modelSubstituted, .sourceEvidence, .completed:
                     break
                 case .textDelta(let delta):
                     guard text.utf8.count + delta.utf8.count <= SophyResponseValidator.rawLimit else {

@@ -27,6 +27,8 @@ struct PlanDetailView: View {
     @State private var passageReader: ReaderSession?
     @State private var planConversationID: UUID?
     @State private var priorConversationID: UUID?
+    /// True when the overlay shows a conversation saved as a Plan assignment, not a new study question.
+    @State private var resumedConversation = false
     @State private var priorCompanionDraft = ""
     @State private var editing: PlanEditorDraft?
     @State private var reading = false
@@ -58,6 +60,7 @@ struct PlanDetailView: View {
             guard let id = item.payload.targetID, let note = notes.snapshot.notes.first(where: { $0.id == id }) else { return false }
             return note.isActiveInLibrary && !notes.isLocked(note) && !store.concealsNote(id)
         case .link: return item.payload.targetID.flatMap { readableLink($0) } != nil
+        case .conversation: return item.payload.targetID.flatMap { readableConversation($0) } != nil
         }
     }
 
@@ -298,6 +301,7 @@ struct PlanDetailView: View {
             switch item.payload.kind {
             case .note: if let id = item.payload.targetID { previewNote(id) }
             case .link: linkID = item.payload.targetID
+            case .conversation: if let id = item.payload.targetID { Task { await resumeConversation(id) } }
             case .scripture: Task { await review(plan, itemID: item.id) }
             }
         } label: {
@@ -365,6 +369,18 @@ struct PlanDetailView: View {
                             }.padding(28).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
                         }
                     } else { ContentUnavailableView("Link unavailable", systemImage: "lock") }
+                case .conversation:
+                    if let id = item.payload.targetID, let conversation = readableConversation(id) {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 20) {
+                                Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(Color(theme.palette.accent))
+                                Text(conversation.title).font(.system(.title3, design: .serif)).foregroundStyle(Color(theme.palette.secondary))
+                                Button("Open conversation", systemImage: "bubble.left.and.text.bubble.right") { Task { await resumeConversation(id) } }
+                                    .buttonStyle(CollectionProminentButtonStyle())
+                                    .accessibilityIdentifier("plans.conversation.open")
+                            }.padding(28).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity)
+                        }
+                    } else { ContentUnavailableView("Conversation unavailable", systemImage: "lock") }
                 }
             }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -408,6 +424,10 @@ struct PlanDetailView: View {
     }
     private func readableNote(_ id: UUID) -> NoteDocument? {
         notes.snapshot.notes.first { $0.id == id && $0.isActiveInLibrary && !notes.isLocked($0) && !store.concealsNote($0.id) }
+    }
+    private func readableConversation(_ id: UUID) -> CompanionConversation? {
+        guard !store.collectionIDs(containing: id).contains(where: store.isLocked) else { return nil }
+        return companion.conversations.first { $0.id == id && $0.state != .archived && !$0.isTrashed }
     }
     private func readableLink(_ id: UUID) -> SavedLink? {
         guard !store.collectionIDs(containing: id).contains(where: store.isLocked) else { return nil }
@@ -454,6 +474,11 @@ struct PlanDetailView: View {
         case .link:
             guard let id = item.payload.targetID, let link = readableLink(id) else { return "Link unavailable" }
             return link.title
+        case .conversation:
+            guard let id = item.payload.targetID else { return "Conversation unavailable" }
+            if store.collectionIDs(containing: id).contains(where: store.isLocked) { return "Locked conversation" }
+            return companion.conversations.first(where: { $0.id == id && !$0.isTrashed })?.title
+                ?? store.conversation(id: id)?.title ?? "Conversation unavailable"
         }
     }
     private func itemCursor(_ plan: StudyPlan, _ section: PlanSection, _ item: PlanItem) -> PlanCursor {
@@ -659,9 +684,38 @@ struct PlanDetailView: View {
         companion.attachPlanContext(context, to: id, canSend: canSend)
         planConversationID = id
         message = nil
+        await assignConversation(id, item: item, noteID: noteID)
+    }
+
+    /// Records a conversation started in the Plan as a completed assignment after its source item.
+    private func assignConversation(_ id: UUID, item: PlanItem?, noteID: UUID?) async {
+        guard let plan, permitted else { return }
+        let anchor: PlanItem?
+        if let item { anchor = item }
+        else if let noteID { anchor = plan.items.first { $0.payload.kind == .note && $0.payload.targetID == noteID } }
+        else { anchor = nil }
+        guard let sectionID = anchor.flatMap({ anchor in plan.sections.first { $0.items.contains { $0.id == anchor.id } }?.id })
+                ?? cursor?.sectionID ?? plan.sections.first?.id else { return }
+        let draft = PlanReflectionDraft(kind: .conversation, plan: plan, sectionID: sectionID, anchorID: anchor?.id, targetID: id)
+        if !(await draft.attachConversation(store: store, collectionID: collectionID)) { message = draft.message }
+    }
+
+    private func resumeConversation(_ id: UUID) async {
+        guard permitted, scenePhase == .active, !transitioning, planConversationID == nil else { return }
+        transitioning = true; defer { transitioning = false }
+        guard await savePlanInk() else { return }
+        await companion.load()
+        guard permitted, readableConversation(id) != nil else { message = "This conversation is unavailable."; return }
+        priorConversationID = companion.selectedConversationID
+        priorCompanionDraft = companion.composerText
+        companion.selectConversation(id)
+        resumedConversation = true
+        planConversationID = id
+        message = nil
     }
 
     private var planContextIsReadable: Bool {
+        if resumedConversation, let id = planConversationID { return permitted && readableConversation(id) != nil }
         if let noteID = previewNoteID ?? item?.payload.targetID, previewNoteID != nil || item?.payload.kind == .note {
             return permitted && readableNote(noteID) != nil
         }
@@ -676,6 +730,7 @@ struct PlanDetailView: View {
             companion.composerText = priorCompanionDraft
         }
         planConversationID = nil
+        resumedConversation = false
         priorConversationID = nil
         priorCompanionDraft = ""
     }

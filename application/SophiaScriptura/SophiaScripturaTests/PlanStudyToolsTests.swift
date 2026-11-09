@@ -42,6 +42,24 @@ import UIKit
         XCTAssertEqual(saved.items[1].origin, .reflection); XCTAssertNotNil(saved.items[1].completedAt)
         XCTAssertNil(saved.items[0].completedAt); XCTAssertEqual(store.links.count, 1)
     }
+    func testPlanConversationIsAssignedAfterAnchorAndFiledInSectionFolder() async throws {
+        let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
+        _ = await store.submit(.init(intent: .savePlan(makePlan(), collectionID: nil)))
+        let plan = try XCTUnwrap(store.plans.first)
+        let conversationID = UUID()
+        store.upsertCompanionConversation(StudyConversation(id: conversationID, title: "Genesis 1:7–14", detail: "Plan", createdAt: Date(), isPlaceholder: false))
+        let draft = PlanReflectionDraft(kind: .conversation, plan: plan, sectionID: plan.sections[0].id,
+            anchorID: plan.items[0].id, targetID: conversationID)
+        let attached = await draft.attachConversation(store: store, collectionID: StudyCollection.unfiledID)
+        XCTAssertTrue(attached, draft.message ?? "Attachment failed")
+        let saved = try XCTUnwrap(store.plans.first)
+        XCTAssertEqual(saved.items.count, 2)
+        XCTAssertEqual(saved.items[1].payload.kind, .conversation)
+        XCTAssertEqual(saved.items[1].payload.targetID, conversationID)
+        XCTAssertEqual(saved.items[1].origin, .reflection); XCTAssertNotNil(saved.items[1].completedAt)
+        let folderID = try XCTUnwrap(saved.sections[0].materialsFolderID)
+        XCTAssertTrue(store.memberships.contains(.init(collectionID: folderID, artifactID: conversationID)))
+    }
     func testMultipleReflectionsKeepCreationOrderAfterCurrentAssignment() async throws {
         let store = CollectionsStore(collections: [], artifacts: [], memberships: [])
         _ = await store.submit(.init(intent: .savePlan(makePlan(), collectionID: nil)))

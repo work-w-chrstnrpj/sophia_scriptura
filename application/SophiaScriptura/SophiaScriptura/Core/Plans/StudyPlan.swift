@@ -103,7 +103,7 @@ struct PlanItem: Codable, Equatable, Identifiable, Sendable {
 }
 /// Explicit stable tag/keys, rather than Swift's synthesized associated-enum encoding.
 struct PlanItemPayload: Codable, Equatable, Sendable {
-    enum Kind: String, Codable, Sendable { case scripture, note, link }
+    enum Kind: String, Codable, Sendable { case scripture, note, link, conversation }
     enum Selection: String, Codable, Sendable { case wholeChapter, verseRange }
     var kind: Kind
     var referenceSystemID: String?
@@ -119,7 +119,7 @@ struct PlanItemPayload: Codable, Equatable, Sendable {
     }
     func validate() throws {
         switch kind {
-        case .note, .link:
+        case .note, .link, .conversation:
             guard targetID != nil, book == nil, chapter == nil, referenceSystemID == nil,
                   selection == nil, startVerse == nil, endVerse == nil else { throw StudyMutationFailure.invalid }
         case .scripture:
@@ -139,7 +139,13 @@ struct PlanItemPayload: Codable, Equatable, Sendable {
         return bookTitle + referenceLabel.dropFirst(book.count)
     }
     var referenceLabel: String {
-        guard kind == .scripture else { return kind == .note ? "Note" : "Link" }
+        guard kind == .scripture else {
+            switch kind {
+            case .note: return "Note"
+            case .link: return "Link"
+            default: return "Conversation"
+            }
+        }
         let base = "\(book ?? "") \(chapter ?? 1)"
         guard selection == .verseRange, let startVerse, let endVerse else { return base }
         return base + (startVerse == endVerse ? ":\(startVerse)" : ":\(startVerse)–\(endVerse)")

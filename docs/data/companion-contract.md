@@ -34,8 +34,16 @@ Qwen (Alibaba Cloud Model Studio / DashScope) uses OpenAI-compatible chat comple
 Adapter ids are `qwen-cn` (China Beijing keys,
 `https://dashscope.aliyuncs.com/compatible-mode/v1`) and `qwen-intl` (international keys,
 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`). API keys are region-bound; a
-401 on the wrong endpoint should prompt the owner to switch adapters. Curated models include
-Flash and Turbo as paid/unknown-cost options; no Qwen free-model filter is offered. Remote model lists merge when the key can list models. Trial quota depends on the account and provider console.
+401 on the wrong endpoint should prompt the owner to switch adapters. Remote model lists merge when the key can list models.
+
+`qwen-cn` curates Flash, Turbo, Plus, Max and Qwen 2.5 as paid/unknown-cost options and offers no free filter.
+Since v1.8.1, `qwen-intl` uses the owner's Singapore free-quota capture (2026-11-09, `QwenFreeQuota` in
+`ProviderModelCatalog.swift`): the text-chat priority list is curated in order, free-quota language models are
+labeled free, and the free-only filter is offered. When a request returns HTTP 403 `AllocationQuota.FreeTierOnly`
+before any text streams, the adapter retries the same request with the next model in the priority list and emits
+`LLMStreamEvent.modelSubstituted`; Companion updates the conversation's model. Exhausted models are skipped for the
+rest of the app session. Fallback requires Stop-on-Exhaust (Free Only) in Model Studio; otherwise Alibaba bills
+usage instead of returning 403. Quota amounts and expiry are not queried from the provider.
 
 ## Provider-neutral contract
 

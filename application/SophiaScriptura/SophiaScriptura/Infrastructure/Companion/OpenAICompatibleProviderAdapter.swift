@@ -107,17 +107,37 @@ struct OpenAICompatibleProviderAdapter: LLMProviderAdapter {
         applyAuthHeaders(to: &urlRequest, apiKey: apiKey)
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        urlRequest.httpBody = try Self.completionBody(for: request)
 
-        let (bytes, response) = try await session.bytes(for: urlRequest)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            var body = Data()
-            for try await byte in bytes {
-                body.append(byte)
-                if body.count >= 8_192 { break }
+        // Free-quota providers: on exhaustion, retry the same request with the next free model
+        // before any text has streamed. Exhausted models are skipped for the rest of the session.
+        let registry = FreeQuotaExhaustionRegistry.shared
+        let fallbacks = ProviderModelCatalog.freeQuotaFallbacks(after: request.modelID, adapterID: id)
+        var candidates = ([request.modelID] + fallbacks).filter { !registry.isExhausted($0, adapterID: id) }
+        if candidates.isEmpty { candidates = [request.modelID] }
+        var bytes: URLSession.AsyncBytes?
+        var response: URLResponse?
+        for (offset, modelID) in candidates.enumerated() {
+            var attempt = request
+            attempt.modelID = modelID
+            urlRequest.httpBody = try Self.completionBody(for: attempt)
+            let (candidateBytes, candidateResponse) = try await session.bytes(for: urlRequest)
+            if let http = candidateResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                var body = Data()
+                for try await byte in candidateBytes {
+                    body.append(byte)
+                    if body.count >= 8_192 { break }
+                }
+                if !fallbacks.isEmpty, QwenFreeQuota.isExhausted(status: http.statusCode, body: body) {
+                    registry.markExhausted(modelID, adapterID: id)
+                    if offset < candidates.count - 1 { continue }
+                }
+                try validateResponse(candidateResponse, body: body)
             }
-            try validateResponse(response, body: body)
+            if modelID != request.modelID { continuation.yield(.modelSubstituted(modelID)) }
+            bytes = candidateBytes; response = candidateResponse
+            break
         }
+        guard let bytes, let response else { throw LLMProviderError.malformedResponse }
         continuation.yield(.responseStarted)
 
         var sawSSE = false
@@ -358,6 +378,9 @@ extension OpenAICompatibleProviderAdapter {
             }
             return .invalidCredential
         case 403:
+            if QwenFreeQuota.isExhausted(status: status, body: body) {
+                return .refused("The free quota is used up for this Qwen model and every free-quota fallback. Pick another model or turn off Free Only in Model Studio.")
+            }
             return .refused("Enable the model in Alibaba Cloud Model Studio, or confirm your trial quota is still active.")
         case 400, 404, 422:
             return .refused("That Qwen model id is unavailable on this endpoint. Refresh models or pick another model.")

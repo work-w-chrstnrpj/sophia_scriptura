@@ -54,14 +54,76 @@ final class SophyProviderRoutingTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testQwenDefaultsAndTrialModelsAreNotLabeledFree() {
-        for adapter in ["qwen-cn", "qwen-intl"] {
-            XCTAssertEqual(ProviderModelCatalog.defaultModelID(adapterID: adapter), "qwen-flash")
-            XCTAssertFalse(ProviderModelCatalog.curatedModels(adapterID: adapter).isEmpty)
-            XCTAssertFalse(ProviderModelCatalog.supportsFreeModelFilter(adapterID: adapter))
-            XCTAssertTrue(ProviderModelCatalog.curatedModels(adapterID: adapter).allSatisfy { !$0.isFree })
-            XCTAssertFalse(ProviderModelCatalog.isLikelyFreeModel(modelID: "qwen-turbo", adapterID: adapter))
+    func testQwenChinaTrialModelsAreNotLabeledFree() {
+        let adapter = "qwen-cn"
+        XCTAssertEqual(ProviderModelCatalog.defaultModelID(adapterID: adapter), "qwen-flash")
+        XCTAssertFalse(ProviderModelCatalog.curatedModels(adapterID: adapter).isEmpty)
+        XCTAssertFalse(ProviderModelCatalog.supportsFreeModelFilter(adapterID: adapter))
+        XCTAssertTrue(ProviderModelCatalog.curatedModels(adapterID: adapter).allSatisfy { !$0.isFree })
+        XCTAssertFalse(ProviderModelCatalog.isLikelyFreeModel(modelID: "qwen-turbo", adapterID: adapter))
+    }
+
+    func testQwenInternationalPrioritizesFreeQuotaModels() {
+        let adapter = "qwen-intl"
+        XCTAssertEqual(ProviderModelCatalog.defaultModelID(adapterID: adapter), "qwen-flash")
+        XCTAssertTrue(ProviderModelCatalog.supportsFreeModelFilter(adapterID: adapter))
+        XCTAssertEqual(ProviderModelCatalog.curatedModels(adapterID: adapter).map(\.modelID), QwenFreeQuota.chatPriority)
+        XCTAssertTrue(ProviderModelCatalog.isLikelyFreeModel(modelID: "qwen3.7-plus", adapterID: adapter))
+        XCTAssertFalse(ProviderModelCatalog.isLikelyFreeModel(modelID: "qwen-turbo", adapterID: adapter))
+        let merged = ProviderModelCatalog.mergeRemote(ids: ["qwen-turbo", "glm-5.1", "qwen3.7-plus", "qwen-flash"], adapterID: adapter)
+        XCTAssertEqual(merged.map(\.modelID), ["qwen-flash", "qwen3.7-plus", "glm-5.1", "qwen-turbo"])
+        XCTAssertEqual(ProviderModelCatalog.freeQuotaFallbacks(after: "qwen-max", adapterID: adapter).prefix(2), ["qwen3.7-max", "qwen-flash"])
+        XCTAssertEqual(ProviderModelCatalog.freeQuotaFallbacks(after: "glm-5.1", adapterID: adapter), QwenFreeQuota.chatPriority)
+        XCTAssertTrue(ProviderModelCatalog.freeQuotaFallbacks(after: "qwen-flash", adapterID: "qwen-cn").isEmpty)
+    }
+
+    func testQwenInternationalFallsBackWhenFreeQuotaIsExhausted() async throws {
+        FreeQuotaExhaustionRegistry.shared.reset()
+        defer { FreeQuotaExhaustionRegistry.shared.reset() }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RoutingHTTPStub.self]
+        let adapter = OpenAICompatibleProviderAdapter.qwenInternational(session: URLSession(configuration: configuration))
+        var requested: [String] = []
+        RoutingHTTPStub.handler = { request in
+            let model = Self.requestedModel(request) ?? ""
+            requested.append(model)
+            if model == "qwen-flash" || model == "qwen3.5-flash" {
+                return .success(RoutingHTTPResponse(status: 403, data: Data(#"{"error":{"code":"AllocationQuota.FreeTierOnly","message":"The free tier of the model has been exhausted."}}"#.utf8)))
+            }
+            return .success(RoutingHTTPResponse(status: 200, data: Data("data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}\n\ndata: [DONE]\n\n".utf8), mime: "text/event-stream"))
         }
+        var substituted: String?
+        var text = ""
+        let request = LLMCompletionRequest(modelID: "qwen-flash", systemInstruction: "rules", turns: [LLMChatTurn(role: .user, content: "Hi")])
+        for try await event in adapter.streamCompletion(apiKey: "sk-test", request: request) {
+            switch event {
+            case .modelSubstituted(let model): substituted = model
+            case .textDelta(let delta): text += delta
+            case .failed(let error): XCTFail("Unexpected \(error)")
+            default: break
+            }
+        }
+        XCTAssertEqual(requested, ["qwen-flash", "qwen3.5-flash", "qwen3.6-flash"])
+        XCTAssertEqual(substituted, "qwen3.6-flash")
+        XCTAssertEqual(text, "Hi")
+        // Exhausted models are skipped on the next request.
+        requested.removeAll()
+        for try await _ in adapter.streamCompletion(apiKey: "sk-test", request: request) {}
+        XCTAssertEqual(requested, ["qwen3.6-flash"])
+    }
+
+    nonisolated private static func requestedModel(_ request: URLRequest) -> String? {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(buffer, count: count)
+            }
+        }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["model"] as? String
     }
 
     func testLegacySnapshotOmitsSharedRouteAndResolvesFirstSavedKey() throws {

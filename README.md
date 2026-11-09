@@ -291,8 +291,10 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.8.0](docs/releases/v1.8.0.md), build 34**, dated
-**2026-11-08**. Plan cards have a customizable traveler that moves with progress. Strict
+The current release is **[v1.8.1](docs/releases/v1.8.1.md), build 35**, dated
+**2026-11-09**. Companion conversations started inside a Plan are saved as Plan assignments,
+and Qwen (International) prefers free-quota models with automatic fallback when a quota runs out.
+In v1.8.0, Plan cards have a customizable traveler that moves with progress. Strict
 Plans offer rolling reminders, and Plans support Scripture review, a named Pencil layer
 per section, and contextual Companion conversations inside the Plan.
 In v1.7.1, Plan Edit gained a Translation picker for any installed translation, new Plans

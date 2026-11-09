@@ -369,6 +369,9 @@ struct PlanEditorView: View {
         case .link:
             guard let link = store.links.first(where: { $0.id == item.payload.targetID }), store.accessAllowed(link.access) else { return "Link unavailable" }
             return link.title
+        case .conversation:
+            guard let id = item.payload.targetID, let conversation = store.conversation(id: id) else { return "Conversation unavailable" }
+            return store.collectionIDs(containing: id).contains(where: store.isLocked) ? "Locked conversation" : "\(conversation.title) (Conversation)"
         }
     }
     private func persistDraft() async -> Bool {

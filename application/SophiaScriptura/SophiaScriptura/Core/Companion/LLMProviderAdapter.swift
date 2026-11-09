@@ -35,6 +35,8 @@ enum LLMProviderError: Error, LocalizedError, Sendable, Equatable {
 
 enum LLMStreamEvent: Sendable {
     case responseStarted
+    /// The requested model's free quota was used up; this model is answering instead.
+    case modelSubstituted(String)
     case textDelta(String)
     case sourceEvidence(CompanionSource)
     case completed

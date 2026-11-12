@@ -127,8 +127,11 @@ import SwiftUI
     }
     func toggleCompletion(sectionID: UUID, itemID: UUID) {
         guard !saving, let s = draft.sections.firstIndex(where: { $0.id == sectionID }),
-              let i = draft.sections[s].items.firstIndex(where: { $0.id == itemID }) else { return }
-        draft.sections[s].items[i].completedAt = draft.sections[s].items[i].completedAt == nil ? Date() : nil
+              let i = draft.sections[s].items.firstIndex(where: { $0.id == itemID }),
+              !draft.sections[s].isCompleted else { return }
+        let wasDone = draft.sections[s].items[i].completedAt != nil
+        draft.sections[s].items[i].completedAt = wasDone ? nil : Date()
+        if wasDone, let c = draft.cursor, c.kind == .planSummary || (c.kind == .sectionSummary && c.sectionID == sectionID) { draft.cursor = nil }
         changed()
     }
     func removeItems(_ ids: [UUID], from sectionID: UUID) {

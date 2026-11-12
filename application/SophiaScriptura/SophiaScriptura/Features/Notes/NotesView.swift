@@ -13,6 +13,7 @@ struct NotesView: View {
     @State private var searchPresented = false
     @State private var tag = ""
     @State private var noteKindFilter: NoteKind?
+    @AppStorage("notes.hidePlanNotes") private var hidePlanNotes = false
     @State private var sort = "Modified"
     @State private var cards = true
     @State private var deleted = false
@@ -38,13 +39,19 @@ struct NotesView: View {
     /// Every library card uses this height. Title and note type stay at the top; the dates sit on the bottom.
     private let noteCardHeight: CGFloat = 176
 
+    /// Notes created for a Plan, or assigned to one as an existing note.
+    private var planNoteIDs: Set<UUID> {
+        Set(collections.plans.filter { $0.trashedAt == nil }.flatMap(\.items).compactMap { $0.payload.kind == .note ? $0.payload.targetID : nil })
+    }
     private var notes: [NoteDocument] {
         let _ = protection.unlocked
+        let planNotes = hidePlanNotes ? planNoteIDs : []
         return session.snapshot.notes.filter { note in
             let visibility = deleted ? note.isArchived : note.isActiveInLibrary
             return visibility
                 && collections.accessAllowed(note.access)
                 && !collections.concealsNote(note.id)
+                && (!hidePlanNotes || (note.planOrigin == nil && !planNotes.contains(note.id)))
                 && (search.isEmpty || (session.isLocked(note) ? note.title : note.searchableText).localizedCaseInsensitiveContains(search))
                 && (tag.isEmpty || (!session.isLocked(note) && note.tags.contains(tag)))
                 && (noteKindFilter == nil || note.kind == noteKindFilter)
@@ -266,6 +273,8 @@ struct NotesView: View {
                     }
                 }
                 .accessibilityIdentifier("notes.filter.type")
+                Toggle("Hide Plan notes", isOn: $hidePlanNotes)
+                    .accessibilityIdentifier("notes.filter.hidePlan")
                 Toggle("Cards", isOn: $cards)
             } label: {
                 LibraryHeaderIcon(systemImage: "line.3.horizontal.decrease")
@@ -286,11 +295,12 @@ struct NotesView: View {
         var parts = [sort]
         if let noteKindFilter { parts.append(noteKindFilter.displayName) }
         if !tag.isEmpty { parts.append(tag) }
+        if hidePlanNotes { parts.append("No Plan notes") }
         return parts.joined(separator: " · ")
     }
 
     private var hasActiveLibraryFilter: Bool {
-        !search.isEmpty || !tag.isEmpty || noteKindFilter != nil
+        !search.isEmpty || !tag.isEmpty || noteKindFilter != nil || hidePlanNotes
     }
 
     private var backupsMenu: some View {

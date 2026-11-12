@@ -36,6 +36,7 @@ struct PlanAssignmentPicker: View {
     @State private var loading = false
     @State private var message: String?
     @State private var seeded = false
+    @State private var verses: [Int] = []
     private var chapterCount: Int { max(1, reader?.books.first(where: { $0.id == bookID })?.chapterCount ?? 1) }
     private var bounds: PlanChapterBounds { .init(chapter: chapter, lastChapter: lastChapter, chapterCount: chapterCount) }
     private var selectedBook: Binding<String> {
@@ -63,14 +64,15 @@ struct PlanAssignmentPicker: View {
             .navigationTitle(initialScripture == nil ? "Add assignment" : "Edit Scripture assignment").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .task {
-                await reader?.start()
                 if !seeded, let seed = initialScripture {
                     chapter = seed.chapter ?? 1; lastChapter = chapter
                     firstVerse = seed.startVerse ?? 1; lastVerse = seed.endVerse ?? firstVerse
                     wholeChapter = seed.selection == .wholeChapter; bookID = seed.book ?? "GEN"
                     seeded = true
                 }
+                await reader?.start()
             }
+            .task(id: "\(bookID)|\(bounds.chapter)|\(wholeChapter)|\(reader?.books.count ?? 0)") { await loadVerses() }
             .onChange(of: tab) { _, _ in message = nil }
             .onChange(of: chapter) { _, value in lastChapter = max(value, lastChapter) }
             .onChange(of: firstVerse) { _, value in lastVerse = max(value, lastVerse) }
@@ -86,14 +88,47 @@ struct PlanAssignmentPicker: View {
                 Toggle("Whole chapters", isOn: $wholeChapter).accessibilityIdentifier("plans.wholeChapters")
                 if wholeChapter { Stepper("Through chapter \(bounds.lastChapter)", value: Binding(get: { bounds.lastChapter }, set: { lastChapter = $0 }), in: bounds.throughRange) }
                 else {
-                    Stepper("First verse \(firstVerse)", value: $firstVerse, in: 1...176)
-                    Stepper("Last verse \(max(firstVerse, lastVerse))", value: $lastVerse, in: firstVerse...176)
+                    verseWheels
                 }
                 Button(initialScripture == nil ? "Add Scripture" : "Save Scripture") { Task { await addScripture(reader) } }
                     .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
                     .accessibilityIdentifier("plans.addScripture")
             } else { Text("Open Scripture to load the available books, then add readings here.") }
         }.listRowBackground(Color(theme.palette.soft))
+    }
+    /// Wheels list only verses that exist in this chapter, so out-of-range verses cannot be chosen.
+    @ViewBuilder private var verseWheels: some View {
+        if verses.isEmpty {
+            HStack { ProgressView(); Text("Loading verses…").foregroundStyle(Color(theme.palette.secondary)) }
+        } else {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    Text("First verse").font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                    Picker("First verse", selection: Binding(get: { clampedFirst }, set: { firstVerse = $0 })) {
+                        ForEach(verses, id: \.self) { Text("\($0)").tag($0) }
+                    }.pickerStyle(.wheel).frame(height: 120).accessibilityIdentifier("plans.firstVerse")
+                }
+                VStack(spacing: 0) {
+                    Text("Last verse").font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                    Picker("Last verse", selection: Binding(get: { clampedLast }, set: { lastVerse = $0 })) {
+                        ForEach(verses.filter { $0 >= clampedFirst }, id: \.self) { Text("\($0)").tag($0) }
+                    }.pickerStyle(.wheel).frame(height: 120).accessibilityIdentifier("plans.lastVerse")
+                }
+            }
+        }
+    }
+    private var clampedFirst: Int { verses.contains(firstVerse) ? firstVerse : (verses.first(where: { $0 >= firstVerse }) ?? verses.last ?? 1) }
+    private var clampedLast: Int {
+        let options = verses.filter { $0 >= clampedFirst }
+        return options.contains(lastVerse) ? lastVerse : (options.first(where: { $0 >= lastVerse }) ?? options.last ?? clampedFirst)
+    }
+    private func loadVerses() async {
+        guard let reader, !wholeChapter else { return }
+        let book = bookID, number = bounds.chapter
+        let loaded = (try? await reader.availableVerses(book: book, chapter: number)) ?? []
+        guard book == bookID, number == bounds.chapter else { return }
+        verses = loaded
+        if !loaded.isEmpty { firstVerse = clampedFirst; lastVerse = clampedLast }
     }
     @ViewBuilder private var noteFields: some View {
         Section("New note") {
@@ -175,10 +210,10 @@ struct PlanAssignmentPicker: View {
         do {
             var payloads: [PlanItemPayload] = []
             for number in bounds.chapter...(wholeChapter ? bounds.lastChapter : bounds.chapter) {
-                let verses = try await reader.availableVerses(book: bookID, chapter: number)
-                guard !verses.isEmpty, wholeChapter || (firstVerse...max(firstVerse, lastVerse)).allSatisfy(verses.contains) else { throw StudyMutationFailure.invalid }
+                let available = try await reader.availableVerses(book: bookID, chapter: number)
+                guard !available.isEmpty, wholeChapter || (clampedFirst...clampedLast).allSatisfy(available.contains) else { throw StudyMutationFailure.invalid }
                 payloads.append(.scripture(referenceSystemID: referenceSystemID, book: bookID, chapter: number,
-                    start: wholeChapter ? nil : firstVerse, end: wholeChapter ? nil : max(firstVerse, lastVerse)))
+                    start: wholeChapter ? nil : clampedFirst, end: wholeChapter ? nil : clampedLast))
             }
             if let onSaveScripture {
                 let result = await onSaveScripture(payloads)

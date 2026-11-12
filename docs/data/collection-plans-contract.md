@@ -41,7 +41,7 @@ Existing Collections fields remain. Add these required top-level fields:
 
 | Record | Fields and meaning |
 | --- | --- |
-| StudyPlan | `id`, `revision`, `materialsFolderID?`, `folderOwnershipConfirmed?`, `title`, `detail`, `sectionPrefix`, `preferredEditionID`, `referenceSystemID`, `sections`, `cursor?`, `travelerCharacter?` (absent for Sophy), `travelerOutfitColor?` (palette key, absent for character default), `travelerBackdrop?` (absent for cloudy sky), `travelerEquipment?` (absent for candle), `access`, `createdAt`, `modifiedAt`, `archivedAt?`, `trashedAt?` |
+| StudyPlan | `id`, `revision`, `materialsFolderID?`, `folderOwnershipConfirmed?`, `title`, `detail`, `sectionPrefix`, `preferredEditionID`, `referenceSystemID`, `sections`, `cursor?`, `travelerCharacter?` (absent for Sophy), `travelerOutfitColor?` (palette key, absent for character default), `travelerBackdrop?` (absent for cloudy sky), `travelerEquipment?` (absent for candle), `viewLayout?` (`List`, `Carousel` or `Tile`; absent for List, v1.9.0), `access`, `createdAt`, `modifiedAt`, `archivedAt?`, `trashedAt?` |
 | PlanSection | `id`, `materialsFolderID?`, `title?`, `items`; ordinal is derived from array position |
 | PlanItem | `id`, `payload`, `completedAt?`, `origin` (`assignment` or `reflection`), `createdAt`, `operationID?` |
 | PlanItemPayload | `kind`: `scripture`, `note`, `link` or `conversation` (v1.8.1); scripture has `referenceSystemID`, `book`, `chapter`, `selection`; note/link/conversation has `targetID` |

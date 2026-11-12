@@ -111,7 +111,15 @@ import PencilKit
         }
     }
 
-    func createPlanLayer(document: ChapterDocument, preferences: ReaderPreferences, width: Double, name: String) async {
+    /// Editions that already hold a Plan layer for this day's passage, in creation order.
+    func planEditions(scope: PlanAnnotationScope, book: String, chapter: Int) -> [String] {
+        var seen: [String] = []
+        for g in snapshot.groups where g.planScope == scope && g.source.book == book && g.source.chapter == chapter
+            && !seen.contains(g.source.editionID) { seen.append(g.source.editionID) }
+        return seen
+    }
+
+    func createPlanLayer(document: ChapterDocument, preferences: ReaderPreferences, width: Double, name: String, startDrawing: Bool = true) async {
         guard let scope = planScope, await prepareForNavigation(), planScope == scope,
               group == nil, !snapshot.groups.contains(where: { $0.planScope == scope && $0.source == AnnotationSource(document) }) else { return }
         let layout = AnnotationRenderer.measure(document, preferences: preferences, width: width)
@@ -126,7 +134,9 @@ import PencilKit
         refreshLayout(for: document)
         changed()
         await save()
-        if groupID == value.id, !failed { mode = .draw; toolsVisible = true }
+        if groupID == value.id, !failed {
+            if startDrawing { mode = .draw; toolsVisible = true } else { mode = .visible }
+        }
     }
 
     func closePlanChapter() {

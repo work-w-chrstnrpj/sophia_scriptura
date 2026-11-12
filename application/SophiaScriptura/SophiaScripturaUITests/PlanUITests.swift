@@ -143,7 +143,7 @@ final class PlanUITests: XCTestCase {
         if (wholeChapters.value as? String) == "1" {
             wholeChapters.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         }
-        XCTAssertTrue(app.steppers.matching(NSPredicate(format: "label CONTAINS 'First verse'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
         scripture.tap()
         scrollTo(app.staticTexts["Genesis 1:1"], app: app)
         XCTAssertTrue(app.staticTexts["Genesis 1:1"].waitForExistence(timeout: 5))

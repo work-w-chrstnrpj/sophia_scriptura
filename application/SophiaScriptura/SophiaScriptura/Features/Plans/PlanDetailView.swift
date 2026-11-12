@@ -43,19 +43,38 @@ struct PlanDetailView: View {
     @State private var showingCompletion = false
     @State private var showingMusic = false
     @State private var showingMusicLibrary = false
+    /// Which edition's Pencil layer is shown for one assignment; nil follows the Plan's translation.
+    @State private var viewingEditionID: String?
+    @State private var viewingItemID: UUID?
+    private var layout: PlanLayout { plan?.viewLayout ?? .list }
 
     private var playback: PlanPlaybackService { .init(store: store, activity: activity) }
     private var plan: StudyPlan? { store.plans.first { $0.id == planID && $0.trashedAt == nil } }
     private var permitted: Bool { plan.map { store.planAccessAllowed($0) } ?? false }
     private var cursor: PlanCursor? { reviewCursor ?? plan?.cursor }
     private var item: PlanItem? { plan?.items.first { $0.id == cursor?.itemID } }
+    private var shownEditionID: String? {
+        (viewingItemID == cursor?.itemID ? viewingEditionID : nil) ?? plan?.preferredEditionID
+    }
+    private func editionLabel(_ id: String) -> String {
+        if id == ScriptureReferenceIdentity.bundledEditionID { return "WEB" }
+        if let status = reader?.helloAOEditions.first(where: { $0.appEditionID == id }) { return status.eligible.abbreviation }
+        return LicensedTranslation.approved.first(where: { $0.editionID == id })?.abbreviation ?? id
+    }
+    private func selectEdition(_ id: String) {
+        Task {
+            guard await savePlanInk() else { return }
+            viewingEditionID = id; viewingItemID = cursor?.itemID
+            await loadAssignment()
+        }
+    }
 
     private var assignmentReady: Bool {
         guard let item, cursor?.kind == .item else { return true }
         switch item.payload.kind {
         case .scripture:
             return passageReader?.document?.book == item.payload.book && passageReader?.document?.chapter == item.payload.chapter
-                && passageReader?.document?.editionID == plan?.preferredEditionID && passageReader?.error == nil
+                && passageReader?.document?.editionID == shownEditionID && passageReader?.error == nil
         case .note:
             guard let id = item.payload.targetID, let note = notes.snapshot.notes.first(where: { $0.id == id }) else { return false }
             return note.isActiveInLibrary && !notes.isLocked(note) && !store.concealsNote(id)
@@ -270,59 +289,128 @@ struct PlanDetailView: View {
                     }
                     ProgressView(value: Double(plan.completedSectionCount), total: Double(max(1, plan.sections.count))).tint(Color(theme.palette.accent))
                 }
-                ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
-                    VStack(alignment: .leading, spacing: 14) {
-                        Button { Task { await start(plan, sectionID: section.id) } } label: {
-                            Text(plan.sectionTitle(index)).font(.system(.title2, design: .serif).weight(.semibold))
-                                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                            .disabled(section.items.isEmpty || reader == nil || saving || transitioning || plan.archivedAt != nil)
-                            .accessibilityHint("Start or resume this day")
-                            .accessibilityIdentifier("plans.playDay.\(index + 1)")
-                        VStack(spacing: 0) {
-                            if section.items.isEmpty { Text("No assignments").foregroundStyle(Color(theme.palette.secondary)).padding(20) }
-                            ForEach(section.items) { item in
-                                assignmentRow(item, plan: plan)
-                                if item.id != section.items.last?.id { Divider().padding(.leading, 56) }
+                switch layout {
+                case .list:
+                    ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
+                        dayContent(plan, index: index, section: section)
+                    }
+                case .carousel:
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(alignment: .top, spacing: 20) {
+                            ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
+                                dayContent(plan, index: index, section: section)
+                                    .padding(24)
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                                    .background(Color(theme.palette.paper), in: RoundedRectangle(cornerRadius: 28))
+                                    .overlay { RoundedRectangle(cornerRadius: 28).stroke(Color(theme.palette.rule), lineWidth: 1) }
+                                    .containerRelativeFrame(.horizontal) { width, _ in min(width, 700) }
+                                    .accessibilityIdentifier("plans.carouselCard.\(index + 1)")
                             }
-                        }.background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22))
-                            .overlay { RoundedRectangle(cornerRadius: 22).stroke(Color(theme.palette.rule), lineWidth: 1) }
-                        if let caption = plan.scheduleCaption(for: index) {
-                            Text(caption).font(.caption).foregroundStyle(Color(theme.palette.secondary))
-                                .accessibilityIdentifier("plans.dayDates.\(index + 1)")
+                        }.scrollTargetLayout().frame(minHeight: 460, alignment: .top)
+                    }.scrollTargetBehavior(.viewAligned).scrollClipDisabled()
+                case .tile:
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 16)], spacing: 16) {
+                        ForEach(Array(plan.sections.enumerated()), id: \.element.id) { index, section in
+                            let done = !section.items.isEmpty && section.items.allSatisfy { $0.completedAt != nil }
+                            Button { Task { await start(plan, sectionID: section.id) } } label: {
+                                VStack(spacing: 10) {
+                                    Image(systemName: done ? "checkmark.circle.fill" : "play.circle")
+                                        .font(.title2).foregroundStyle(Color(done ? theme.palette.accent : theme.palette.secondary))
+                                    Text(plan.sectionTitle(index)).font(.system(.headline, design: .serif))
+                                        .multilineTextAlignment(.center).lineLimit(3)
+                                }.frame(maxWidth: .infinity).frame(height: 120).padding(8)
+                                    .background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 20))
+                                    .overlay { RoundedRectangle(cornerRadius: 20).stroke(Color(theme.palette.rule), lineWidth: 1) }
+                                    .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .disabled(section.items.isEmpty || reader == nil || saving || transitioning || plan.archivedAt != nil)
+                                .accessibilityHint("Play this day")
+                                .accessibilityIdentifier("plans.playDay.\(index + 1)")
                         }
                     }
                 }
             }.padding(28).frame(maxWidth: 960).frame(maxWidth: .infinity, alignment: .top)
         }
     }
-    private func assignmentRow(_ item: PlanItem, plan: StudyPlan) -> some View {
-        Button {
-            switch item.payload.kind {
-            case .note: if let id = item.payload.targetID { previewNote(id) }
-            case .link: linkID = item.payload.targetID
-            case .conversation: if let id = item.payload.targetID { Task { await resumeConversation(id) } }
-            case .scripture: Task { await review(plan, itemID: item.id) }
+    private func dayContent(_ plan: StudyPlan, index: Int, section: PlanSection) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Button { Task { await start(plan, sectionID: section.id) } } label: {
+                Text(plan.sectionTitle(index)).font(.system(.title2, design: .serif).weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .disabled(section.items.isEmpty || reader == nil || saving || transitioning || plan.archivedAt != nil)
+                .accessibilityHint("Start or resume this day")
+                .accessibilityIdentifier("plans.playDay.\(index + 1)")
+            VStack(spacing: 0) {
+                if section.items.isEmpty { Text("No assignments").foregroundStyle(Color(theme.palette.secondary)).padding(20) }
+                ForEach(section.items) { item in
+                    assignmentRow(item, plan: plan)
+                    if item.id != section.items.last?.id { Divider().padding(.leading, 56) }
+                }
+            }.background(Color(theme.palette.soft), in: RoundedRectangle(cornerRadius: 22))
+                .overlay { RoundedRectangle(cornerRadius: 22).stroke(Color(theme.palette.rule), lineWidth: 1) }
+            if let caption = plan.scheduleCaption(for: index) {
+                Text(caption).font(.caption).foregroundStyle(Color(theme.palette.secondary))
+                    .accessibilityIdentifier("plans.dayDates.\(index + 1)")
             }
-        } label: {
-            HStack(alignment: .top, spacing: 16) {
+        }
+    }
+    private func typeLabel(_ item: PlanItem) -> String {
+        switch item.payload.kind {
+        case .scripture: return "Scripture"
+        case .link: return "Link"
+        case .conversation: return "Conversation"
+        case .note:
+            if let id = item.payload.targetID, let note = readableNote(id) { return note.kind.displayName }
+            return "Note"
+        }
+    }
+    /// Checks change freely only while the day is unfinished; a completed day needs Reset.
+    private func toggleCompletion(_ item: PlanItem, plan: StudyPlan) async {
+        guard permitted, !saving, plan.archivedAt == nil,
+              let section = plan.sections.first(where: { $0.items.contains { $0.id == item.id } }), !section.isCompleted else { return }
+        saving = true; defer { saving = false }
+        var updated = plan
+        for s in updated.sections.indices {
+            guard let i = updated.sections[s].items.firstIndex(where: { $0.id == item.id }) else { continue }
+            let wasDone = updated.sections[s].items[i].completedAt != nil
+            updated.sections[s].items[i].completedAt = wasDone ? nil : Date()
+            // A finished-day or finished-Plan cursor no longer describes unchecked work.
+            if wasDone, let c = updated.cursor, c.kind == .planSummary || (c.kind == .sectionSummary && c.sectionID == updated.sections[s].id) {
+                updated.cursor = nil
+            }
+        }
+        let result = await store.submit(.init(expectedPlanRevision: plan.revision, intent: .savePlan(updated, collectionID: collectionID)))
+        message = result.message
+    }
+    private func assignmentRow(_ item: PlanItem, plan: StudyPlan) -> some View {
+        let dayCompleted = plan.sections.first(where: { $0.items.contains { $0.id == item.id } })?.isCompleted == true
+        return HStack(alignment: .center, spacing: 0) {
+            Button { Task { await toggleCompletion(item, plan: plan) } } label: {
                 Image(systemName: item.completedAt == nil ? "circle" : "checkmark.circle.fill").font(.title3)
                     .foregroundStyle(Color(item.completedAt == nil ? theme.palette.secondary : theme.palette.accent))
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(title(item)).font(.system(.headline, design: .serif)).foregroundStyle(Color(theme.palette.ink))
-                    if item.payload.kind == .note, let id = item.payload.targetID, let note = readableNote(id) {
-                        Text(note.kind.displayName).font(.caption).foregroundStyle(Color(theme.palette.accent))
-                        if let body = note.page?.body, !body.isEmpty {
-                            Text(String(body.replacingOccurrences(of: "\u{FFFC}", with: "").prefix(240))).font(.subheadline).lineLimit(3).foregroundStyle(Color(theme.palette.secondary))
-                        }
-                        Text("Preview note").font(.caption).foregroundStyle(Color(theme.palette.accent))
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Color(theme.palette.secondary))
-            }.padding(20).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityIdentifier("plans.assignment.\(item.id)")
-            .accessibilityValue(item.completedAt == nil ? "Not completed" : "Completed")
+                    .frame(width: 56, height: 56).contentShape(Rectangle())
+            }.buttonStyle(.plain).disabled(saving || plan.archivedAt != nil || dayCompleted)
+                .accessibilityLabel(dayCompleted ? "Day completed. Reset the day in Edit to uncheck" : item.completedAt == nil ? "Mark complete" : "Mark unfinished")
+                .accessibilityIdentifier("plans.assignment.toggle.\(item.id)")
+            Button {
+                switch item.payload.kind {
+                case .note: if let id = item.payload.targetID { previewNote(id) }
+                case .link: linkID = item.payload.targetID
+                case .conversation: if let id = item.payload.targetID { Task { await resumeConversation(id) } }
+                case .scripture: Task { await review(plan, itemID: item.id) }
+                }
+            } label: {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title(item)).font(.system(.headline, design: .serif)).foregroundStyle(Color(theme.palette.ink))
+                        Text(typeLabel(item)).font(.caption).foregroundStyle(Color(theme.palette.accent))
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "chevron.right").foregroundStyle(Color(theme.palette.secondary))
+                }.padding(.vertical, 20).padding(.trailing, 20).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityIdentifier("plans.assignment.\(item.id)")
+                .accessibilityValue(item.completedAt == nil ? "Not completed" : "Completed")
+        }
     }
 
     @ViewBuilder private func readingContent(_ plan: StudyPlan) -> some View {
@@ -346,7 +434,8 @@ struct PlanDetailView: View {
                        assignmentReady, let scope = annotationScope, let name = layerName(in: plan) {
                         PlanPassageReader(reader: reader, document: document, annotations: annotations,
                             scope: scope, layerName: name,
-                            focus: item.payload.selection == .verseRange ? reader.emphasisVerses : nil)
+                            focus: item.payload.selection == .verseRange ? reader.emphasisVerses : nil,
+                            editionLabel: editionLabel, onSelectEdition: selectEdition)
                             .allowsHitTesting(!transitioning || annotations.usingTool)
                         if annotations.planScope != scope {
                             Button("Retry opening Pencil layer") { Task { await loadAssignment() } }
@@ -755,7 +844,7 @@ struct PlanDetailView: View {
         guard let reader, let book = item.payload.book, let chapter = item.payload.chapter else { return }
         let session = reader.makePlanReader()
         let isRange = item.payload.selection == .verseRange
-        await session.openPlanPassage(editionID: plan.preferredEditionID, book: book, chapter: chapter,
+        await session.openPlanPassage(editionID: shownEditionID ?? plan.preferredEditionID, book: book, chapter: chapter,
             verse: isRange ? item.payload.startVerse : nil, endVerse: isRange ? item.payload.endVerse : nil)
         guard permitted, scenePhase == .active, cursor == expectedCursor, reading || reviewCursor != nil, !Task.isCancelled else { return }
         passageReader = session

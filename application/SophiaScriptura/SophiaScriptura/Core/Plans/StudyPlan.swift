@@ -21,6 +21,8 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
     var travelerOutfitColor: CollectionAccent?
     var travelerBackdrop: PlanTravelerBackdrop?
     var travelerEquipment: PlanTravelerEquipment?
+    /// How days appear in the Plan overview; missing means List.
+    var viewLayout: PlanLayout?
     var access = StudyAccessRequirements()
     var createdAt = Date()
     var modifiedAt = Date()
@@ -87,6 +89,8 @@ struct StudyPlan: Codable, Equatable, Identifiable, Sendable {
 }
 struct PlanSection: Codable, Equatable, Identifiable, Sendable {
     var id = UUID()
+    /// A finished day is locked: its checks change only through Reset.
+    var isCompleted: Bool { !items.isEmpty && items.allSatisfy { $0.completedAt != nil } }
     var materialsFolderID: UUID?
     var title: String?
     var items: [PlanItem] = []
@@ -165,4 +169,9 @@ struct RetainedPlanAccess: Codable, Equatable, Sendable {
     var lastTitle: String
     var access: StudyAccessRequirements
     var detachedAt: Date?
+}
+
+enum PlanLayout: String, Codable, CaseIterable, Identifiable, Sendable {
+    case list = "List", carousel = "Carousel", tile = "Tile"
+    var id: String { rawValue }
 }

@@ -291,8 +291,11 @@ the [deployment guide](docs/deployment/deployment.md).
 
 ## Project status and verification
 
-The current release is **[v1.8.1](docs/releases/v1.8.1.md), build 35**, dated
-**2026-11-09**. Companion conversations started inside a Plan are saved as Plan assignments,
+The current release is **[v1.9.0](docs/releases/v1.9.0.md), build 36**, dated
+**2026-11-12**. Plan verse ranges use bounded scroll wheels, Plans can be shown as a List,
+Carousel or Tiles, completed days are locked until reset, Plan Pencil layers follow the Plan's
+Bible version, and Notes can hide Plan notes.
+In v1.8.1, Companion conversations started inside a Plan are saved as Plan assignments,
 and Qwen (International) prefers free-quota models with automatic fallback when a quota runs out.
 In v1.8.0, Plan cards have a customizable traveler that moves with progress. Strict
 Plans offer rolling reminders, and Plans support Scripture review, a named Pencil layer

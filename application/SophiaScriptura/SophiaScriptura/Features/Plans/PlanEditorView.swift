@@ -66,7 +66,8 @@ struct PlanEditorView: View {
         }
             .sheet(item: Binding(get: { model.addingTo.map(PlanSectionTarget.init) }, set: { if $0 == nil { model.closeAssignmentPicker() } else { model.addingTo = $0?.id } })) { target in
                 PlanAssignmentPicker(store: store, notes: notes, reader: reader, referenceSystemID: model.draft.referenceSystemID, planID: model.draft.id, sectionID: target.id, collectionID: collectionID,
-                    initialScripture: model.draft.items.first(where: { $0.id == model.replacingItemID && $0.payload.kind == .scripture })?.payload) { payloads in
+                    initialScripture: model.draft.items.first(where: { $0.id == model.replacingItemID && $0.payload.kind == .scripture })?.payload,
+                    scriptureOnly: model.draft.items.contains(where: { $0.id == model.replacingItemID && $0.payload.kind == .scripture })) { payloads in
                     if let saved = store.plans.first(where: { $0.id == model.draft.id }) { model.adoptSavedPlan(saved) }
                     model.applyAssignments(payloads, sectionID: target.id, replacing: model.replacingItemID)
                 }
@@ -193,6 +194,13 @@ struct PlanEditorView: View {
                 Text(model.saveStatus).font(.caption).accessibilityIdentifier("plans.saveStatus")
                 if let message = model.message { Text(message).foregroundStyle(.red).accessibilityIdentifier("plans.error") }
             }
+            Section("Plan view") {
+                Picker("Days appear as", selection: Binding(get: { model.draft.viewLayout ?? .list }, set: { model.draft.viewLayout = $0 })) {
+                    ForEach(PlanLayout.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).accessibilityIdentifier("plans.layout")
+                Text("List shows every day with its assignments. Carousel shows one large card per day to swipe through. Tile shows equal tiles; tap one to play that day.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Plan card") {
                 Picker("Character", selection: Binding(get: { model.draft.resolvedTravelerCharacter }, set: {
                     model.draft.travelerCharacter = $0
@@ -283,8 +291,16 @@ struct PlanEditorView: View {
                         HStack {
                             Button { model.toggleCompletion(sectionID: section.id, itemID: item.id) } label: {
                                 Image(systemName: item.completedAt == nil ? "circle" : "checkmark.circle.fill")
-                            }.buttonStyle(.borderless).accessibilityLabel(item.completedAt == nil ? "Mark complete" : "Mark unfinished")
+                            }.buttonStyle(.borderless).disabled(section.isCompleted)
+                                .opacity(section.isCompleted ? 0.4 : 1)
+                                .accessibilityLabel(section.isCompleted ? "Day completed. Reset the day to uncheck" : item.completedAt == nil ? "Mark complete" : "Mark unfinished")
                             Text(itemTitle(item)).lineLimit(2)
+                                .foregroundStyle(section.isCompleted ? Color.secondary : Color.primary)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard item.payload.kind == .scripture else { return }
+                                    Task { if await persistDraft() { model.beginAssignment(sectionID: section.id, replacing: item.id) } }
+                                }
                             if editMode.isEditing {
                                 Button("Move assignment up", systemImage: "arrow.up") {
                                     let ids = model.draft.sections.first(where: { $0.id == section.id })?.items.map(\.id) ?? []
@@ -297,7 +313,7 @@ struct PlanEditorView: View {
                             }
                             Spacer()
                             Menu {
-                                Button("Replace assignment") {
+                                Button(item.payload.kind == .scripture ? "Edit Scripture" : "Replace assignment", systemImage: item.payload.kind == .scripture ? "pencil" : "arrow.triangle.2.circlepath") {
                                     Task { if await persistDraft() { model.beginAssignment(sectionID: section.id, replacing: item.id) } }
                                 }
                                 ForEach(model.draft.sections.filter { $0.id != section.id }) { destination in
@@ -327,7 +343,12 @@ struct PlanEditorView: View {
                         HStack { Text("Manage section"); Spacer(); Image(systemName: "ellipsis") }.contentShape(Rectangle())
                     }.buttonStyle(.borderless).accessibilityLabel("Manage section")
                     .accessibilityIdentifier("plans.manageSection.\(section.id)")
-                } header: { Text(model.sectionTitle(section.id)) } footer: {
+                } header: {
+                    HStack(spacing: 6) {
+                        Text(model.sectionTitle(section.id))
+                        if section.isCompleted { Image(systemName: "checkmark.circle.fill"); Text("Completed · Reset to change") }
+                    }.foregroundStyle(section.isCompleted ? Color.secondary : Color.primary.opacity(0.6))
+                } footer: {
                     if let index = model.draft.sections.firstIndex(where: { $0.id == section.id }),
                        let caption = model.draft.scheduleCaption(for: index) {
                         Text(caption).font(.caption).accessibilityIdentifier("plans.edit.sectionDates.\(section.id)")
